@@ -28,11 +28,12 @@ public class ChatController {
      */
     @PostMapping("/msg")
     public Result<Void> sendMsg(@Valid @RequestBody SendMsgReqDTO request) {
-        log.info("[HTTP-发消息] roomId={}, memberId={}, content={}",
-                request.getRoomId(), request.getMemberId(), request.getContent());
+        log.info("[HTTP-发消息] roomId={}, userId={}, content={}",
+                request.getRoomId(), request.getUserId(), request.getContent());
 
         chatService.sendMsg(request);
 
         return Results.success();
+
     }
 }

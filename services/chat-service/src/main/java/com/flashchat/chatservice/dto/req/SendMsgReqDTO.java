@@ -14,8 +14,8 @@ public  class SendMsgReqDTO {
     @NotNull(message = "房间ID不能为空")
     private String roomId;
 
-    @NotNull(message = "成员ID不能为空")
-    private Long memberId;
+    @NotNull(message = "用户ID不能为空")
+    private Long userId;
 
     @NotBlank(message = "消息内容不能为空")
     @Size(max = 500, message = "消息内容不能超过500字")

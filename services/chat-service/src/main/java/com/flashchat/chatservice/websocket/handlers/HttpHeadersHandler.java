@@ -14,7 +14,13 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
+/**
+ * HTTP 握手阶段提取连接参数
+ *
+ * 连接URL：ws://host:8090/?token=xxx
+ * 只提取 token 和 IP，不再提取 roomId
+ * 因为一个连接对应多个房间，roomId 不在连接时确定
+ */
 @Slf4j
 public class HttpHeadersHandler extends ChannelInboundHandlerAdapter {
 
@@ -27,32 +33,30 @@ public class HttpHeadersHandler extends ChannelInboundHandlerAdapter {
             QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
             Map<String, List<String>> params = decoder.parameters();
 
-            String roomId = getParam(params, "roomId");
             String token = getParam(params, "token");
-            String type = getParam(params, "type");  // "host" 或 null
 
             // ===== 2. 提取 IP =====
             HttpHeaders headers = request.headers();
-            String ip = Optional.ofNullable(headers.get("X-Real-IP"))
-                    .orElse(Optional.ofNullable(headers.get("X-Forwarded-For"))
-                            .orElse(getRemoteIp(ctx)));
-
-            // ===== 3. 存入 Channel 属性 =====
-            ChannelAttrUtil.set(ctx.channel(), ChannelAttrUtil.TOKEN, token);
-            ChannelAttrUtil.set(ctx.channel(), ChannelAttrUtil.IP, ip);
-            ChannelAttrUtil.set(ctx.channel(), ChannelAttrUtil.ROOM_ID, roomId);
-
-            // 如果 type=host，标记为房主连接
-            if ("host".equals(type)) {
-                ChannelAttrUtil.set(ctx.channel(), ChannelAttrUtil.IS_HOST, true);
+            String ip = headers.get("X-Real-IP");
+            if (ip == null) {
+                String xff = headers.get("X-Forwarded-For");
+                if (xff != null) {
+                    ip = xff.split(",")[0].trim();  // 取第一个IP
+                }
+            }
+            if (ip == null) {
+                ip = getRemoteIp(ctx);
             }
 
-            log.info("提取连接参数: roomId={}, token={}, type={}, ip={}",
-                    roomId, token, type, ip);
+            // ===== 3. 存入 Channel 属性（仅用户级信息） =====
+            ChannelAttrUtil.set(ctx.channel(), ChannelAttrUtil.TOKEN, token);
+            ChannelAttrUtil.set(ctx.channel(), ChannelAttrUtil.IP, ip);
+
+            log.info("[WS握手] 提取连接参数: token={}, ip={}", token, ip);
 
             // ===== 4. 重写 URI =====
             // WebSocketServerProtocolHandler 需要路径匹配 "/"
-            // 但实际URL是 "/?roomId=xxx&token=xxx"
+            // 但实际URL是 "/?token=xxx"
             // 必须去掉查询参数
             request.setUri(decoder.path());
 

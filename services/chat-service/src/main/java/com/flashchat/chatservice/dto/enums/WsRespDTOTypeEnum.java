@@ -18,7 +18,8 @@ public enum WsRespDTOTypeEnum {
     SYSTEM_MSG(10, "系统消息"),
     MSG_REJECTED(11, "消息被拒绝"),
     MSG_RECALLED(12, "消息被撤回"),
-    ;
+    IDENTITY_ASSIGNED(13,"身份分配通知"),    // ★ 新增：身份分配通知
+    HEARTBEAT_REPLY(14,"心跳回复");      // ★ 新增：心跳回复
 
     private final Integer type;
     private final String desc;
