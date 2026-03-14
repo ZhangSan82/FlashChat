@@ -9,9 +9,6 @@ import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 import com.flashchat.convention.exception.ClientException;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.group.ChannelGroup;
-import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import lombok.extern.slf4j.Slf4j;
@@ -183,11 +180,11 @@ public class RoomChannelManager {
 
         if (roomId == null || roomId.isBlank()) {
             log.warn("[加入房间] roomId 为空, userId={}", userId);
-            throw  new ClientException("房间ID不能为空");
+            //throw  new ClientException("房间ID不能为空");
         }
         if (userId == null) {
             log.warn("[加入房间] userId 为空, roomId={}", roomId);
-            throw  new ClientException("用户ID不能为空");
+            //throw  new ClientException("用户ID不能为空");
         }
 
 
@@ -400,6 +397,10 @@ public class RoomChannelManager {
         return channelUserIndex.get(channel);
     }
 
+    public Channel getChannel(Long userId) {
+        return userChannels.get(userId);
+    }
+
     /**
      * 获取用户在某房间的成员信息
      */
@@ -423,6 +424,12 @@ public class RoomChannelManager {
     public boolean isOnline(Long userId) {
         Channel ch = userChannels.get(userId);
         return ch != null && ch.isActive();
+    }
+
+
+    public int getMemberCount(String roomId) {
+        ConcurrentHashMap<Long, RoomMemberInfo> members = roomMembers.get(roomId);
+        return members != null ? members.size() : 0;
     }
 
     /**

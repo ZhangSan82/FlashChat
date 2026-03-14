@@ -26,6 +26,10 @@ public class ChannelAttrUtil {
     //认证令牌（WebSocket 连接时从 URL 参数提取）
     public static final AttributeKey<String> TOKEN = AttributeKey.valueOf("token");
 
+    //账号ID
+    public static final AttributeKey<String> ACCOUNT_ID = AttributeKey.valueOf("accountId");
+
+
     //用户IP
     public static final AttributeKey<String> IP = AttributeKey.valueOf("ip");
 
@@ -68,6 +72,10 @@ public class ChannelAttrUtil {
 
     public static String getAvatar(Channel ch) {
         return get(ch, AVATAR);
+    }
+
+    public static String getAccountId(Channel ch) {
+        return get(ch, ACCOUNT_ID);
     }
 
     public static String getToken(Channel ch) {

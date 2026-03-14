@@ -1,16 +1,19 @@
 package com.flashchat.chatservice.websocket.handlers;
 
 
+import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dto.enums.WsReqDTOTypeEnum;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.IdentityInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
+import com.flashchat.chatservice.service.MemberService;
 import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
+import com.flashchat.convention.exception.ClientException;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -22,8 +25,6 @@ import io.netty.util.internal.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
-
 
 
 /**
@@ -53,18 +54,14 @@ import java.util.concurrent.atomic.AtomicLong;
 @ChannelHandler.Sharable
 public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
 
-    // ===== 临时的ID和昵称生成（后续接入数据库后删除）=====
-    private static final AtomicLong USER_ID_GEN = new AtomicLong(1);
-    private static final String[] NICKNAMES = {
-            "神秘猫咪", "月光兔子", "星空企鹅", "云端熊猫", "深海水母",
-            "极光狐狸", "雷电松鼠", "彩虹鹦鹉", "暗夜猫头鹰", "晨曦麻雀",
-            "迷雾獾", "闪电猎豹", "蓝色海豚", "翡翠蜥蜴", "紫色蝴蝶"
-    };
 
+
+    private final MemberService memberService;
     private final RoomChannelManager roomManager;
 
-    public NettyWebSocketServerHandler(RoomChannelManager roomManager) {
+    public NettyWebSocketServerHandler(RoomChannelManager roomManager, MemberService memberService) {
         this.roomManager = roomManager;
+        this.memberService = memberService;
     }
 
 
@@ -86,31 +83,98 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
      * 连接建立：分配身份 + 注册在线
      */
     private void handleConnect(Channel channel) {
-        // TODO分配临时身份（后续接入DB后改为从token解析或DB查询）
-        long userId = USER_ID_GEN.getAndIncrement();
-        String nickname = NICKNAMES[ThreadLocalRandom.current().nextInt(NICKNAMES.length)];
-        String avatar = "#" + String.format("%06X",
-                ThreadLocalRandom.current().nextInt(0xFFFFFF));
+        String accountId = ChannelAttrUtil.getAccountId(channel);
+        String token = ChannelAttrUtil.getToken(channel);
 
-        // 2. 绑定到 Channel 属性（只绑用户级信息，不绑房间级信息）
-        ChannelAttrUtil.bindIdentity(channel, userId, 0, nickname, avatar);
+        if (accountId != null && !accountId.isBlank()) {
+            // ===== 匿名成员 =====
+            handleAnonymousConnect(channel, accountId);
 
-        // 3. 注册在线（只记录 userId ↔ Channel 的映射，不加入房间）
-        //    【对比旧代码】旧代码这里直接 joinRoom(roomId, channel)
-        roomManager.online(userId, channel);
+        } else if (token != null && !token.isBlank()) {
+            // ===== 注册用户（未来实现）=====
+            handleRegisteredUserConnect(channel, token);
 
-        log.info("[握手完成] userId={}, nickname={}, 等待加入房间...", userId, nickname);
+        } else {
+            // ===== 都没传 =====
+            log.warn("[握手失败] 缺少 accountId 或 token 参数");
+            sendErrorAndClose(channel, "连接失败：请传入 accountId 或 token");
+        }
+    }
 
-        // 4. 通知客户端身份信息（客户端需要知道分配到的userId）
-        //    【新增】旧代码没有这步，因为旧代码加入房间时在 joinRoom 里发了欢迎消息
+    /**
+     * 匿名成员连接
+     *
+     * 流程：
+     *   前端传 accountId → 查 DB 获取 MemberDO → 绑定 member.id 作为内部ID
+     *
+     * 为什么用 accountId 而不是 member.id：
+     *   accountId 是面向用户的标识，不暴露自增主键
+     *   用户可以跨设备输入 accountId 登录
+     */
+    private void handleAnonymousConnect(Channel channel, String accountId) {
+
+        // 1.//TODO 查 DB
+        MemberDO member = memberService.lambdaQuery().eq(MemberDO::getAccountId, accountId).one();
+
+        if (member == null) {
+            log.warn("[握手失败] accountId={} 不存在", accountId);
+            sendErrorAndClose(channel, "账号不存在，请先调用 /member/auto-register 注册");
+            return;
+        }
+
+        if (member.getStatus() != null && member.getStatus() == 0) {
+            log.warn("[握手失败] accountId={} 已被封禁", accountId);
+            sendErrorAndClose(channel, "账号已被封禁");
+            return;
+        }
+
+        // 2. 绑定真实身份
+        //    Channel 上存的 userId = member.id（数据库主键）
+        //    后续 RoomChannelManager、消息入库 都用这个 ID
+        Long memberId = member.getId();
+        String nickname = member.getNickname();
+        String avatar = member.getAvatarColor();
+
+        ChannelAttrUtil.bindIdentity(channel, memberId, 0, nickname, avatar);
+
+        // 3. 注册在线
+        roomManager.online(memberId, channel);
+
+        log.info("[匿名连接成功] memberId={}, accountId={}, nickname={}",
+                memberId, accountId, nickname);
+
+        // 4. 通知客户端
         roomManager.sendToChannel(channel,
                 WsRespDTO.ofGlobal(WsRespDTOTypeEnum.LOGIN_SUCCESS,
                         IdentityInfoRespDTO.builder()
-                                .userId(userId)
+                                .userId(memberId)
                                 .nickname(nickname)
                                 .avatar(avatar)
                                 .build()));
+    }
 
+    /**
+     * 注册用户连接（Phase 5 实现）
+     */
+    private void handleRegisteredUserConnect(Channel channel, String token) {
+        // TODO Phase 5：Sa-Token 验证 token → 查 t_user → 绑定身份（userType=1）
+        log.info("[注册用户连接] token={}, 功能暂未开放", token);
+        sendErrorAndClose(channel, "注册用户登录暂未开放，敬请期待");
+    }
+
+    /**
+     * 发送错误消息并关闭连接
+     * 不能用 throw ClientException：
+     *   Netty 线程中抛出的异常不会被 Spring GlobalExceptionHandler 捕获
+     *   必须手动发送错误消息 + 手动关闭连接
+     */
+    private void sendErrorAndClose(Channel channel, String errorMsg) {
+        if (channel.isActive()) {
+            String json = JsonUtil.toJson(
+                    WsRespDTO.ofGlobal(WsRespDTOTypeEnum.SYSTEM_MSG, errorMsg));
+            channel.writeAndFlush(new TextWebSocketFrame(json))
+                    .addListener(ChannelFutureListener.CLOSE);
+        }
     }
 
 

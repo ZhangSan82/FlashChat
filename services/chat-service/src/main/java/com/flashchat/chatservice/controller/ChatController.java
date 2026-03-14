@@ -29,7 +29,7 @@ public class ChatController {
     @PostMapping("/msg")
     public Result<Void> sendMsg(@Valid @RequestBody SendMsgReqDTO request) {
         log.info("[HTTP-发消息] roomId={}, userId={}, content={}",
-                request.getRoomId(), request.getUserId(), request.getContent());
+                request.getRoomId(), request.getAccountId(), request.getContent());
 
         chatService.sendMsg(request);
 
