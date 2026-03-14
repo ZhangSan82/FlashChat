@@ -7,6 +7,7 @@ import com.flashchat.chatservice.dto.req.UserLeaveMsgReqDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
 import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
+import com.flashchat.convention.exception.ClientException;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.group.ChannelGroup;
@@ -16,24 +17,27 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 /**
  * 房间与用户连接管理器
  *
- * 【改造前】一个 Channel 只能在一个房间：
- *   roomGroups:       roomId → ChannelGroup
- *   channelRoomIndex: Channel → roomId（1对1）
- *   memberIndex:      roomId → (memberId → Channel)
+ * 【本次改造重点】断线 ≠ 离开房间
  *
- * 【改造后】一个 Channel（用户）可以同时在多个房间：
- *   userChannels:     userId → Channel             （一个用户一条连接）
- *   channelUserIndex: Channel → userId              （反向索引，断线时用）
- *   roomMembers:      roomId → {userId → MemberInfo}（每个房间的成员和状态）
- *   userRooms:        userId → Set<roomId>          （用户在哪些房间，断线时批量清理）
+ *   内存分两层：
+ *     第1层 - 成员关系（roomMembers + userRooms）
+ *       断线不影响，只有 HTTP 主动 leaveRoom / kickMember 才移除
+ *       后续接入 DB 后以 t_room_member 表为准
+ *
+ *     第2层 - 在线状态（userChannels + channelUserIndex）
+ *       断线立即移除，重连立即恢复
+ *       用于判断"能否收到 WS 推送"
+ *
+ *   数据结构：
+ *     userChannels:     userId → Channel             （在线状态，断线删）
+ *     channelUserIndex: Channel → userId              （反向索引，断线删）
+ *     roomMembers:      roomId → {userId → MemberInfo}（成员关系，断线不删）
+ *     userRooms:        userId → Set<roomId>          （成员关系，断线不删）
  */
 @Slf4j
 @Component
@@ -92,16 +96,38 @@ public class RoomChannelManager {
             log.info("[用户重连] userId={}, 关闭旧连接", userId);
         }
         channelUserIndex.put(channel, userId);
-        log.info("[用户上线] userId={}", userId);
+        // ★ 新增：检查是否有残留的房间成员关系（断线重连场景）
+        //   如果有，说明用户之前断线但没退出房间，现在恢复在线
+        // 检查是否有残留的房间成员关系（断线重连场景）
+        Set<String> rooms = userRooms.get(userId);
+        if (rooms != null && !rooms.isEmpty()) {
+            log.info("[断线重连] userId={}, 恢复 {} 个房间的在线状态", userId, rooms.size());
+
+            // 复制一份再遍历，防止并发修改
+            for (String roomId : new ArrayList<>(rooms)) {
+                RoomMemberInfo info = getRoomMemberInfo(roomId, userId);
+                if (info != null) {
+                    Map<String, Object> onlineData = new LinkedHashMap<>();
+                    onlineData.put("userId", userId);
+                    onlineData.put("nickname", info.getNickname());
+                    onlineData.put("onlineCount", getOnlineCountInRoom(roomId));
+
+                    broadcastToRoomExclude(roomId,
+                            WsRespDTO.of(roomId, WsRespDTOTypeEnum.USER_ONLINE, onlineData),
+                            userId);
+                }
+            }
+        } else {
+            log.info("[用户上线] userId={}", userId);
+        }
     }
 
     /**
-     * 用户下线：离开所有房间，清理所有索引
-     *
-     * 【对比旧代码】旧代码的 leaveRoom(Channel) 只离开一个房间
-     *              新代码要批量离开所有房间
-     *
-     * @param channel 断开的连接
+     * 用户下线（WS 连接断开时调用）
+     * 【关键改变】
+     *   旧: 断线 → leaveRoomInternal() → 用户不再是房间成员
+     *   新: 断线 → 只清除在线状态 → 成员关系保留 → 广播 USER_OFFLINE
+     *       用户重连后在 online() 中自动恢复
      */
     public void offline(Channel channel) {
         Long userId = channelUserIndex.remove(channel);
@@ -109,15 +135,28 @@ public class RoomChannelManager {
 
         userChannels.remove(userId, channel);
 
-        // 批量离开所有房间
-        Set<String> rooms = userRooms.remove(userId);
-        if (rooms != null) {
+        // 不再调用 leaveRoomInternal！
+        //   不删除 userRooms，不删除 roomMembers
+        //   用户仍然是房间成员，只是暂时不在线
+
+        // 广播"用户离线"到所有房间
+        Set<String> rooms = userRooms.get(userId);  // 注意：get 不是 remove！
+        if (rooms != null && !rooms.isEmpty()) {
             for (String roomId : new ArrayList<>(rooms)) {
-                leaveRoomInternal(roomId, userId);
+                RoomMemberInfo info = getRoomMemberInfo(roomId, userId);
+                if (info != null) {
+                    Map<String, Object> offlineData = new LinkedHashMap<>();
+                    offlineData.put("userId", userId);
+                    offlineData.put("nickname", info.getNickname());
+                    offlineData.put("onlineCount", getOnlineCountInRoom(roomId));
+
+                    broadcastToRoom(roomId,
+                            WsRespDTO.of(roomId, WsRespDTOTypeEnum.USER_OFFLINE, offlineData));
+                }
             }
         }
 
-        log.info("[用户下线] userId={}, 已离开 {} 个房间",
+        log.info("[用户离线] userId={}, 仍保留 {} 个房间成员关系",
                 userId, rooms != null ? rooms.size() : 0);
     }
 
@@ -144,11 +183,11 @@ public class RoomChannelManager {
 
         if (roomId == null || roomId.isBlank()) {
             log.warn("[加入房间] roomId 为空, userId={}", userId);
-            return;
+            throw  new ClientException("房间ID不能为空");
         }
         if (userId == null) {
             log.warn("[加入房间] userId 为空, roomId={}", roomId);
-            return;
+            throw  new ClientException("用户ID不能为空");
         }
 
 
@@ -235,44 +274,55 @@ public class RoomChannelManager {
     }
 
     /**
-     * 内部离开逻辑
-     * 不操作 userRooms，供 offline() 批量调用时使用
+     * 内部离开逻辑（真正移除成员关系）
      *
-     * 【对比旧代码】旧代码的离开逻辑在 leaveRoom 中用 compute 原子操作
-     *              新代码拆成独立方法，因为 offline 需要批量调用
+     * 只被以下场景调用：
+     *   1. leaveRoom() - 用户主动退出（HTTP）
+     *   2. kickMember() → leaveRoom() - 被房主踢出（HTTP）
+     *   3. closeRoom() - 房间关闭
+     *
+     * 不再被 offline() 调用！
      */
     private void leaveRoomInternal(String roomId, Long userId) {
-        //  compute 原子操作，解决空房间清理竞态
+        // 用数组在 lambda 中"传出"数据
+        final RoomMemberInfo[] removedInfo = {null};
+        final int[] remainOnline = {0};
+        final boolean[] roomEmpty = {false};
+
         roomMembers.compute(roomId, (key, members) -> {
             if (members == null) return null;
 
-            RoomMemberInfo memberInfo = members.remove(userId);
-            if (memberInfo == null) return members.isEmpty() ? null : members;
-
-            int onlineCount = members.size();
-            log.info("[离开房间] room={}, userId={}, nickname={}, 剩余={}",
-                    roomId, userId, memberInfo.getNickname(), onlineCount);
-
-            // 通知剩余成员
-            if (onlineCount > 0) {
-                // ★ 注意：这里在 compute 内部广播
-                //   compute 会锁住这个 key，广播耗时可能导致其他操作等待
-                //   如果性能敏感，可以把广播放到 compute 外面
-                broadcastToRoom(roomId,
-                        WsRespDTO.of(roomId, WsRespDTOTypeEnum.USER_LEAVE,
-                                UserLeaveMsgReqDTO.builder()
-                                        .nickname(memberInfo.getNickname())
-                                        .reason("离开了房间")
-                                        .onlineCount(onlineCount)
-                                        .build()));
+            removedInfo[0] = members.remove(userId);
+            if (removedInfo[0] == null) {
+                return members.isEmpty() ? null : members;
             }
 
             if (members.isEmpty()) {
+                roomEmpty[0] = true;
                 log.info("[清理房间] room={} 已空，移除", roomId);
-                return null;  // 返回 null 自动删除这个 key
+                return null; // 返回 null 自动删除 key
             }
             return members;
         });
+
+        // ★ 关键：在 compute 外部执行广播和 getOnlineCountInRoom
+        //   避免 compute 内部调用可能操作同一 ConcurrentHashMap 的方法
+        if (removedInfo[0] != null) {
+            remainOnline[0] = getOnlineCountInRoom(roomId);
+
+            log.info("[离开房间] room={}, userId={}, nickname={},  剩余在线={}",
+                    roomId, userId, removedInfo[0].getNickname(), remainOnline[0]);
+
+            if (!roomEmpty[0]) {
+                broadcastToRoom(roomId,
+                        WsRespDTO.of(roomId, WsRespDTOTypeEnum.USER_LEAVE,
+                                UserLeaveMsgReqDTO.builder()
+                                        .nickname(removedInfo[0].getNickname())
+
+                                        .onlineCount(remainOnline[0])
+                                        .build()));
+            }
+        }
     }
 
     // ===========================================================
@@ -280,12 +330,10 @@ public class RoomChannelManager {
     // ===========================================================
 
     /**
-     * 广播给房间所有在线成员
+     * 广播给房间所有【在线】成员
      *
-     * 【对比旧代码】
-     *   旧: ChannelGroup.writeAndFlush() 一行搞定
-     *   新: 遍历房间成员 → 用 userId 找到 Channel → 逐个推送
-     *       因为不再用 ChannelGroup（一个 Channel 可能在多个房间的 group 里会重复）
+     * 离线成员（断线但没退出房间）不会收到推送
+     * 他们重连后不会收到断线期间的消息（除非做消息持久化+拉取）
      */
     public void broadcastToRoom(String roomId, WsRespDTO<?> resp) {
         ConcurrentHashMap<Long, RoomMemberInfo> members = roomMembers.get(roomId);
@@ -303,10 +351,6 @@ public class RoomChannelManager {
 
     /**
      * 广播给房间成员，排除某人
-     * 【对比旧代码】
-     *   旧: broadcastExclude(roomId, resp, Channel exclude) → 按 Channel 排除
-     *   新: broadcastToRoomExclude(roomId, resp, Long excludeUserId) → 按 userId 排除
-     *       因为现在按用户维度管理，不再按 Channel 维度
      */
     public void broadcastToRoomExclude(String roomId, WsRespDTO<?> resp, Long excludeUserId) {
         ConcurrentHashMap<Long, RoomMemberInfo> members = roomMembers.get(roomId);
@@ -325,10 +369,6 @@ public class RoomChannelManager {
 
     /**
      * 发给指定用户（通过 userId 找到唯一的 Channel）
-     *
-     * 【对比旧代码】
-     *   旧: sendToOne(Channel, resp) → 需要先找到 Channel
-     *   新: sendToUser(userId, resp) → 内部自动找 Channel
      */
     public void sendToUser(Long userId, WsRespDTO<?> resp) {
         Channel ch = userChannels.get(userId);
@@ -339,8 +379,6 @@ public class RoomChannelManager {
 
     /**
      * 发给指定 Channel（用于未认证时的错误提示等）
-     *
-     * 【保留旧方法】有些场景用户还没认证，没有 userId，只能直接操作 Channel
      */
     public void sendToChannel(Channel channel, WsRespDTO<?> resp) {
         if (channel != null && channel.isActive()) {
@@ -364,9 +402,6 @@ public class RoomChannelManager {
 
     /**
      * 获取用户在某房间的成员信息
-     *
-     * 【新增方法】旧代码用 ChannelAttrUtil 读 Channel 属性
-     *            新代码用 RoomMemberInfo，因为同一用户在不同房间状态不同
      */
     public RoomMemberInfo getRoomMemberInfo(String roomId, Long userId) {
         ConcurrentHashMap<Long, RoomMemberInfo> members = roomMembers.get(roomId);
@@ -375,7 +410,6 @@ public class RoomChannelManager {
 
     /**
      * 判断某用户是否在某房间
-     * （逻辑不变，只是数据源从 memberIndex 改为 roomMembers）
      */
     public boolean isInRoom(String roomId, Long userId) {
         ConcurrentHashMap<Long, RoomMemberInfo> members = roomMembers.get(roomId);
@@ -383,17 +417,35 @@ public class RoomChannelManager {
     }
 
     /**
-     * 获取房间在线人数
-     * （逻辑不变，只是数据源改了）
+     * 判断用户是否在线（有活跃的 WS 连接）
+     * 【新增方法】用于区分"在房间里但断线了" vs "在房间里且在线"
      */
-    public int getOnlineCount(String roomId) {
+    public boolean isOnline(Long userId) {
+        Channel ch = userChannels.get(userId);
+        return ch != null && ch.isActive();
+    }
+
+    /**
+     * 获取房间内【在线】成员数
+     * 【新增方法】遍历房间成员，只数有活跃 WS 连接的
+     * 区别于 getMemberCount()（返回所有成员数，包括离线的）
+     */
+    public int getOnlineCountInRoom(String roomId) {
         ConcurrentHashMap<Long, RoomMemberInfo> members = roomMembers.get(roomId);
-        return members != null ? members.size() : 0;
+        if (members == null) return 0;
+
+        int count = 0;
+        for (Long uid : members.keySet()) {
+            Channel ch = userChannels.get(uid);
+            if (ch != null && ch.isActive()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /**
      * 获取房间所有成员ID
-     * （逻辑不变，只是数据源改了）
      */
     public Set<Long> getRoomMemberIds(String roomId) {
         ConcurrentHashMap<Long, RoomMemberInfo> members = roomMembers.get(roomId);
@@ -402,8 +454,6 @@ public class RoomChannelManager {
 
     /**
      * 获取用户加入的所有房间ID
-     *
-     * 【新增方法】旧代码不需要，因为一个用户只在一个房间
      */
     public Set<String> getUserRooms(Long userId) {
         Set<String> rooms = userRooms.get(userId);
@@ -416,14 +466,11 @@ public class RoomChannelManager {
 
     /**
      * 踢人
-     * 【对比旧代码】
-     *   旧: 踢人后关闭 Channel（ChannelFutureListener.CLOSE）
-     *   新: 踢人只离开该房间，不关闭 Channel（用户可能还在其他房间）
      */
     public void kickMember(String roomId, Long targetUserId) {
         if (!isInRoom(roomId, targetUserId)) {
             log.warn("[踢人失败] room={}, userId={} 不在房间中", roomId, targetUserId);
-            return;
+            throw  new ClientException("用户不在房间中");
         }
 
         // 先通知被踢者
@@ -464,30 +511,45 @@ public class RoomChannelManager {
         }
     }
 
+    /** 判断用户在某房间是否为房主 */
+    public boolean isHost(String roomId, Long userId) {
+        RoomMemberInfo info = getRoomMemberInfo(roomId, userId);
+        return info != null && info.isHost();
+    }
+
+    /** 判断用户在某房间是否被禁言 */
+    public boolean isMuted(String roomId, Long userId) {
+        RoomMemberInfo info = getRoomMemberInfo(roomId, userId);
+        return info != null && info.isMuted();
+    }
+
     /**
      * 关闭整个房间
-     * 【对比旧代码】
-     *   旧: group.close() → 关闭所有 Channel → 用户断线
-     *   新: 只通知成员并移除房间数据 → 不关闭 Channel → 用户可能还在其他房间
      */
     public void closeRoom(String roomId) {
-        ConcurrentHashMap<Long, RoomMemberInfo> members = roomMembers.remove(roomId);
-        if (members == null) return;
+        // 原子移除房间
+        final ConcurrentHashMap<Long, RoomMemberInfo>[] removedMembers = new ConcurrentHashMap[1];
+        roomMembers.compute(roomId, (key, members) -> {
+            removedMembers[0] = members;
+            return null; // 返回 null 删除 key
+        });
 
-        // 通知所有成员
+        if (removedMembers[0] == null) return;
+        ConcurrentHashMap<Long, RoomMemberInfo> members = removedMembers[0];
+
+        // 通知所有在线成员 + 清理 userRooms
         String json = JsonUtil.toJson(
                 WsRespDTO.of(roomId, WsRespDTOTypeEnum.ROOM_CLOSED, "房间已关闭"));
 
         for (Long uid : members.keySet()) {
-            // 从用户的房间列表移除
-            Set<String> rooms = userRooms.get(uid);
-            if (rooms != null) {
+            // 原子清理 userRooms
+            userRooms.compute(uid, (key, rooms) -> {
+                if (rooms == null) return null;
                 rooms.remove(roomId);
-                if (rooms.isEmpty()) {
-                    userRooms.remove(uid);
-                }
-            }
-            // 通知用户（不关闭连接！）
+                return rooms.isEmpty() ? null : rooms;
+            });
+
+            // 通知在线成员
             Channel ch = userChannels.get(uid);
             if (ch != null && ch.isActive()) {
                 ch.writeAndFlush(new TextWebSocketFrame(json));

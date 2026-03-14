@@ -12,17 +12,10 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum WsReqDTOTypeEnum {
-    // ===== 基础操作 =====
-    JOIN_ROOM(1, "加入房间"),
-    LEAVE_ROOM(2, "离开房间"),
-    SEND_MSG(3, "发送消息"),
-    HEARTBEAT(4, "心跳"),
 
-    // ===== 管理操作（需要房主权限）=====
-    MUTE(5, "禁言"),
-    UNMUTE(6, "解除禁言"),
-    KICK(7, "踢人"),
-    CLOSE_ROOM(8, "关闭房间"),
+    HEARTBEAT(1, "心跳"),
+    SEND_MSG(2, "发送消息"),
+
     ;
 
     private final Integer type;

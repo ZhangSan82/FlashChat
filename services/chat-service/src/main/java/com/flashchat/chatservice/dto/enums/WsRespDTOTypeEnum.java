@@ -6,6 +6,7 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum WsRespDTOTypeEnum {
+    LOGIN_SUCCESS(0,"登录成功"),
     CHAT_BROADCAST(1, "聊天消息广播"),
     USER_JOIN(2, "用户加入"),
     USER_LEAVE(3, "用户离开"),
@@ -18,8 +19,8 @@ public enum WsRespDTOTypeEnum {
     SYSTEM_MSG(10, "系统消息"),
     MSG_REJECTED(11, "消息被拒绝"),
     MSG_RECALLED(12, "消息被撤回"),
-    IDENTITY_ASSIGNED(13,"身份分配通知"),    // ★ 新增：身份分配通知
-    HEARTBEAT_REPLY(14,"心跳回复");      // ★ 新增：心跳回复
+    USER_ONLINE(13,"用户上线"),    // ★ 新增：用户上线
+    USER_OFFLINE(14,"用户离线");      // ★ 新增：用户离线
 
     private final Integer type;
     private final String desc;

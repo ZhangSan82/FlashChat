@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/chat")
+@RequestMapping("/api/FlashChat/v1/chat")
 @CrossOrigin(origins = "*")
 @AllArgsConstructor
 public class ChatController {
