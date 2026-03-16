@@ -112,6 +112,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     public RoomInfoRespDTO joinRoom(RoomJoinReqDTO request) {
         String roomId = request.getRoomId();
 
+        flashChatRoomRegisterCachePenetrationBloomFilter.add(roomId);
         MemberDO memberDO = memberService.getByAccountId(request.getAccountId());
 
         if (memberDO == null) {
@@ -308,6 +309,46 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         return result;
     }
 
+    @Override
+    public void restoreRoomMemberships(Long memberId) {
+        // 1. 查 DB：该用户所有 ACTIVE 的房间成员记录
+        List<RoomMemberDO> activeMembers = roomMemberService.lambdaQuery()
+                .eq(RoomMemberDO::getMemberId, memberId)
+                .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
+                .list();
+
+        if (activeMembers == null || activeMembers.isEmpty()) {
+            log.debug("[恢复房间] memberId={}, 无活跃房间", memberId);
+            return;
+        }
+
+        // 2. 获取用户信息（走缓存）
+        MemberDO member = memberService.getById(memberId);
+        String nickname = member != null ? member.getNickname() : "匿名用户";
+        String avatar = member != null ? member.getAvatarColor() : "#999999";
+
+        // 3. 逐个恢复到内存
+        int count = 0;
+        for (RoomMemberDO rm : activeMembers) {
+            // 检查房间是否还存在且未关闭
+            RoomDO room = this.lambdaQuery()
+                    .eq(RoomDO::getRoomId, rm.getRoomId())
+                    .one();
+
+            if (room == null || room.getStatus() == RoomStatusEnum.CLOSED.getCode()) {
+                continue;  // 房间已关闭，跳过
+            }
+
+            boolean isHost = rm.getRole() == RoomMemberRoleEnum.HOST.getCode();
+
+            // 静默加入（不广播）
+            roomChannelManager.joinRoomSilent(rm.getRoomId(), memberId, nickname, avatar, isHost);
+            count++;
+        }
+
+        log.info("[恢复房间] memberId={}, 恢复了 {} 个房间", memberId, count);
+    }
+
 
     /**
      * 构建房间信息响应
@@ -356,7 +397,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             }
             customGenerateCount++;
         }
-        flashChatRoomRegisterCachePenetrationBloomFilter.add(roomId);
+
         return roomId;
     }
 

@@ -1,11 +1,11 @@
-package com.flashchat.chatservice.dto.req;
+package com.flashchat.chatservice.dto.resp;
 
 import lombok.Builder;
 import lombok.Data;
 
 @Data
 @Builder
-public class ChatBroadcastMsgReqDTO {
+public class ChatBroadcastMsgRespDTO {
     private String _id;         // 消息唯一ID
     private String content;     // 消息内容
     private String senderId;    // 发送者ID

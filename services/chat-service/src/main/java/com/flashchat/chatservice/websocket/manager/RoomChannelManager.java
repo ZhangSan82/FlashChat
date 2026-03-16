@@ -321,6 +321,28 @@ public class RoomChannelManager {
             }
         }
     }
+    public void joinRoomSilent(String roomId, Long userId, String nickname, String avatar, boolean isHost) {
+        if (roomId == null || roomId.isBlank() || userId == null) return;
+
+        ConcurrentHashMap<Long, RoomMemberInfo> members =
+                roomMembers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
+
+        // 已经在房间中就跳过
+        if (members.containsKey(userId)) return;
+
+        RoomMemberInfo memberInfo = RoomMemberInfo.builder()
+                .userId(userId)
+                .nickname(nickname != null ? nickname : "匿名用户")
+                .avatar(avatar != null ? avatar : "")
+                .isHost(isHost)
+                .isMuted(false)
+                .build();
+
+        members.put(userId, memberInfo);
+        userRooms.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(roomId);
+
+        log.debug("[静默恢复] room={}, userId={}, nickname={}", roomId, userId, nickname);
+    }
 
     // ===========================================================
     //                    消息推送

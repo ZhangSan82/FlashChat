@@ -2,6 +2,7 @@ package com.flashchat.chatservice.websocket;
 
 
 import com.flashchat.chatservice.service.MemberService;
+import com.flashchat.chatservice.service.RoomService;
 import com.flashchat.chatservice.websocket.handlers.HttpHeadersHandler;
 import com.flashchat.chatservice.websocket.handlers.NettyWebSocketServerHandler;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
@@ -36,6 +37,7 @@ import org.springframework.context.annotation.Configuration;
 public class NettyWebSocketServer {
     private final RoomChannelManager roomManager;
     private final MemberService memberService;
+    private final RoomService roomService;
     public static final int WEB_SOCKET_PORT = 8090;
     private NettyWebSocketServerHandler NETTY_WEB_SOCKET_SERVER_HANDLER;
 
@@ -53,7 +55,7 @@ public class NettyWebSocketServer {
     @PostConstruct
     public void start() {
         try {
-            NETTY_WEB_SOCKET_SERVER_HANDLER = new NettyWebSocketServerHandler(roomManager,memberService);
+            NETTY_WEB_SOCKET_SERVER_HANDLER = new NettyWebSocketServerHandler(roomManager,memberService,roomService);
             log.info("NETTY_WEB_SOCKET_SERVER_HANDLER初始化:{}",NETTY_WEB_SOCKET_SERVER_HANDLER);
             run();
 

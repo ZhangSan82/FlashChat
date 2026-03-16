@@ -1,6 +1,7 @@
 package com.flashchat.chatservice.controller;
 
 import com.flashchat.chatservice.dto.req.SendMsgReqDTO;
+import com.flashchat.chatservice.dto.resp.ChatBroadcastMsgRespDTO;
 import com.flashchat.chatservice.service.ChatService;
 import com.flashchat.convention.result.Result;
 import com.flashchat.convention.result.Results;
@@ -27,13 +28,10 @@ public class ChatController {
      * Body: {"roomId": "test_room", "memberId": 1, "content": "你好"}
      */
     @PostMapping("/msg")
-    public Result<Void> sendMsg(@Valid @RequestBody SendMsgReqDTO request) {
-        log.info("[HTTP-发消息] roomId={}, userId={}, content={}",
-                request.getRoomId(), request.getAccountId(), request.getContent());
+    public Result<ChatBroadcastMsgRespDTO> sendMsg(@Valid @RequestBody SendMsgReqDTO request) {
+        log.info("[发消息] roomId={}, accountId={}", request.getRoomId(), request.getAccountId());
 
-        chatService.sendMsg(request);
-
-        return Results.success();
+        return Results.success(chatService.sendMsg(request));
 
     }
 }

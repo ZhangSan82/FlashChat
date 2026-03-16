@@ -1,11 +1,17 @@
 package com.flashchat.chatservice.service;
 
 
+import com.baomidou.mybatisplus.extension.service.IService;
+import com.flashchat.chatservice.dao.entity.MessageDO;
+import com.flashchat.chatservice.dao.mapper.MessageMapper;
 import com.flashchat.chatservice.dto.req.SendMsgReqDTO;
+import com.flashchat.chatservice.dto.resp.ChatBroadcastMsgRespDTO;
+import jakarta.validation.Valid;
 
-public interface ChatService{
+public interface ChatService extends IService<MessageDO> {
+
     /**
-     * 发送消息
+     *发送消息
      */
-    void sendMsg(SendMsgReqDTO request);
+    ChatBroadcastMsgRespDTO sendMsg(@Valid SendMsgReqDTO request);
 }

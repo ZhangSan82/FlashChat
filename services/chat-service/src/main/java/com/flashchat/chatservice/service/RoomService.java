@@ -35,4 +35,9 @@ public interface RoomService extends IService<RoomDO> {
      *房间的成员列表
      */
     List<RoomMemberRespDTO> getRoomMembers(String roomId);
+
+    /**
+     *用户重新登录恢复房间
+     */
+    void restoreRoomMemberships(Long memberId);
 }

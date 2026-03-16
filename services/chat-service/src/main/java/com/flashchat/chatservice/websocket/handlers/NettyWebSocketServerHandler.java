@@ -5,9 +5,11 @@ import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dto.enums.WsReqDTOTypeEnum;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.req.*;
+import com.flashchat.chatservice.dto.resp.ChatBroadcastMsgRespDTO;
 import com.flashchat.chatservice.dto.resp.IdentityInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
 import com.flashchat.chatservice.service.MemberService;
+import com.flashchat.chatservice.service.RoomService;
 import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 
@@ -58,10 +60,12 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
 
     private final MemberService memberService;
     private final RoomChannelManager roomManager;
+    private final RoomService roomService;
 
-    public NettyWebSocketServerHandler(RoomChannelManager roomManager, MemberService memberService) {
+    public NettyWebSocketServerHandler(RoomChannelManager roomManager, MemberService memberService,RoomService roomService) {
         this.roomManager = roomManager;
         this.memberService = memberService;
+        this.roomService = roomService;
     }
 
 
@@ -83,6 +87,7 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
      * 连接建立：分配身份 + 注册在线
      */
     private void handleConnect(Channel channel) {
+        log.info("channel:{}", channel);
         String accountId = ChannelAttrUtil.getAccountId(channel);
         String token = ChannelAttrUtil.getToken(channel);
 
@@ -114,7 +119,7 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
     private void handleAnonymousConnect(Channel channel, String accountId) {
 
         // 1.//TODO 查 DB
-        MemberDO member = memberService.lambdaQuery().eq(MemberDO::getAccountId, accountId).one();
+        MemberDO member = memberService.getByAccountId(accountId);
 
         if (member == null) {
             log.warn("[握手失败] accountId={} 不存在", accountId);
@@ -139,6 +144,15 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
 
         // 3. 注册在线
         roomManager.online(memberId, channel);
+
+        // ★ 4. 从 DB 恢复房间成员关系
+        try {
+            roomService.restoreRoomMemberships(memberId);
+        } catch (Exception e) {
+            log.error("[恢复房间失败] memberId={}", memberId, e);
+            // 恢复失败不影响连接，用户可以重新加入房间
+        }
+
 
         log.info("[匿名连接成功] memberId={}, accountId={}, nickname={}",
                 memberId, accountId, nickname);
@@ -219,6 +233,13 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
             return;
         }
 
+        // 未认证不处理
+        if (!ChannelAttrUtil.isAuthenticated(ctx.channel())) {
+            roomManager.sendToChannel(ctx.channel(),
+                    WsRespDTO.ofGlobal(WsRespDTOTypeEnum.SYSTEM_MSG, "请先完成身份认证"));
+            return;
+        }
+
         log.debug("[收到WS消息] {}", text);
 
         // 解析消息
@@ -254,72 +275,12 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
 
         switch (type) {
             case HEARTBEAT -> ctx.channel().writeAndFlush(new TextWebSocketFrame("pong"));
-            case SEND_MSG -> handleSendMsg(ctx.channel(), data);
+            case SEND_MSG ->// 发消息走 HTTP 接口
+                    roomManager.sendToChannel(ctx.channel(),
+                            WsRespDTO.ofGlobal(WsRespDTOTypeEnum.SYSTEM_MSG,
+                                    "发消息请使用 HTTP 接口 POST /api/FlashChat/v1/chat/msg"));
         }
     }
 
-    // ================================================================
-    //                    发送聊天消息
-    // ================================================================
 
-    /**
-     * 处理发送消息
-     * <p>
-     * 客户端发: {"type":2, "data":{"roomId":"room_abc", "content":"大家好"}}
-     * <p>
-     * 这是 WS 通道上唯一的业务操作
-     */
-    private void handleSendMsg(Channel channel, JsonElement data) {
-        if (data == null) {
-            roomManager.sendToChannel(channel,
-                    WsRespDTO.ofGlobal(WsRespDTOTypeEnum.MSG_REJECTED, "发送失败：缺少参数"));
-            return;
-        }
-
-        WsSendMsgReqDTO req = JsonUtil.fromJson(data.toString(), WsSendMsgReqDTO.class);
-        if (req == null || req.getRoomId() == null || req.getContent() == null) {
-            roomManager.sendToChannel(channel,
-                    WsRespDTO.ofGlobal(WsRespDTOTypeEnum.MSG_REJECTED, "消息格式错误"));
-            return;
-        }
-
-        Long userId = ChannelAttrUtil.getUserId(channel);
-        if (userId == null) return;
-
-        String roomId = req.getRoomId();
-
-        // 1. 检查是否在房间中
-        if (!roomManager.isInRoom(roomId, userId)) {
-            roomManager.sendToChannel(channel,
-                    WsRespDTO.of(roomId, WsRespDTOTypeEnum.MSG_REJECTED,
-                            "你不在该房间中，请先通过HTTP接口加入房间"));
-            return;
-        }
-
-        // 2. 检查禁言（每个房间独立）
-        RoomMemberInfo memberInfo = roomManager.getRoomMemberInfo(roomId, userId);
-        if (memberInfo != null && memberInfo.isMuted()) {
-            roomManager.sendToChannel(channel,
-                    WsRespDTO.of(roomId, WsRespDTOTypeEnum.MSG_REJECTED, "你在该房间已被禁言"));
-            return;
-        }
-
-        // 3. 构建广播消息体
-        String msgId = UUID.randomUUID().toString().replace("-", "");
-        ChatBroadcastMsgReqDTO broadcastMsg = ChatBroadcastMsgReqDTO.builder()
-                ._id(msgId)
-                .content(req.getContent())
-                .senderId(userId.toString())
-                .username(memberInfo != null ? memberInfo.getNickname() : "匿名")
-                .avatar(memberInfo != null ? memberInfo.getAvatar() : "")
-                .timestamp(System.currentTimeMillis())
-                .isHost(memberInfo != null && memberInfo.isHost())
-                .build();
-
-        // 4. 广播给房间所有在线成员
-        roomManager.broadcastToRoom(roomId,
-                WsRespDTO.of(roomId, WsRespDTOTypeEnum.CHAT_BROADCAST, broadcastMsg));
-
-        log.info("[WS-发消息] room={}, userId={}, content={}", roomId, userId, req.getContent());
-    }
 }

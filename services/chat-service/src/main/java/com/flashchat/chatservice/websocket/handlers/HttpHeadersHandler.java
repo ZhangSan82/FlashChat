@@ -36,7 +36,7 @@ public class HttpHeadersHandler extends ChannelInboundHandlerAdapter {
             String token = getParam(params, "token");
 
             //提取账号ID
-            String accoundId = getParam(params, "accoundId");
+            String accountId = getParam(params, "accountId");
 
             // ===== 2. 提取 IP =====
             HttpHeaders headers = request.headers();
@@ -54,7 +54,7 @@ public class HttpHeadersHandler extends ChannelInboundHandlerAdapter {
             // ===== 3. 存入 Channel 属性（仅用户级信息） =====
             ChannelAttrUtil.set(ctx.channel(), ChannelAttrUtil.TOKEN, token);
             ChannelAttrUtil.set(ctx.channel(), ChannelAttrUtil.IP, ip);
-            ChannelAttrUtil.set(ctx.channel(),ChannelAttrUtil.ACCOUNT_ID, accoundId);
+            ChannelAttrUtil.set(ctx.channel(),ChannelAttrUtil.ACCOUNT_ID, accountId);
 
             log.info("[WS握手] 提取连接参数: token={}, ip={}", token, ip);
 

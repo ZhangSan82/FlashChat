@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -38,10 +39,13 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper,MemberDO> implem
     };
 
 
+
+    @Transactional
     @Override
     public MemberInfoRespDTO autoRegister() {
         // 1. 生成 accountId，确保唯一
         String accountId = generateUniqueAccountId();
+        flashChatAccountRegisterCachePenetrationBloomFilter.add(accountId);
 
         // 2. 生成随机昵称
         String nickname = generateNickname();
@@ -108,22 +112,21 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper,MemberDO> implem
      */
     private String  generateUniqueAccountId(){
         int customGenerateCount = 0;
-        String accoundId;
+        String accountId;
         String SEED_PREFIX = "flashchat:AccoundId:" + UUID.randomUUID().toString();
         while (true) {
             if (customGenerateCount > 10)
             {
                 throw new ServiceException("房间ID频繁生成,请稍后再试");
             }
-            accoundId = HashUtil.hashToBase62(SEED_PREFIX);
-            if (!flashChatAccountRegisterCachePenetrationBloomFilter.contains(accoundId))
+            accountId = HashUtil.hashToBase62(SEED_PREFIX);
+            if (!flashChatAccountRegisterCachePenetrationBloomFilter.contains(accountId))
             {
                 break;
             }
             customGenerateCount++;
         }
-        flashChatAccountRegisterCachePenetrationBloomFilter.add(accoundId);
-        return "FC-" + accoundId ;
+        return "FC-" + accountId ;
     }
 
 
