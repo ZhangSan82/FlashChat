@@ -8,7 +8,6 @@ import com.flashchat.chatservice.service.MemberService;
 import com.flashchat.chatservice.toolkit.HashUtil;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
-import jakarta.annotation.Resource;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
@@ -22,7 +21,7 @@ import java.util.concurrent.ThreadLocalRandom;
 @Service
 @Slf4j
 @AllArgsConstructor
-public class MemberServiceImpl extends ServiceImpl<MemberMapper,MemberDO> implements MemberService {
+public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> implements MemberService {
 
     @Qualifier("flashChatAccountRegisterCachePenetrationBloomFilter")
     private  final RBloomFilter<String> flashChatAccountRegisterCachePenetrationBloomFilter;
@@ -113,7 +112,7 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper,MemberDO> implem
     private String  generateUniqueAccountId(){
         int customGenerateCount = 0;
         String accountId;
-        String SEED_PREFIX = "flashchat:AccoundId:" + UUID.randomUUID().toString();
+        String SEED_PREFIX = "flashchat:AccountId:" + UUID.randomUUID().toString();
         while (true) {
             if (customGenerateCount > 10)
             {

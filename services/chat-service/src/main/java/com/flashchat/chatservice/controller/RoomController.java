@@ -2,13 +2,10 @@ package com.flashchat.chatservice.controller;
 
 
 
-import com.flashchat.chatservice.dto.req.RoomCreateReqDTO;
-import com.flashchat.chatservice.dto.req.RoomJoinReqDTO;
-import com.flashchat.chatservice.dto.req.RoomLeaveReqDTO;
+import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
 import com.flashchat.chatservice.service.RoomService;
-
 import com.flashchat.convention.result.Result;
 import com.flashchat.convention.result.Results;
 import jakarta.validation.Valid;
@@ -67,5 +64,53 @@ public class RoomController {
         return Results.success(members);
     }
 
+    /**
+     * 踢人（仅房主可操作）
+     */
+    @PostMapping("/kick")
+    public Result<Void> kickMember(@Valid @RequestBody RoomKickReqDTO request) {
+        log.info("[踢人] roomId={}, operator={}, target={}",
+                request.getRoomId(), request.getAccountId(), request.getTargetMemberId());
+        roomService.kickMember(request);
+        return Results.success();
+    }
 
+    /**
+     * 禁言（仅房主可操作）
+     */
+    @PostMapping("/mute")
+    public Result<Void> muteMember(@Valid @RequestBody RoomMuteReqDTO request) {
+        log.info("[禁言] roomId={}, operator={}, target={}",
+                request.getRoomId(), request.getAccountId(), request.getTargetMemberId());
+        roomService.muteMember(request);
+        return Results.success();
+    }
+
+    /**
+     * 解除禁言（仅房主可操作）
+     */
+    @PostMapping("/unmute")
+    public Result<Void> unmuteMember(@Valid @RequestBody RoomMuteReqDTO request) {
+        log.info("[解禁] roomId={}, operator={}, target={}",
+                request.getRoomId(), request.getAccountId(), request.getTargetMemberId());
+        roomService.unmuteMember(request);
+        return Results.success();
+    }
+
+    /**
+     * 获取我加入的所有房间
+     */
+    @GetMapping("/my-rooms/{accountId}")
+    public Result<List<RoomInfoRespDTO>> getMyRooms(@PathVariable("accountId") String accountId) {
+        log.info("[我的房间] accountId={}", accountId);
+        return Results.success(roomService.getMyRooms(accountId));
+    }
+
+
+    @PostMapping("/close")
+    public Result<Void> closeRoom(@Valid @RequestBody RoomCloseReqDTO request) {
+        log.info("[关闭房间] roomId={}, operator={}", request.getRoomId(), request.getAccountId());
+        roomService.closeRoom(request);
+        return Results.success();
+    }
 }

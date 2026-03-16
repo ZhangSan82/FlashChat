@@ -212,7 +212,6 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
     }
 
     private void handleDisconnect(Channel channel) {
-        if (!channel.isOpen()) return;
         roomManager.offline(channel);
         if (channel.isActive()) {
             channel.close();

@@ -1,10 +1,9 @@
 package com.flashchat.chatservice.controller;
 
+
 import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dto.resp.MemberInfoRespDTO;
 import com.flashchat.chatservice.service.MemberService;
-
-
 import com.flashchat.convention.result.Result;
 import com.flashchat.convention.result.Results;
 import lombok.AllArgsConstructor;
@@ -23,7 +22,7 @@ public class MemberController {
     /**
      * 匿名成员自动注册
      */
-    @PostMapping("/auto-register")
+    @PostMapping("/auto-register")//TODO限流避免恶意注册账号
     public Result<MemberInfoRespDTO> autoRegister() {
         log.info("[自动注册] 收到注册请求");
         return Results.success(memberService.autoRegister());

@@ -88,7 +88,6 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .senderMemberId(memberId)
                 .status(0)//TODO
                 .isHost(isHost)
-                .createTime(LocalDateTime.now())
                 .build();
         this.save(messageDO);
 
