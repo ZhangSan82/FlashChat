@@ -34,4 +34,8 @@ public class ChatController {
         return Results.success(chatService.sendMsg(request));
 
     }
+
+    /**
+     * 查询历史消息
+     */
 }

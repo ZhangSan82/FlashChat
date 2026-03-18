@@ -180,11 +180,11 @@ public class RoomChannelManager {
 
         if (roomId == null || roomId.isBlank()) {
             log.warn("[加入房间] roomId 为空, userId={}", userId);
-            //throw  new ClientException("房间ID不能为空");
+            return;
         }
         if (userId == null) {
             log.warn("[加入房间] userId 为空, roomId={}", roomId);
-            //throw  new ClientException("用户ID不能为空");
+            return;
         }
 
 

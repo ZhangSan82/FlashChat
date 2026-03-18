@@ -17,6 +17,8 @@ import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
 import com.flashchat.convention.exception.ClientException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.bytebuddy.asm.Advice;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -29,6 +31,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
 
     private final RoomChannelManager roomChannelManager;
     private final MemberService  memberService;
+    private final MessagePersistServiceImpl messagePersistServiceImpl;
 
     @Override
     public ChatBroadcastMsgRespDTO sendMsg(SendMsgReqDTO request) {
@@ -75,7 +78,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 roomId, memberId, request.getContent());
 
 
-        // ===== 6. TODO: 保存到数据库  ,异步添加=====
+        // ===== 6. TODO: 保存到数据库  ,异步批量添加=====
         // messageBatchWriter.addMessage(message);
         Integer isHost = memberInfo != null && memberInfo.isHost() ? 1 : 0;
         MessageDO messageDO = MessageDO.builder()
@@ -89,9 +92,12 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .status(0)//TODO
                 .isHost(isHost)
                 .build();
-        this.save(messageDO);
+        messagePersistServiceImpl.saveAsync(messageDO);
 
 
         return broadcastMsg;
     }
+
+
+
 }

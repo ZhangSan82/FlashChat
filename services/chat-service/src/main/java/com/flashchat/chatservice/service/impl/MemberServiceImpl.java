@@ -76,13 +76,8 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
 
     @Override
     public MemberInfoRespDTO getMemberByAccountId(String accountId) {
-        MemberDO member = this.lambdaQuery().eq(MemberDO::getAccountId, accountId).one();
-        if (member == null) {
-            throw new ClientException("账号不存在");
-        }
-        if (member.getStatus() != null && member.getStatus() == 0) {
-            throw new ClientException("账号已被封禁");
-        }
+        MemberDO member = getByAccountId(accountId);
+
 
         return MemberInfoRespDTO.builder()
                 .accountId(member.getAccountId())

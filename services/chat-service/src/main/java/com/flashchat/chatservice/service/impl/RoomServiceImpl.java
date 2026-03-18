@@ -28,9 +28,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -252,6 +251,23 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             return List.of();
         }
 
+        List<Long> memberIds = new ArrayList<>();
+        for (RoomMemberDO member : dbMembers) {
+            Long memberId = member.getMemberId() != null ? member.getMemberId() : member.getUserId();
+            RoomMemberInfo memoryInfo = roomChannelManager.getRoomMemberInfo(roomId, memberId);
+            if (memoryInfo != null) {
+                memberIds.add(memberId);
+            }
+        }
+
+        Map<Long,MemberDO> memberMap = new HashMap<>();
+        if (!memberIds.isEmpty()) {
+            List<MemberDO> memberDOS = memberService.listByIds(memberIds);
+            for (MemberDO member : memberDOS) {
+                memberMap.put(member.getId(),member);
+            }
+        }
+
         // ===== 3. 组装响应（DB + 内存合并）=====
         List<RoomMemberRespDTO> result = new ArrayList<>();
 
@@ -270,7 +286,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 avatar = memoryInfo.getAvatar();
             } else {
                 // 用 memberService 带缓存的查询
-                MemberDO memberDO = memberService.getById(id);
+                MemberDO memberDO = memberMap.get(id);
                 nickname = memberDO != null ? memberDO.getNickname() : "匿名用户";
                 avatar = memberDO != null ? memberDO.getAvatarColor() : "#999999";
             }
@@ -323,14 +339,22 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         String nickname = member != null ? member.getNickname() : "匿名用户";
         String avatar = member != null ? member.getAvatarColor() : "#999999";
 
+
+        List<String> roomIds = activeMembers.stream()
+                .map(RoomMemberDO::getRoomId)
+                .toList();
+
+        Map<String,RoomDO> roomMap = this.lambdaQuery()
+                .in(RoomDO::getRoomId,roomIds)
+                .list()
+                .stream()
+                .collect(Collectors.toMap(RoomDO::getRoomId,room -> room));
+
         // 3. 逐个恢复到内存
         int count = 0;
         for (RoomMemberDO rm : activeMembers) {
             // 检查房间是否还存在且未关闭
-            RoomDO room = this.lambdaQuery()
-                    .eq(RoomDO::getRoomId, rm.getRoomId())
-                    .one();
-
+            RoomDO room = roomMap.get(rm.getRoomId());
             if (room == null || room.getStatus() == RoomStatusEnum.CLOSED.getCode()) {
                 continue;  // 房间已关闭，跳过
             }
@@ -428,10 +452,12 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     public void closeRoom(RoomCloseReqDTO request) {
         String roomId = request.getRoomId();
 
+        MemberDO operator = memberService.getByAccountId(request.getAccountId());
+
         // ===== 1. 校验操作者是房主 =====
         RoomMemberDO operatorMember = roomMemberService.lambdaQuery()
                 .eq(RoomMemberDO::getRoomId, roomId)
-                .eq(RoomMemberDO::getMemberId, request.getAccountId())
+                .eq(RoomMemberDO::getMemberId, operator.getId())
                 .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
                 .one();
         if (operatorMember == null) {
@@ -479,22 +505,18 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             return List.of();
         }
 
-        // 批量查房间信息
-        List<RoomInfoRespDTO> result = new ArrayList<>();
-        for (RoomMemberDO rm : activeMembers) {
-            RoomDO room = this.lambdaQuery()
-                    .eq(RoomDO::getRoomId, rm.getRoomId())
-                    .one();
+        List<String> roomIds = activeMembers.stream()
+                .map(RoomMemberDO::getRoomId)
+                .toList();
 
-            // 跳过不存在或已关闭的房间
-            if (room == null || room.getStatus() == RoomStatusEnum.CLOSED.getCode()) {
-                continue;
-            }
+        List<RoomDO> rooms = this.lambdaQuery()
+                .in(RoomDO::getRoomId, roomIds)
+                .ne(RoomDO::getStatus,RoomStatusEnum.CLOSED.getCode())
+                .list();
 
-            result.add(buildRoomInfoResp(room));
-        }
-
-        return result;
+        return rooms.stream()
+                .map(this::buildRoomInfoResp)
+                .toList();
 
     }
 
