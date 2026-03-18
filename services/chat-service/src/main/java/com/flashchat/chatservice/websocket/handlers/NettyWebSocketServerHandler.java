@@ -4,8 +4,6 @@ package com.flashchat.chatservice.websocket.handlers;
 import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dto.enums.WsReqDTOTypeEnum;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
-import com.flashchat.chatservice.dto.req.*;
-import com.flashchat.chatservice.dto.resp.ChatBroadcastMsgRespDTO;
 import com.flashchat.chatservice.dto.resp.IdentityInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
 import com.flashchat.chatservice.service.MemberService;
@@ -14,8 +12,6 @@ import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
-import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
-import com.flashchat.convention.exception.ClientException;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -23,10 +19,12 @@ import io.netty.channel.*;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.handler.timeout.IdleStateEvent;
-import io.netty.util.internal.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
-import java.util.UUID;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadPoolExecutor;
 
 
 /**
@@ -61,11 +59,24 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
     private final MemberService memberService;
     private final RoomChannelManager roomManager;
     private final RoomService roomService;
+    private final ThreadPoolTaskExecutor wsBusinessExecutor;
 
-    public NettyWebSocketServerHandler(RoomChannelManager roomManager, MemberService memberService,RoomService roomService) {
+    /**
+     * 正在处理连接的 accountId 集合
+     * 防止同一用户快速刷新页面导致并发处理同一个 accountId
+     */
+    private final Set<String> connectingAccounts = ConcurrentHashMap.newKeySet();
+
+    /**
+     * 队列剩余容量低于此值时拒绝新连接
+     */
+    private static final int QUEUE_CAPACITY_THRESHOLD = 10;
+
+    public NettyWebSocketServerHandler(RoomChannelManager roomManager, MemberService memberService, RoomService roomService, ThreadPoolTaskExecutor wsBusinessExecutor) {
         this.roomManager = roomManager;
         this.memberService = memberService;
         this.roomService = roomService;
+        this.wsBusinessExecutor = wsBusinessExecutor;
     }
 
 
@@ -93,7 +104,7 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
 
         if (accountId != null && !accountId.isBlank()) {
             // ===== 匿名成员 =====
-            handleAnonymousConnect(channel, accountId);
+            handleAnonymousConnectAsync(channel, accountId);
 
         } else if (token != null && !token.isBlank()) {
             // ===== 注册用户（未来实现）=====
@@ -106,69 +117,117 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
         }
     }
 
+
     /**
-     * 匿名成员连接
-     *
-     * 流程：
-     *   前端传 accountId → 查 DB 获取 MemberDO → 绑定 member.id 作为内部ID
-     *
-     * 为什么用 accountId 而不是 member.id：
-     *   accountId 是面向用户的标识，不暴露自增主键
-     *   用户可以跨设备输入 accountId 登录
+     * 匿名成员连接 — 异步执行
      */
-    private void handleAnonymousConnect(Channel channel, String accountId) {
+    private void handleAnonymousConnectAsync(Channel channel, String accountId) {
 
-        // 1.//TODO 查 DB
-        MemberDO member = memberService.getByAccountId(accountId);
+        // ============================
+        // 以下 3 个防护在 EventLoop 线程执行（纳秒级，不阻塞）
+        // ============================
 
-        if (member == null) {
-            log.warn("[握手失败] accountId={} 不存在", accountId);
-            sendErrorAndClose(channel, "账号不存在，请先调用 /member/auto-register 注册");
+        // 防护1：防重复连接
+        if (!connectingAccounts.add(accountId)) {
+            log.warn("[重复连接] accountId={} 正在处理中，拒绝本次", accountId);
+            sendErrorAndClose(channel, "正在连接中，请勿重复操作");
             return;
         }
 
-        if (member.getStatus() != null && member.getStatus() == 0) {
-            log.warn("[握手失败] accountId={} 已被封禁", accountId);
-            sendErrorAndClose(channel, "账号已被封禁");
+        // 防护2：队列容量预检查
+        if (wsBusinessExecutor.getThreadPoolExecutor().getQueue().remainingCapacity() < QUEUE_CAPACITY_THRESHOLD) {
+            log.warn("[线程池繁忙] 拒绝连接 accountId={}, 剩余容量不足", accountId);
+            connectingAccounts.remove(accountId);
+            sendErrorAndClose(channel, "服务器繁忙，请稍后重试");
             return;
         }
 
-        // 2. 绑定真实身份
-        //    Channel 上存的 userId = member.id（数据库主键）
-        //    后续 RoomChannelManager、消息入库 都用这个 ID
-        Long memberId = member.getId();
-        String nickname = member.getNickname();
-        String avatar = member.getAvatarColor();
+        // ============================
+        // 提交到业务线程池（EventLoop 立即返回）
+        // ============================
+        wsBusinessExecutor.execute(() -> {
+            try {
+                // ============================
+                // 以下全部在 ws-biz 线程中执行
+                // 即使阻塞也不影响 Netty EventLoop
+                // ============================
 
-        ChannelAttrUtil.bindIdentity(channel, memberId, 0, nickname, avatar);
+                // 防护3：执行前检查连接（用户可能在排队期间已断开）
+                if (!channel.isActive()) {
+                    log.info("[连接已断开] accountId={}, 放弃处理", accountId);
+                    return;
+                }
 
-        // 3. 注册在线
-        roomManager.online(memberId, channel);
+                // ===== 1. 查 DB（阻塞操作，现在在业务线程池中执行）=====
+                MemberDO member;
+                try {
+                    member = memberService.getByAccountId(accountId);
+                } catch (Exception e) {
+                    log.warn("[握手失败] accountId={}, 查询异常: {}", accountId, e.getMessage());
+                    sendErrorAndClose(channel, "账号不存在，请先注册");
+                    return;
+                }
 
-        // ★ 4. 从 DB 恢复房间成员关系
-        try {
-            roomService.restoreRoomMemberships(memberId);
-        } catch (Exception e) {
-            log.error("[恢复房间失败] memberId={}", memberId, e);
-            // 恢复失败不影响连接，用户可以重新加入房间
-        }
+                if (member == null) {
+                    log.warn("[握手失败] accountId={} 不存在", accountId);
+                    sendErrorAndClose(channel, "账号不存在，请先调用 /member/auto-register 注册");
+                    return;
+                }
 
+                if (member.getStatus() != null && member.getStatus() == 0) {
+                    log.warn("[握手失败] accountId={} 已被封禁", accountId);
+                    sendErrorAndClose(channel, "账号已被封禁");
+                    return;
+                }
 
-        log.info("[匿名连接成功] memberId={}, accountId={}, nickname={}",
-                memberId, accountId, nickname);
+                // 防护4：DB 查询后再检查连接（查询可能耗时较长）
+                if (!channel.isActive()) {
+                    log.info("[连接已断开] accountId={}, DB查询后发现连接已关闭", accountId);
+                    return;
+                }
 
-        // 4. 通知客户端
-        roomManager.sendToChannel(channel,
-                WsRespDTO.ofGlobal(WsRespDTOTypeEnum.LOGIN_SUCCESS,
-                        IdentityInfoRespDTO.builder()
-                                .userId(memberId)
-                                .nickname(nickname)
-                                .avatar(avatar)
-                                .build()));
+                // ===== 2. 绑定身份（内存操作，安全）=====
+                Long memberId = member.getId();
+                String nickname = member.getNickname();
+                String avatar = member.getAvatarColor();
+
+                ChannelAttrUtil.bindIdentity(channel, memberId, 0, nickname, avatar);
+
+                // ===== 3. 注册在线（内存操作，安全）=====
+                roomManager.online(memberId, channel);
+
+                // ===== 4. 从 DB 恢复房间成员关系（阻塞操作，在业务线程池中执行）=====
+                try {
+                    roomService.restoreRoomMemberships(memberId);
+                } catch (Exception e) {
+                    log.error("[恢复房间失败] memberId={}", memberId, e);
+                    // 恢复失败不影响连接，用户可以重新加入房间
+                }
+
+                log.info("[匿名连接成功] memberId={}, accountId={}, nickname={}",
+                        memberId, accountId, nickname);
+
+                // ===== 5. 通知客户端（writeAndFlush 从任何线程调用都是线程安全的）=====
+                roomManager.sendToChannel(channel,
+                        WsRespDTO.ofGlobal(WsRespDTOTypeEnum.LOGIN_SUCCESS,
+                                IdentityInfoRespDTO.builder()
+                                        .userId(memberId)
+                                        .nickname(nickname)
+                                        .avatar(avatar)
+                                        .build()));
+
+            } catch (Exception e) {
+                log.error("[匿名连接异常] accountId={}", accountId, e);
+                sendErrorAndClose(channel, "服务器内部错误，请重试");
+            } finally {
+                // 防护5：必须在 finally 中移除，否则该 accountId 永远无法再连接
+                connectingAccounts.remove(accountId);
+            }
+        });
     }
 
     /**
-     * 注册用户连接（Phase 5 实现）
+     * 注册用户连接（Phase 5 实现）* 未来实现时也需要提交到 wsBusinessExecutor
      */
     private void handleRegisteredUserConnect(Channel channel, String token) {
         // TODO Phase 5：Sa-Token 验证 token → 查 t_user → 绑定身份（userType=1）

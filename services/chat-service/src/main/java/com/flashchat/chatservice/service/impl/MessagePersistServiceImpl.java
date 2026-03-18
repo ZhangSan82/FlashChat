@@ -13,14 +13,14 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class MessagePersistServiceImpl {
 
-    private final ChatService chatService;
+    private final MessageMapper messageMapper;
 
 
     //TODO未来实现批量保存
     @Async("messageExecutor")
     public void saveAsync(MessageDO messageDO) {
         try {
-            chatService.save(messageDO);
+            messageMapper.insert(messageDO);
         } catch (Exception e) {
             log.error("[消息持久化失败] msgId={}, roomId={}",
                     messageDO.getMsgId(), messageDO.getRoomId(), e);

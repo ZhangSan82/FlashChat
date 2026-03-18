@@ -27,7 +27,10 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
 
 
 
@@ -38,6 +41,10 @@ public class NettyWebSocketServer {
     private final RoomChannelManager roomManager;
     private final MemberService memberService;
     private final RoomService roomService;
+
+    @Qualifier("wsBusinessExecutor")
+    private final ThreadPoolTaskExecutor wsBusinessExecutor;
+
     public static final int WEB_SOCKET_PORT = 8090;
     private NettyWebSocketServerHandler NETTY_WEB_SOCKET_SERVER_HANDLER;
 
@@ -55,7 +62,12 @@ public class NettyWebSocketServer {
     @PostConstruct
     public void start() {
         try {
-            NETTY_WEB_SOCKET_SERVER_HANDLER = new NettyWebSocketServerHandler(roomManager,memberService,roomService);
+            NETTY_WEB_SOCKET_SERVER_HANDLER = new NettyWebSocketServerHandler(
+                    roomManager,
+                    memberService,
+                    roomService,
+                    wsBusinessExecutor
+            );
             log.info("NETTY_WEB_SOCKET_SERVER_HANDLER初始化:{}",NETTY_WEB_SOCKET_SERVER_HANDLER);
             run();
 

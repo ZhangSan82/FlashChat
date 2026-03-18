@@ -12,6 +12,13 @@ spring:
     url: jdbc:mysql://localhost:3306/flashchat?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: 123456
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 5000
+      pool-name: FlashChatHikariPool
 
     data:
       redis:
@@ -36,9 +43,3 @@ mybatis-plus:
     # 开发阶段打印 SQL
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
-# ==================== 日志 ====================
-#logging:
-#  level:
-#    com.flashchat: debug
-#    # MyBatis-Plus Mapper SQL 日志
-#    com.flashchat.chatservice.dao.mapper: debug

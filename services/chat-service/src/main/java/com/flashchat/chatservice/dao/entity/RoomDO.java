@@ -1,4 +1,4 @@
-﻿package com.flashchat.chatservice.dao.entity;
+package com.flashchat.chatservice.dao.entity;
 
 
 import com.baomidou.mybatisplus.annotation.*;

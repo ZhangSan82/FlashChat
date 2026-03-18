@@ -52,12 +52,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         MemberDO creator = memberService.getByAccountId(request.getAccountId());
 
-        if (creator == null) {
-            throw new ClientException("账号不存在");
-        }
-        if (creator.getStatus() != null && creator.getStatus() == 0) {
-            throw new ClientException("账号已被封禁，无法创建房间");
-        }
 
         // TODO 未来：检查是否为注册用户（主持人）+ 扣除积分
 
@@ -110,12 +104,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         MemberDO memberDO = memberService.getByAccountId(request.getAccountId());
 
-        if (memberDO == null) {
-            throw new ClientException("账号不存在");
-        }
-        if (memberDO.getStatus() != null && memberDO.getStatus() == 0) {
-            throw new ClientException("账号已被封禁，无法加入房间");
-        }
 
         Long memberId = memberDO.getId();
         // 1. 查房间
