@@ -7,6 +7,7 @@ import lombok.Data;
 @Builder
 public class ChatBroadcastMsgRespDTO {
     private String _id;         // 消息唯一ID
+    private Long dbId;          //消息自增ID
     private String content;     // 消息内容
     private String senderId;    // 发送者ID
     private String username;    // 发送者昵称

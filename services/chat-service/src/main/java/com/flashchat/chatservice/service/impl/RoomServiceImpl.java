@@ -15,6 +15,7 @@ import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
 import com.flashchat.chatservice.service.MemberService;
 import com.flashchat.chatservice.service.RoomMemberService;
 import com.flashchat.chatservice.service.RoomService;
+import com.flashchat.chatservice.service.UnreadService;
 import com.flashchat.chatservice.toolkit.HashUtil;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
@@ -41,6 +42,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final RBloomFilter<String> flashChatRoomRegisterCachePenetrationBloomFilter;
     private final RoomMemberService roomMemberService;
     private final MemberService memberService;
+    private final UnreadService unreadService;
 
     /**
      * 创建房间
@@ -213,6 +215,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         // ===== 5. 同步内存 =====
         roomChannelManager.leaveRoom(roomId, memberId);
+        unreadService.removeRoomUnread(memberId, roomId);
 
         log.info("[离开房间] room={}, memberId={}", roomId, memberId);
 
@@ -373,6 +376,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         // 同步内存
         roomChannelManager.kickMember(request.getRoomId(), ctx.getTargetId());
+        unreadService.removeRoomUnread(ctx.getTargetId(), request.getRoomId());
 
         log.info("[踢人成功] room={}, operator={}, target={}",
                 request.getRoomId(), ctx.getOperatorId(), ctx.getTargetId());
@@ -474,6 +478,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         // ===== 4. 同步内存：通知所有在线成员 + 清理房间数据 =====
         roomChannelManager.closeRoom(roomId);
+        unreadService.clearRoomForAllMembers(roomId);
 
         log.info("[关闭房间] room={}, operator={}", roomId, request.getAccountId());
     }
@@ -502,10 +507,15 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .ne(RoomDO::getStatus,RoomStatusEnum.CLOSED.getCode())
                 .list();
 
-        return rooms.stream()
-                .map(this::buildRoomInfoResp)
-                .toList();
+        Map<String, Integer> unreadMap = unreadService.getAllUnreadCounts(memberId);
 
+        return rooms.stream()
+                .map(room -> {
+                    RoomInfoRespDTO dto = buildRoomInfoResp(room);
+                    dto.setUnreadCount(unreadMap.getOrDefault(room.getRoomId(), 0));
+                    return dto;
+                })
+                .toList();
     }
 
 

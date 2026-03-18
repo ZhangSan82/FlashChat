@@ -100,8 +100,8 @@ public class RoomController {
     /**
      * 获取我加入的所有房间
      */
-    @GetMapping("/my-rooms/{accountId}")
-    public Result<List<RoomInfoRespDTO>> getMyRooms(@PathVariable("accountId") String accountId) {
+    @GetMapping("/my-rooms")
+    public Result<List<RoomInfoRespDTO>> getMyRooms(@RequestParam("accountId") String accountId) {
         log.info("[我的房间] accountId={}", accountId);
         return Results.success(roomService.getMyRooms(accountId));
     }

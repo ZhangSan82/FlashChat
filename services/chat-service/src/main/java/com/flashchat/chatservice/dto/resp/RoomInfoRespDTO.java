@@ -14,6 +14,7 @@ public class RoomInfoRespDTO {
     private Integer status;
     private String statusDesc;
     private Integer maxMembers;
+    private Integer unreadCount;/** 当前用户在该房间的未读消息数 */
     private Integer isPublic;
     private Integer onlineCount;
     private Integer memberCount;

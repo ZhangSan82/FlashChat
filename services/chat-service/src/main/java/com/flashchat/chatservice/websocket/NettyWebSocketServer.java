@@ -122,7 +122,7 @@ public class NettyWebSocketServer {
                          */
                         pipeline.addLast(new WebSocketServerProtocolHandler("/"));
                         //30秒客户端没有向服务器发送心跳则关闭连接
-                        pipeline.addLast(new IdleStateHandler(60, 0, 0));
+                        pipeline.addLast(new IdleStateHandler(600, 0, 0));
                         // 自定义handler ，处理业务逻辑
                         pipeline.addLast(NETTY_WEB_SOCKET_SERVER_HANDLER);
                     }
