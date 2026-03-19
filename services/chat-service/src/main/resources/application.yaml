@@ -43,3 +43,8 @@ mybatis-plus:
     # 开发阶段打印 SQL
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
+flashchat:
+  cache:
+    redis:
+      value-timeout: 60000
+      value-time-unit: MILLISECONDS

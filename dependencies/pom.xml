@@ -32,6 +32,7 @@
         <lombok.version>1.18.34</lombok.version>
         <hutool.version>5.8.32</hutool.version>
         <guava.version>33.3.1-jre</guava.version>
+        <fastjson2.version>2.0.43</fastjson2.version>
 
         <!-- 本项目模块版本 -->
         <flashchat.version>1.0.0</flashchat.version>
@@ -52,6 +53,11 @@
             <dependency>
                 <groupId>com.flashchat</groupId>
                 <artifactId>FlashChat-framework-convention</artifactId>
+                <version>${flashchat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.flashchat</groupId>
+                <artifactId>FlashChat-framework-cache</artifactId>
                 <version>${flashchat.version}</version>
             </dependency>
             <dependency>
@@ -121,6 +127,12 @@
                 <artifactId>lombok</artifactId>
                 <version>${lombok.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.alibaba.fastjson2</groupId>
+                <artifactId>fastjson2</artifactId>
+                <version>${fastjson2.version}</version>
+            </dependency>
+
             <dependency>
                 <groupId>cn.hutool</groupId>
                 <artifactId>hutool-all</artifactId>

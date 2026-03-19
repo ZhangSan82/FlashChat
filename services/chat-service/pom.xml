@@ -26,6 +26,10 @@
             <artifactId>FlashChat-framework-convention</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.flashchat</groupId>
+            <artifactId>FlashChat-framework-cache</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
         </dependency>

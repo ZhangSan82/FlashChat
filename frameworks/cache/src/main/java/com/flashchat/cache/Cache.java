@@ -17,11 +17,6 @@ public interface Cache {
     void put(@NotBlank String Key,Object value);
 
     /**
-     * 如果 keys 全部不存在，则新增，返回 true，反之 false
-     */
-    Boolean putIfAllAbsent(@NotNull Collection<String> keys);
-
-    /**
      * 删除缓存
      */
     Boolean delete(@NotBlank String key);

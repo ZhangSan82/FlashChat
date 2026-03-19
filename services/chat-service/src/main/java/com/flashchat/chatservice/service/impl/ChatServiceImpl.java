@@ -3,6 +3,8 @@ package com.flashchat.chatservice.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.flashchat.cache.DistributedCache;
+import com.flashchat.cache.toolkit.CacheUtil;
 import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
@@ -24,6 +26,8 @@ import com.flashchat.convention.exception.ClientException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.bytebuddy.asm.Advice;
+import org.redisson.api.RBloomFilter;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -42,6 +46,9 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private final RoomService roomService;
     private final RoomMemberService roomMemberService;
     private final UnreadService unreadService;
+    private final DistributedCache distributedCache;
+    @Qualifier("flashChatRoomRegisterCachePenetrationBloomFilter")
+    private final RBloomFilter<String> flashChatRoomRegisterCachePenetrationBloomFilter;
 
     @Override
     public ChatBroadcastMsgRespDTO sendMsg(SendMsgReqDTO request) {
@@ -53,7 +60,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         String roomId = request.getRoomId();
 
 
-        // ===== 1. 检查用户是否在房间中 TODO应该用数据库查=====
+        // ===== 1. 检查用户是否在房间中=====
         if (!roomChannelManager.isInRoom(roomId, memberId)) {
             throw new ClientException("你不在该房间中，请先加入房间");
         }
@@ -314,11 +321,16 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
 
 
     private void validateRoomExists(String roomId) {
-       RoomDO roomDO =  roomService.lambdaQuery()
-               .eq(RoomDO::getRoomId, roomId)
-               .eq(RoomDO::getStatus, 1)
-               .one();
-       if(roomDO == null) {
+      RoomDO roomDO = distributedCache.safeGet(
+              CacheUtil.buildKey("flashchat","room",roomId),
+              RoomDO.class,
+              ()->roomService.lambdaQuery()
+                      .eq(RoomDO::getRoomId,roomId)
+                      .one(),
+              60000L,
+              flashChatRoomRegisterCachePenetrationBloomFilter
+      );
+       if(roomDO == null || roomDO.getStatus() != 1) {
            throw new ClientException("房间不存在");
        }
     }

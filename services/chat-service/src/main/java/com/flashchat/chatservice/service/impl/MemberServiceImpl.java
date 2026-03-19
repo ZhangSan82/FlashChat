@@ -1,6 +1,8 @@
 package com.flashchat.chatservice.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.flashchat.cache.DistributedCache;
+import com.flashchat.cache.toolkit.CacheUtil;
 import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dao.mapper.MemberMapper;
 import com.flashchat.chatservice.dto.resp.MemberInfoRespDTO;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
+
 @Service
 @Slf4j
 @AllArgsConstructor
@@ -25,6 +28,8 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
 
     @Qualifier("flashChatAccountRegisterCachePenetrationBloomFilter")
     private  final RBloomFilter<String> flashChatAccountRegisterCachePenetrationBloomFilter;
+
+    private final DistributedCache distributedCache;
 
     private static final String[] ADJ = {
             "神秘的", "可爱的", "暴躁的", "温柔的", "沉默的",
@@ -44,7 +49,6 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
     public MemberInfoRespDTO autoRegister() {
         // 1. 生成 accountId，确保唯一
         String accountId = generateUniqueAccountId();
-        flashChatAccountRegisterCachePenetrationBloomFilter.add(accountId);
 
         // 2. 生成随机昵称
         String nickname = generateNickname();
@@ -61,7 +65,18 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
                 .status(1)          // 正常状态
                 .build();
 
-        this.save(member);
+        try {
+            this.save(member);
+            flashChatAccountRegisterCachePenetrationBloomFilter.add(accountId);
+            distributedCache.put(
+                    CacheUtil.buildKey("flashchat","member",accountId),
+                    member,
+                    6000L
+            );
+
+        } catch (Exception e) {
+            log.error("注册失败:" + e.getMessage());
+        }
 
 
         log.info("[匿名注册] id={}, accountId={}, nickname={}",
@@ -89,7 +104,13 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
     @Override
     public MemberDO getByAccountId(String accountId) {
 
-        MemberDO member = this.lambdaQuery().eq(MemberDO::getAccountId, accountId).one();
+        MemberDO member = distributedCache.safeGet(
+                CacheUtil.buildKey("flashchat","member",accountId),
+                MemberDO.class,
+                ()->this.lambdaQuery().eq(MemberDO::getAccountId,accountId).one(),
+                60000L,
+                flashChatAccountRegisterCachePenetrationBloomFilter
+        );
 
         if (member == null) {
             throw new ClientException("账号不存在");

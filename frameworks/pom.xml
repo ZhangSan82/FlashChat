@@ -16,5 +16,6 @@
 
     <modules>
         <module>convention</module>
+        <module>cache</module>
     </modules>
 </project>

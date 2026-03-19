@@ -1,6 +1,8 @@
 package com.flashchat.chatservice.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.flashchat.cache.DistributedCache;
+import com.flashchat.cache.toolkit.CacheUtil;
 import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
@@ -43,6 +45,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final RoomMemberService roomMemberService;
     private final MemberService memberService;
     private final UnreadService unreadService;
+    private final DistributedCache distributedCache;
 
     /**
      * 创建房间
@@ -467,6 +470,8 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .set(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
                 .set(RoomDO::getClosedTime, now)
                 .update();
+
+        distributedCache.delete(CacheUtil.buildKey("flashchat","room",roomId));
 
         // ===== 3. 批量更新所有活跃成员 → LEFT =====
         roomMemberService.lambdaUpdate()
