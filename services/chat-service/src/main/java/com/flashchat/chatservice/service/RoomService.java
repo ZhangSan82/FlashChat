@@ -59,6 +59,15 @@ public interface RoomService extends IService<RoomDO> {
      */
     void closeRoom(@Valid RoomCloseReqDTO request);
 
+    /** 系统触发：即将到期 */
+    void doRoomExpiringSoon(String roomId);
+
+    /** 系统触发：进入宽限期 */
+    void doRoomExpired(String roomId);
+
+    /** 系统触发：正式关闭（无权限校验） */
+    void doCloseRoom(String roomId);
+
     List<RoomInfoRespDTO> getMyRooms(String accountId);
 
     /**

@@ -59,6 +59,13 @@ public class RoomDO {
     private Integer status;
 
     /**
+     * 到期版本号，每次延期 +1
+     * 延时队列消费时比对此值，不匹配则跳过
+     */
+    private Integer expireVersion;
+
+
+    /**
      * 二维码 URL
      */
     private String qrUrl;

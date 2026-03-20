@@ -18,8 +18,11 @@ public class RoomCreateReqDTO {
     /** 0-私密 1-公开，默认 0 */
     private Integer isPublic;
 
-    /** 时长（小时），默认 2.0，步进 0.5 */
-    private Double durationHours;
+    /**
+     * 房间时长档位（枚举名）
+     * 默认：HOUR_2
+     */
+    private String duration;
 
     /** 创建者 t_user.id（MVP 阶段手动传入，后续从 Token 获取） */
     @NotBlank(message = "账号ID 不能为空")

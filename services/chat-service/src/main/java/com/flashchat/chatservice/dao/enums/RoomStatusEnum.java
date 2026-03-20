@@ -38,6 +38,6 @@ public enum RoomStatusEnum {
      * 是否允许发送消息
      */
     public boolean canSendMsg() {
-        return this == ACTIVE || this == EXPIRING;
+        return this == WAITING || this == ACTIVE || this == EXPIRING;
     }
 }

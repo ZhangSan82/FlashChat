@@ -6,14 +6,18 @@ import com.flashchat.cache.toolkit.CacheUtil;
 import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
+import com.flashchat.chatservice.dao.enums.RoomDurationEnum;
 import com.flashchat.chatservice.dao.enums.RoomMemberRoleEnum;
 import com.flashchat.chatservice.dao.enums.RoomMemberStatusEnum;
 import com.flashchat.chatservice.dao.enums.RoomStatusEnum;
 import com.flashchat.chatservice.dao.mapper.RoomMapper;
+import com.flashchat.chatservice.delay.producer.RoomDelayProducer;
 import com.flashchat.chatservice.dto.context.HostOperationContext;
+import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
+import com.flashchat.chatservice.dto.resp.WsRespDTO;
 import com.flashchat.chatservice.service.MemberService;
 import com.flashchat.chatservice.service.RoomMemberService;
 import com.flashchat.chatservice.service.RoomService;
@@ -46,6 +50,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final MemberService memberService;
     private final UnreadService unreadService;
     private final DistributedCache distributedCache;
+    private final RoomDelayProducer roomDelayProducer;
     private static final long CACHE_TIMEOUT = 60000L;
 
 
@@ -62,8 +67,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         // TODO 未来：检查是否为注册用户（主持人）+ 扣除积分
 
-        double hours = request.getDurationHours() != null ? request.getDurationHours() : 2.0;
-        LocalDateTime expireTime = LocalDateTime.now().plusMinutes((long) (hours * 60));
+        RoomDurationEnum durationEnum = RoomDurationEnum.of(request.getDuration());
+        if (durationEnum == null) {
+            durationEnum = RoomDurationEnum.MIN_30;  // 默认 30 分钟
+        }
+        LocalDateTime expireTime = LocalDateTime.now().plusMinutes(durationEnum.getMinutes());
 
         String roomId = getRoomID();
 
@@ -76,6 +84,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .isPublic(request.getIsPublic() != null ? request.getIsPublic() : 0)
                 .status(RoomStatusEnum.WAITING.getCode())
                 .expireTime(expireTime)
+                .expireVersion(1)
                 .build();
         try {
             this.save(room);
@@ -88,6 +97,13 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             throw new RuntimeException(e);
         }
         log.info("[创建房间] roomId={}, title={}, creator={}", roomId, room.getTitle(), room.getCreatorId());
+
+        try {
+            roomDelayProducer.submitRoomExpireEvents(roomId, expireTime, room.getExpireVersion());
+        } catch (Exception e) {
+            // 投递失败不阻塞创建流程，由兜底定时任务保障
+            log.error("[延时任务投递失败] room={}, 不影响创建，将由兜底任务兜底", roomId, e);
+        }
 
         RoomMemberDO hostMember = RoomMemberDO.builder()
                 .roomId(roomId)
@@ -418,11 +434,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Override
     public void closeRoom(RoomCloseReqDTO request) {
         String roomId = request.getRoomId();
-
         MemberDO operator = memberService.getByAccountId(request.getAccountId());
 
-        // ===== 1. 校验操作者是房主 =====
-        RoomMemberDO operatorMember = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId,operator.getId());
+        // ===== 权限校验 =====
+        RoomMemberDO operatorMember =
+                roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, operator.getId());
         if (operatorMember == null || operatorMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
             throw new ClientException("你不在该房间中");
         }
@@ -430,32 +446,134 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             throw new ClientException("只有房主可以执行此操作");
         }
 
+        // ===== 执行关闭 =====
+        doCloseRoom(roomId);
 
-        // ===== 2. 更新 t_room =====
-        LocalDateTime now = LocalDateTime.now();
+        log.info("[手动关闭房间] room={}, operator={}", roomId, request.getAccountId());
+    }
+
+    /**
+     * 即将到期处理（延时队列 EXPIRING_SOON 事件触发）
+     * status → EXPIRING(2)，WS 通知房间即将到期
+     * 幂等：只有 ACTIVE 状态才处理，其他状态跳过
+     */
+    @Override
+    public void doRoomExpiringSoon(String roomId) {
+        RoomDO room = getRoomByRoomId(roomId);
+        if (room == null) {
+            log.warn("[即将到期-跳过] room={}, 房间不存在", roomId);
+            return;
+        }
+
+        RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
+        if (status != RoomStatusEnum.ACTIVE) {
+            log.info("[即将到期-跳过] room={}, 当前状态={}，不是 ACTIVE", roomId, status);
+            return;
+        }
+
+        // 更新状态 → EXPIRING
         this.lambdaUpdate()
                 .eq(RoomDO::getRoomId, roomId)
+                .eq(RoomDO::getStatus, RoomStatusEnum.ACTIVE.getCode())
+                .set(RoomDO::getStatus, RoomStatusEnum.EXPIRING.getCode())
+                .update();
+        evictRoomCache(roomId);
+
+        // WS 通知房间所有在线成员
+        roomChannelManager.broadcastToRoom(roomId,
+                WsRespDTO.of(roomId, WsRespDTOTypeEnum.ROOM_EXPIRING, "房间即将到期，5 分钟后将进入宽限期"));
+
+        log.info("[即将到期] room={}, ACTIVE → EXPIRING", roomId);
+    }
+
+    /**
+     * 到期处理（延时队列 EXPIRED 事件触发）
+     * 动作：status → GRACE(3)，设置 grace_end_time，WS 通知进入宽限期
+     * 幂等：只有 ACTIVE 或 EXPIRING 状态才处理
+     */
+    @Override
+    public void doRoomExpired(String roomId) {
+        RoomDO room = getRoomByRoomId(roomId);
+        if (room == null) {
+            log.warn("[到期-跳过] room={}, 房间不存在", roomId);
+            return;
+        }
+
+        RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
+        if (status != RoomStatusEnum.ACTIVE && status != RoomStatusEnum.EXPIRING) {
+            log.info("[到期-跳过] room={}, 当前状态={}", roomId, status);
+            return;
+        }
+
+        LocalDateTime graceEndTime = room.getExpireTime().plusMinutes(5);
+
+        this.lambdaUpdate()
+                .eq(RoomDO::getRoomId, roomId)
+                .in(RoomDO::getStatus, RoomStatusEnum.ACTIVE.getCode(), RoomStatusEnum.EXPIRING.getCode())
+                .set(RoomDO::getStatus, RoomStatusEnum.GRACE.getCode())
+                .set(RoomDO::getGraceEndTime, graceEndTime)
+                .update();
+        evictRoomCache(roomId);
+
+        // WS 通知
+        roomChannelManager.broadcastToRoom(roomId,
+                WsRespDTO.of(roomId, WsRespDTOTypeEnum.ROOM_GRACE, "房间已到期，进入 5 分钟宽限期"));
+
+        log.info("[到期] room={}, → GRACE, graceEndTime={}", roomId, graceEndTime);
+    }
+
+    /**
+     * 执行房间关闭（内部方法，无权限校验）
+     * 调用方：
+     *   1. closeRoom() — 房主手动关闭（校验后调用）
+     *   2. 延时队列消费者 — GRACE_END 事件
+     *   3. 兜底定时任务 — 扫描到期房间
+     * 幂等：已关闭则跳过
+     */
+    @Override
+    public void doCloseRoom(String roomId) {
+        RoomDO room = getRoomByRoomId(roomId);
+        if (room == null) {
+            log.warn("[关闭房间-跳过] room={}, 房间不存在", roomId);
+            return;
+        }
+
+        if (room.getStatus() == RoomStatusEnum.CLOSED.getCode()) {
+            log.info("[关闭房间-跳过] room={}, 已经是 CLOSED 状态", roomId);
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // 更新 t_room
+        boolean updated =  this.lambdaUpdate()
+                .eq(RoomDO::getRoomId, roomId)
+                .ne(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
                 .set(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
                 .set(RoomDO::getClosedTime, now)
                 .update();
 
+        if (!updated) {
+            log.info("[关闭房间-跳过] room={}, CAS更新失败，已被其他操作关闭", roomId);
+            return;
+        }
+
         evictRoomCache(roomId);
 
-        // ===== 3. 批量更新所有活跃成员 → LEFT =====
+        // 批量更新成员 → LEFT
         roomMemberService.lambdaUpdate()
                 .eq(RoomMemberDO::getRoomId, roomId)
                 .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
                 .set(RoomMemberDO::getStatus, RoomMemberStatusEnum.LEFT.getCode())
                 .set(RoomMemberDO::getLeaveTime, now)
                 .update();
-
         roomMemberService.evictAllMemberCacheInRoom(roomId);
 
-        // ===== 4. 同步内存：通知所有在线成员 + 清理房间数据 =====
+        // 清理内存 + WS 通知
         roomChannelManager.closeRoom(roomId);
         unreadService.clearRoomForAllMembers(roomId);
 
-        log.info("[关闭房间] room={}, operator={}", roomId, request.getAccountId());
+        log.info("[关闭房间] room={}, → CLOSED", roomId);
     }
 
     @Override

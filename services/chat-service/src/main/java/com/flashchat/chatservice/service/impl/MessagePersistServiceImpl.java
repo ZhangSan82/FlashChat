@@ -2,7 +2,6 @@ package com.flashchat.chatservice.service.impl;
 
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
-import com.flashchat.chatservice.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
