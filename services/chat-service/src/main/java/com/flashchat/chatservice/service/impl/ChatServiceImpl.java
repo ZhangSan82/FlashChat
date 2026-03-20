@@ -1,7 +1,6 @@
 package com.flashchat.chatservice.service.impl;
 
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.DistributedCache;
 import com.flashchat.cache.toolkit.CacheUtil;
@@ -9,6 +8,7 @@ import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
+import com.flashchat.chatservice.dao.enums.RoomStatusEnum;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 
@@ -25,13 +25,10 @@ import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
 import com.flashchat.convention.exception.ClientException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.bytebuddy.asm.Advice;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
 
@@ -59,6 +56,8 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
 
         String roomId = request.getRoomId();
 
+        validateRoomCanSendMsg(roomId);
+
 
         // ===== 1. 检查用户是否在房间中=====
         if (!roomChannelManager.isInRoom(roomId, memberId)) {
@@ -81,6 +80,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 ._id(msgId)
                 .content(request.getContent())
                 .senderId(memberId.toString())
+            //    .dbId()
                 .username(memberInfo != null ? memberInfo.getNickname() : "匿名")
                 .avatar(memberInfo != null ? memberInfo.getAvatar() : "")
                 .timestamp(System.currentTimeMillis())
@@ -102,9 +102,9 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .msgId(msgId)
                 .roomId(roomId)
                 .content(request.getContent())
-                .avatarColor(memberInfo.getAvatar())
+                .avatarColor(memberInfo != null ? memberInfo.getAvatar() : "")
                 .msgType(1)//TODO
-                .nickname(memberInfo.getNickname())
+                .nickname(memberInfo != null ? memberInfo.getNickname() : "匿名")
                 .senderMemberId(memberId)
                 .status(0)//TODO
                 .isHost(isHost)
@@ -186,10 +186,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         String roomId = request.getRoomId();
 
         // 2. 查找房间成员记录
-        RoomMemberDO roomMember = roomMemberService.lambdaQuery()
-                .eq(RoomMemberDO::getRoomId, roomId)
-                .eq(RoomMemberDO::getMemberId, memberId)
-                .one();
+        RoomMemberDO roomMember = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, memberId);
 
         if (roomMember == null) {
             throw new ClientException("你不在该房间中");
@@ -218,6 +215,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .update();
 
         if (updated) {
+            roomMemberService.evictCache(roomId, memberId);
             unreadService.clearUnread(memberId, roomId);
             log.info("[ACK 成功] room={}, memberId={}, {} → {}",
                     roomId, memberId, currentAckId, request.getLastMsgId());
@@ -241,10 +239,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         MemberDO member = memberService.getByAccountId(accountId);
         Long memberId = member.getId();
 
-        RoomMemberDO roomMember = roomMemberService.lambdaQuery()
-                .eq(RoomMemberDO::getRoomId, roomId)
-                .eq(RoomMemberDO::getMemberId, memberId)
-                .one();
+        RoomMemberDO roomMember = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, memberId);
 
         if (roomMember == null) {
             throw new ClientException("你不在该房间中");
@@ -285,14 +280,17 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         // 拉到的最后一条消息就是最新的，直接更新已读位置
         MessageDO latestMsg = page.getList().get(page.getList().size() - 1);
         if (latestMsg.getId() > lastAckMsgId) {
-            roomMemberService.lambdaUpdate()
+           boolean updated = roomMemberService.lambdaUpdate()
                     .eq(RoomMemberDO::getId, roomMember.getId())
                     .lt(RoomMemberDO::getLastAckMsgId, latestMsg.getId())
                     .set(RoomMemberDO::getLastAckMsgId, latestMsg.getId())
                     .update();
-            unreadService.clearUnread(memberId, roomId);
-            log.info("[自动ACK] room={}, memberId={}, {} → {}",
-                    roomId, memberId, lastAckMsgId, latestMsg.getId());
+           if (updated) {
+               roomMemberService.evictCache(roomId, memberId);
+               unreadService.clearUnread(memberId, roomId);
+               log.info("[自动ACK] room={}, memberId={}, {} → {}",
+                       roomId, memberId, lastAckMsgId, latestMsg.getId());
+           }
         }
 
         // ===== 4. DO → DTO（已经是正序，不需要翻转） =====
@@ -321,18 +319,25 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
 
 
     private void validateRoomExists(String roomId) {
-      RoomDO roomDO = distributedCache.safeGet(
-              CacheUtil.buildKey("flashchat","room",roomId),
-              RoomDO.class,
-              ()->roomService.lambdaQuery()
-                      .eq(RoomDO::getRoomId,roomId)
-                      .one(),
-              60000L,
-              flashChatRoomRegisterCachePenetrationBloomFilter
-      );
-       if(roomDO == null || roomDO.getStatus() != 1) {
+      RoomDO roomDO = roomService.getRoomByRoomId(roomId);
+       if(roomDO == null) {
            throw new ClientException("房间不存在");
        }
+    }
+
+    /**
+     * 改造：校验房间存在且允许发消息
+     */
+    private void validateRoomCanSendMsg(String roomId) {
+        RoomDO roomDO = roomService.getRoomByRoomId(roomId);
+        if (roomDO == null) {
+            throw new ClientException("房间不存在");
+        }
+        RoomStatusEnum status = RoomStatusEnum.of(roomDO.getStatus());
+        if (status == null || !status.canSendMsg()) {
+            throw new ClientException("房间当前不允许发送消息（状态：" +
+                    (status != null ? status.getDesc() : "未知") + "）");
+        }
     }
 
     /**

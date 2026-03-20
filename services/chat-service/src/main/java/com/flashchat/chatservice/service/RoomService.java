@@ -60,4 +60,9 @@ public interface RoomService extends IService<RoomDO> {
     void closeRoom(@Valid RoomCloseReqDTO request);
 
     List<RoomInfoRespDTO> getMyRooms(String accountId);
+
+    /**
+     *用缓存查询房间
+     */
+    RoomDO getRoomByRoomId(String roomId);
 }

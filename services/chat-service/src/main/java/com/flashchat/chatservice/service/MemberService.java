@@ -18,4 +18,9 @@ public interface MemberService extends IService<MemberDO> {
     MemberInfoRespDTO getMemberByAccountId(String accountId);
 
     MemberDO getByAccountId(String accountId);
+
+    /**
+     * 通过数据库主键 ID 查询（带缓存）
+     */
+    MemberDO getByMemberId(Long memberId);
 }

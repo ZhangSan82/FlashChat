@@ -30,6 +30,8 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
     private  final RBloomFilter<String> flashChatAccountRegisterCachePenetrationBloomFilter;
 
     private final DistributedCache distributedCache;
+    private static final long CACHE_TIMEOUT = 60000L;
+
 
     private static final String[] ADJ = {
             "神秘的", "可爱的", "暴躁的", "温柔的", "沉默的",
@@ -68,14 +70,22 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
         try {
             this.save(member);
             flashChatAccountRegisterCachePenetrationBloomFilter.add(accountId);
+            flashChatAccountRegisterCachePenetrationBloomFilter.add(String.valueOf(member.getId()));
             distributedCache.put(
                     CacheUtil.buildKey("flashchat","member",accountId),
                     member,
-                    6000L
+                    CACHE_TIMEOUT
+            );
+
+            distributedCache.put(
+                    CacheUtil.buildKey("flashchat", "member", "id", String.valueOf(member.getId())),
+                    member,
+                    CACHE_TIMEOUT
             );
 
         } catch (Exception e) {
             log.error("注册失败:" + e.getMessage());
+            throw new ServiceException(e.getMessage());
         }
 
 
@@ -108,7 +118,7 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
                 CacheUtil.buildKey("flashchat","member",accountId),
                 MemberDO.class,
                 ()->this.lambdaQuery().eq(MemberDO::getAccountId,accountId).one(),
-                60000L,
+                CACHE_TIMEOUT,
                 flashChatAccountRegisterCachePenetrationBloomFilter
         );
 
@@ -121,6 +131,20 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
         return  member;
     }
 
+    @Override
+    public MemberDO getByMemberId(Long memberId) {
+        if (memberId == null) {
+            return null;
+        }
+        return distributedCache.safeGet(
+                CacheUtil.buildKey("flashchat", "member", "id", String.valueOf(memberId)),
+                MemberDO.class,
+                () -> this.getById(memberId),
+                CACHE_TIMEOUT,
+                flashChatAccountRegisterCachePenetrationBloomFilter
+        );
+    }
+
 
     /**
      *生成唯一账号ID
@@ -128,13 +152,13 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
     private String  generateUniqueAccountId(){
         int customGenerateCount = 0;
         String accountId;
-        String SEED_PREFIX = "flashchat:AccountId:" + UUID.randomUUID().toString();
+        String SEED_PREFIX = "flashchat:AccountId:";
         while (true) {
             if (customGenerateCount > 10)
             {
                 throw new ServiceException("房间ID频繁生成,请稍后再试");
             }
-            accountId = HashUtil.hashToBase62(SEED_PREFIX);
+            accountId = HashUtil.hashToBase62(SEED_PREFIX + UUID.randomUUID().toString());
             if (!flashChatAccountRegisterCachePenetrationBloomFilter.contains(accountId))
             {
                 break;

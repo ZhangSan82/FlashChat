@@ -255,13 +255,9 @@ public class UnreadServiceImpl implements UnreadService {
      * 从 DB 计算单个房间的未读数
      */
     private int computeOneFromDB(Long memberId, String roomId) {
-        RoomMemberDO rm = roomMemberService.lambdaQuery()
-                .eq(RoomMemberDO::getRoomId, roomId)
-                .eq(RoomMemberDO::getMemberId, memberId)
-                .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
-                .one();
+        RoomMemberDO rm = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, memberId);
 
-        if (rm == null) return 0;
+        if (rm == null || rm.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) return 0;
         return doCount(roomId, rm.getLastAckMsgId());
     }
 
