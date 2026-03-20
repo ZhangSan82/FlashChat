@@ -20,7 +20,7 @@ public class RBloomFilterConfiguration {
     public RBloomFilter<String> flashChatRoomRegisterCachePenetrationBloomFilter(RedissonClient redissonClient) {
         RBloomFilter<String> cachePenetrationBloomFilter = redissonClient.getBloomFilter("flashChatRoomRegisterCachePenetrationBloomFilter");
         cachePenetrationBloomFilter.tryInit(100000L, 0.003);
-        log.info("[布隆过滤器] roomId 过滤器初始化完成，预期容量=10000000，误判率=0.001");
+        log.info("[布隆过滤器] roomId 过滤器初始化完成，预期容量=100000，误判率=0.003");
         return cachePenetrationBloomFilter;
     }
 
@@ -31,7 +31,7 @@ public class RBloomFilterConfiguration {
     public RBloomFilter<String> flashChatAccountRegisterCachePenetrationBloomFilter(RedissonClient redissonClient) {
         RBloomFilter<String> cachePenetrationBloomFilter = redissonClient.getBloomFilter("flashChatAccountRegisterCachePenetrationBloomFilter");
         cachePenetrationBloomFilter.tryInit(100000L, 0.003);
-        log.info("[布隆过滤器] accountId 过滤器初始化完成，预期容量=10000000，误判率=0.001");
+        log.info("[布隆过滤器] accountId 过滤器初始化完成，预期容量=100000，误判率=0.003");
         return cachePenetrationBloomFilter;
     }
 }

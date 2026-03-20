@@ -3,7 +3,7 @@ package com.flashchat.chatservice.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.DistributedCache;
-import com.flashchat.cache.toolkit.CacheUtil;
+import com.flashchat.chatservice.config.MsgIdGenerator;
 import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
@@ -46,6 +46,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private final DistributedCache distributedCache;
     @Qualifier("flashChatRoomRegisterCachePenetrationBloomFilter")
     private final RBloomFilter<String> flashChatRoomRegisterCachePenetrationBloomFilter;
+    private final MsgIdGenerator msgIdGenerator;
 
     @Override
     public ChatBroadcastMsgRespDTO sendMsg(SendMsgReqDTO request) {
@@ -53,13 +54,11 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
 
         MemberDO memberDO = memberService.getByAccountId(request.getAccountId());
         Long memberId = memberDO.getId();
-
         String roomId = request.getRoomId();
 
         validateRoomCanSendMsg(roomId);
 
-
-        // ===== 1. 检查用户是否在房间中=====
+        // ===== 1. 检查用户是否在房间中 =====
         if (!roomChannelManager.isInRoom(roomId, memberId)) {
             throw new ClientException("你不在该房间中，请先加入房间");
         }
@@ -70,49 +69,66 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             throw new ClientException("你已被禁言，无法发送消息");
         }
 
-        // ===== 3. TODO: 敏感词过滤（下一步添加）=====
+        // ===== 3. TODO: 敏感词过滤 =====
 
-
-        // ===== 4. 构建广播消息 =====
+        // ===== 4. 生成消息业务 ID =====
         String msgId = UUID.randomUUID().toString().replace("-", "");
+        Integer isHost = memberInfo != null && memberInfo.isHost() ? 1 : 0;
 
+        // ===== 5. ★ 预分配消息顺序 ID =====
+        Long msgSeqId = msgIdGenerator.tryNextId();
+
+        // ===== 6. 构建消息实体 =====
+        MessageDO messageDO = MessageDO.builder()
+                .msgId(msgId)
+                .roomId(roomId)
+                .content(request.getContent())
+                .avatarColor(memberInfo != null ? memberInfo.getAvatar() : "")
+                .msgType(1)
+                .nickname(memberInfo != null ? memberInfo.getNickname() : "匿名")
+                .senderMemberId(memberId)
+                .status(0)
+                .isHost(isHost)
+                .build();
+
+        // ===== 7. 根据 ID 生成结果选择持久化路径 =====
+        if (msgSeqId != null) {
+            // ------ 正常路径：Redis 预分配 ID，异步写 DB ------
+            messageDO.setId(msgSeqId);
+            messagePersistServiceImpl.saveAsync(messageDO);
+        } else {
+            // ------ 降级路径：本地递增 ID，同步写 DB ------
+            // lastKnownId 保证 ID 一定大于所有已通过 Redis 分配的 ID
+            Long fallbackId = msgIdGenerator.fallbackNextId();
+            messageDO.setId(fallbackId);
+            messagePersistServiceImpl.saveSync(messageDO);
+            msgSeqId = fallbackId;
+
+            log.warn("[发消息-降级] Redis不可用，使用本地ID={}, room={}, memberId={}",
+                    fallbackId, roomId, memberId);
+        }
+
+        // ===== 8. 构建广播消息（此时 dbId 一定有值）=====
         ChatBroadcastMsgRespDTO broadcastMsg = ChatBroadcastMsgRespDTO.builder()
                 ._id(msgId)
+                .dbId(msgSeqId)
                 .content(request.getContent())
                 .senderId(memberId.toString())
-            //    .dbId()
                 .username(memberInfo != null ? memberInfo.getNickname() : "匿名")
                 .avatar(memberInfo != null ? memberInfo.getAvatar() : "")
                 .timestamp(System.currentTimeMillis())
                 .isHost(memberInfo != null && memberInfo.isHost())
                 .build();
 
-        // ===== 5. 通过 WebSocket 广播给房间所有人 =====
+        // ===== 9. WebSocket 广播 =====
         roomChannelManager.broadcastToRoom(roomId,
                 WsRespDTO.of(roomId, WsRespDTOTypeEnum.CHAT_BROADCAST, broadcastMsg));
 
-        log.info("[发消息] room={}, memberId={}, content={}",
-                roomId, memberId, request.getContent());
+        log.info("[发消息] room={}, memberId={}, dbId={}, content={}",
+                roomId, memberId, msgSeqId, request.getContent());
 
-
-        // ===== 6. TODO: 保存到数据库  ,异步批量添加=====
-        // messageBatchWriter.addMessage(message);
-        Integer isHost = memberInfo != null && memberInfo.isHost() ? 1 : 0;
-        MessageDO messageDO = MessageDO.builder()
-                .msgId(msgId)
-                .roomId(roomId)
-                .content(request.getContent())
-                .avatarColor(memberInfo != null ? memberInfo.getAvatar() : "")
-                .msgType(1)//TODO
-                .nickname(memberInfo != null ? memberInfo.getNickname() : "匿名")
-                .senderMemberId(memberId)
-                .status(0)//TODO
-                .isHost(isHost)
-                .build();
-        messagePersistServiceImpl.saveAsync(messageDO);
-
+        // ===== 10. 未读计数 +1 =====
         unreadService.incrementUnread(roomId, memberId);
-
 
         return broadcastMsg;
     }
