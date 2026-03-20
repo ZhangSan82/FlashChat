@@ -20,9 +20,9 @@ import java.time.LocalDateTime;
 public class MessageDO {
 
     /**
-     * 主键（自增，兼做离线消息偏移量）
+     * 主键（由 MsgIdGenerator 预分配，兼做离线消息偏移量）
      */
-    @TableId(type = IdType.AUTO)
+    @TableId(type = IdType.INPUT)
     private Long id;
 
     /**
