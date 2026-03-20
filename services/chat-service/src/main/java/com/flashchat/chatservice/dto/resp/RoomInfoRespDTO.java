@@ -1,12 +1,16 @@
 package com.flashchat.chatservice.dto.resp;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class RoomInfoRespDTO {
 
     private String roomId;

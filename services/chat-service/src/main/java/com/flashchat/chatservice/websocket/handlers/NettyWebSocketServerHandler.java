@@ -1,6 +1,8 @@
 package com.flashchat.chatservice.websocket.handlers;
 
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
 import com.flashchat.chatservice.dao.entity.MemberDO;
 import com.flashchat.chatservice.dto.enums.WsReqDTOTypeEnum;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
@@ -12,9 +14,6 @@ import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import io.netty.channel.*;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
@@ -24,7 +23,6 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadPoolExecutor;
 
 
 /**
@@ -301,9 +299,9 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
         log.debug("[收到WS消息] {}", text);
 
         // 解析消息
-        JsonObject jsonObj;
+        JSONObject jsonObj;
         try {
-            jsonObj = JsonParser.parseString(text).getAsJsonObject();
+            jsonObj = JSON.parseObject(text);
         } catch (Exception e) {
             log.warn("[消息格式错误] 不是合法JSON: {}",
                     text.substring(0, Math.min(text.length(), 200)));
@@ -312,13 +310,12 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
             return;
         }
 
-        JsonElement typeElement = jsonObj.get("type");
-        if (typeElement == null) {
+        Integer typeValue = jsonObj.getInteger("type");
+        if (typeValue == null) {
             log.warn("[消息格式错误] 缺少 type: {}", text);
             return;
         }
 
-        int typeValue = typeElement.getAsInt();
         WsReqDTOTypeEnum type = WsReqDTOTypeEnum.of(typeValue);
         if (type == null) {
             log.warn("[未知消息类型] type={}", typeValue);
@@ -329,7 +326,6 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
             return;
         }
 
-        JsonElement data = jsonObj.get("data");
 
         switch (type) {
             case HEARTBEAT -> ctx.channel().writeAndFlush(new TextWebSocketFrame("pong"));

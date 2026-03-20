@@ -1,10 +1,14 @@
 package com.flashchat.chatservice.dto.resp;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class MemberInfoRespDTO {
 
     /** 面向用户的账号ID*/

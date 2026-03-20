@@ -1,29 +1,37 @@
 package com.flashchat.chatservice.toolkit;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONWriter;
+
 import lombok.extern.slf4j.Slf4j;
 
+import java.lang.reflect.Type;
+
+/**
+ * JSON 工具类（FastJSON2 实现）
+ */
 @Slf4j
 public class JsonUtil {
 
-    private static final Gson GSON = new GsonBuilder()
-            // 序列化 null 字段（默认忽略null）
-            .serializeNulls()
-            // 日期格式
-            .setDateFormat("yyyy-MM-dd HH:mm:ss")
-            .disableHtmlEscaping()
-            .create();
+    /**
+     * 全局序列化特性
+     * WriteMapNullValue: null 字段也输出（兼容原 Gson 的 serializeNulls 行为）
+     */
+    private static final JSONWriter.Feature[] WRITE_FEATURES = {
+            JSONWriter.Feature.WriteMapNullValue
+    };
+
+    private JsonUtil() {
+    }
 
     /**
      * 对象 → JSON 字符串
      */
     public static String toJson(Object obj) {
         try {
-            return GSON.toJson(obj);
+            return JSON.toJSONString(obj, WRITE_FEATURES);
         } catch (Exception e) {
-            log.error("JSON序列化失败", e);
+            log.error("JSON 序列化失败", e);
             return "{}";
         }
     }
@@ -33,23 +41,21 @@ public class JsonUtil {
      */
     public static <T> T fromJson(String json, Class<T> clazz) {
         try {
-            return GSON.fromJson(json, clazz);
+            return JSON.parseObject(json, clazz);
         } catch (Exception e) {
-            log.error("JSON反序列化失败: {}", json, e);
+            log.error("JSON 反序列化失败: {}", json, e);
             return null;
         }
     }
 
     /**
      * JSON 字符串 → 带泛型的复杂类型
-     *
-     * 用法: List<User> list = JsonUtil.fromJson(json, new TypeToken<List<User>>(){});
      */
-    public static <T> T fromJson(String json, TypeToken<T> typeToken) {
+    public static <T> T fromJson(String json, Type type) {
         try {
-            return GSON.fromJson(json, typeToken.getType());
+            return JSON.parseObject(json, type);
         } catch (Exception e) {
-            log.error("JSON反序列化失败: {}", json, e);
+            log.error("JSON 反序列化失败: {}", json, e);
             return null;
         }
     }

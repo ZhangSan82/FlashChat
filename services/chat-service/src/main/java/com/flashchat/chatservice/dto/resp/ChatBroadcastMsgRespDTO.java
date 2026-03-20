@@ -1,10 +1,14 @@
 package com.flashchat.chatservice.dto.resp;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class ChatBroadcastMsgRespDTO {
     private String _id;         // 消息唯一ID
     private Long dbId;          //消息自增ID

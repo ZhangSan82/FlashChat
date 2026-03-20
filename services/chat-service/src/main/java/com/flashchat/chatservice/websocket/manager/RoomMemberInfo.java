@@ -1,7 +1,9 @@
 package com.flashchat.chatservice.websocket.manager;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 用户在某个房间中的身份信息
@@ -17,6 +19,8 @@ import lombok.Data;
  */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class RoomMemberInfo {
 
     /** 用户ID */

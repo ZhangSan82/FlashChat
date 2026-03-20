@@ -1,13 +1,17 @@
 package com.flashchat.chatservice.dto.resp;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 房间成员的信息
  */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class RoomMemberRespDTO {
 
     /** 成员 ID（匿名成员 = t_member.id，注册用户 = t_user.id） */
