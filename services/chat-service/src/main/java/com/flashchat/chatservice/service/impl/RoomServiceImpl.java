@@ -79,7 +79,8 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .build();
         try {
             this.save(room);
-            flashChatRoomRegisterCachePenetrationBloomFilter.add(roomId);
+            flashChatRoomRegisterCachePenetrationBloomFilter.add(
+                    CacheUtil.buildKey("flashchat", "room", roomId));
             distributedCache.put(CacheUtil.buildKey("flashchat","room",roomId),
                     room,
                     CACHE_TIMEOUT);
@@ -472,7 +473,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             return List.of();
         }
 
-
         Map<String, Integer> unreadMap = unreadService.getAllUnreadCounts(memberId);
 
         List<RoomInfoRespDTO> result = new ArrayList<>();
@@ -611,7 +611,8 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 throw new ServiceException("房间ID频繁生成,请稍后再试");
             }
             roomId = HashUtil.hashToBase62(SEED_PREFIX + UUID.randomUUID().toString());
-            if (!flashChatRoomRegisterCachePenetrationBloomFilter.contains(roomId))
+            if (!flashChatRoomRegisterCachePenetrationBloomFilter.contains(
+                    CacheUtil.buildKey("flashchat", "room", roomId)))
             {
                 break;
             }

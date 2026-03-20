@@ -69,8 +69,10 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
 
         try {
             this.save(member);
-            flashChatAccountRegisterCachePenetrationBloomFilter.add(accountId);
-            flashChatAccountRegisterCachePenetrationBloomFilter.add(String.valueOf(member.getId()));
+            String cacheKey = CacheUtil.buildKey("flashchat","member",accountId);
+            flashChatAccountRegisterCachePenetrationBloomFilter.add(cacheKey);
+            String idCacheKey = CacheUtil.buildKey("flashchat","member","id",String.valueOf(member.getId()));
+            flashChatAccountRegisterCachePenetrationBloomFilter.add(idCacheKey);
             distributedCache.put(
                     CacheUtil.buildKey("flashchat","member",accountId),
                     member,
@@ -159,7 +161,8 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, MemberDO> imple
                 throw new ServiceException("房间ID频繁生成,请稍后再试");
             }
             accountId = HashUtil.hashToBase62(SEED_PREFIX + UUID.randomUUID().toString());
-            if (!flashChatAccountRegisterCachePenetrationBloomFilter.contains(accountId))
+            if (!flashChatAccountRegisterCachePenetrationBloomFilter.contains(
+                    CacheUtil.buildKey("flashchat", "member", accountId)))
             {
                 break;
             }
