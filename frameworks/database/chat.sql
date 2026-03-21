@@ -35,19 +35,23 @@ CREATE TABLE t_user (
 -- 所有房间共用同一昵称，改名只更新此表
 -- account_id只有用户自己可见
 -- ============================================================
-CREATE TABLE t_member (
-                          id              BIGINT          NOT NULL AUTO_INCREMENT  COMMENT '主键',
-                          account_id      VARCHAR(16)     NOT NULL                 COMMENT '全局唯一账号ID（如FC-8A3D7K，展示给用户本人）',
-                          password        VARCHAR(128)    NOT NULL DEFAULT ''      COMMENT '密码（BCrypt），空字符串=未设置',
-                          nickname        VARCHAR(32)     NOT NULL                 COMMENT '昵称（首次=随机生成，全局统一，可修改）',
-                          avatar_color    VARCHAR(16)     NOT NULL DEFAULT ''      COMMENT '头像背景色（如 #FF6B6B）',
-                          last_active_time DATETIME       NULL                     COMMENT '最近活跃时间',
-                          status          TINYINT         NOT NULL DEFAULT 1       COMMENT '0-封禁 1-正常',
-                          create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                          update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                          PRIMARY KEY (id),
-                          UNIQUE KEY uk_account_id (account_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='匿名成员表（持久身份）';
+create table t_member
+(
+    id               bigint auto_increment comment '主键'
+        primary key,
+    account_id       varchar(16)                            not null comment '全局唯一账号ID（如FC-8A3D7K，展示给用户本人）',
+    password         varchar(128) default ''                not null comment '密码（BCrypt），空字符串=未设置',
+    nickname         varchar(32)                            not null comment '昵称（首次=随机生成，全局统一，可修改）',
+    avatar_color     varchar(16)  default ''                not null comment '头像背景色（如 #FF6B6B）',
+    last_active_time datetime                               null comment '最近活跃时间',
+    status           tinyint      default 1                 not null comment '0-封禁 1-正常',
+    create_time      datetime     default CURRENT_TIMESTAMP not null,
+    update_time      datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
+    constraint uk_account_id
+        unique (account_id)
+)
+    comment '匿名成员表（持久身份）' charset = utf8mb4;
+
 
 
 -- ============================================================
@@ -57,27 +61,40 @@ CREATE TABLE t_member (
 -- 公开房间展示在房间列表，私密房间只能扫码/链接进入
 -- 只有注册用户能创建房间
 -- ============================================================
-CREATE TABLE t_room (
-                        id              BIGINT          NOT NULL AUTO_INCREMENT  COMMENT '主键',
-                        room_id         VARCHAR(32)     NOT NULL                 COMMENT '房间业务ID（URL/QR码中使用）',
-                        creator_id      BIGINT          NOT NULL                 COMMENT '创建者用户ID（t_user.id）',
-                        title           VARCHAR(64)     NOT NULL DEFAULT ''      COMMENT '房间标题',
-                        max_members     INT             NOT NULL DEFAULT 50      COMMENT '最大人数',
-                        is_public       TINYINT(1)      NOT NULL DEFAULT 0       COMMENT '0-私密（仅扫码/链接） 1-公开（展示在房间列表）',
-                        status          TINYINT         NOT NULL DEFAULT 0       COMMENT '0-等待中 1-活跃 2-即将到期 3-宽限期 4-已关闭',
-                        qr_url          VARCHAR(256)    NOT NULL DEFAULT ''      COMMENT '二维码URL',
-                        expire_time     DATETIME        NULL                     COMMENT '预计到期时间',
-                        grace_end_time  DATETIME        NULL                     COMMENT '宽限期结束时间',
-                        closed_time     DATETIME        NULL                     COMMENT '实际关闭时间',
-                        create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                        del_flag        TINYINT(1)      NOT NULL DEFAULT 0       COMMENT '逻辑删除',
-                        PRIMARY KEY (id),
-                        UNIQUE KEY uk_room_id (room_id),
-                        KEY idx_creator_id (creator_id),
-                        KEY idx_status_public (status, is_public),
-                        KEY idx_expire_time (expire_time)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='房间表';
+create table t_room
+(
+    id             bigint auto_increment comment '主键'
+        primary key,
+    room_id        varchar(32)                            not null comment '房间业务ID（URL/QR码中使用）',
+    creator_id     bigint                                 not null comment '创建者用户ID（t_user.id）',
+    title          varchar(64)  default ''                not null comment '房间标题',
+    max_members    int          default 50                not null comment '最大人数',
+    is_public      tinyint(1)   default 0                 not null comment '0-私密（仅扫码/链接） 1-公开（展示在房间列表）',
+    status         tinyint      default 0                 not null comment '0-等待中 1-活跃 2-即将到期 3-宽限期 4-已关闭',
+    qr_url         varchar(256) default ''                not null comment '二维码URL',
+    expire_time    datetime                               null comment '预计到期时间',
+    expire_version int          default 1                 not null comment '到期版本号，每次延期+1',
+    grace_end_time datetime                               null comment '宽限期结束时间',
+    closed_time    datetime                               null comment '实际关闭时间',
+    create_time    datetime     default CURRENT_TIMESTAMP not null,
+    update_time    datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
+    del_flag       tinyint(1)   default 0                 not null comment '逻辑删除',
+    constraint uk_room_id
+        unique (room_id)
+)
+    comment '房间表' charset = utf8mb4;
+
+create index idx_creator_id
+    on t_room (creator_id);
+
+create index idx_expire_time
+    on t_room (expire_time);
+
+create index idx_status_expire
+    on t_room (status, expire_time);
+
+create index idx_status_public
+    on t_room (status, is_public);
 
 
 -- ============================================================
@@ -132,20 +149,27 @@ CREATE TABLE t_room_member (
 --   注册用户发的消息 → sender_user_id 有值
 --   匿名成员发的消息 → sender_member_id 有值
 -- ============================================================
-CREATE TABLE t_message (
-                           id                  BIGINT          NOT NULL AUTO_INCREMENT  COMMENT '主键（自增，兼做离线消息偏移量）',
-                           msg_id              VARCHAR(32)     NOT NULL                 COMMENT '消息业务ID（UUID去横线）',
-                           room_id             VARCHAR(32)     NOT NULL                 COMMENT '房间业务ID',
-                           sender_user_id      BIGINT          NULL                     COMMENT '发送者注册用户ID（与sender_member_id互斥）',
-                           sender_member_id    BIGINT          NULL                     COMMENT '发送者匿名成员ID（与sender_user_id互斥）',
-                           nickname            VARCHAR(32)     NOT NULL                 COMMENT '发送时昵称（冗余快照，前端用最新值覆盖）',
-                           avatar_color        VARCHAR(16)     NOT NULL DEFAULT ''      COMMENT '发送时头像色（冗余快照）',
-                           content             VARCHAR(1024)   NOT NULL                 COMMENT '消息内容',
-                           msg_type            TINYINT         NOT NULL DEFAULT 1       COMMENT '1-文本 2-系统消息 3-游戏消息',
-                           status              TINYINT         NOT NULL DEFAULT 0       COMMENT '0-正常 1-已撤回 2-AI审核拦截',
-                           is_host             TINYINT(1)      NOT NULL DEFAULT 0       COMMENT '发送者是否为房主',
-                           create_time         DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发送时间',
-                           PRIMARY KEY (id),
-                           UNIQUE KEY uk_msg_id (msg_id),
-                           KEY idx_room_id (room_id, id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聊天消息表';
+create table t_message
+(
+    id               bigint auto_increment comment '主键（自增，兼做离线消息偏移量）'
+        primary key,
+    msg_id           varchar(32)                           not null comment '消息业务ID（UUID去横线）',
+    room_id          varchar(32)                           not null comment '房间业务ID',
+    sender_user_id   bigint                                null comment '发送者注册用户ID（与sender_member_id互斥）',
+    sender_member_id bigint                                null comment '发送者匿名成员ID（与sender_user_id互斥）',
+    nickname         varchar(32)                           not null comment '发送时昵称（冗余快照，前端用最新值覆盖）',
+    avatar_color     varchar(16) default ''                not null comment '发送时头像色（冗余快照）',
+    content          varchar(1024)                         not null comment '消息内容',
+    body             text                                  null comment '消息体JSON（files数组格式，文本消息为NULL）',
+    reply_msg_id     bigint                                null comment '引用回复的消息ID（NULL=非回复消息）',
+    msg_type         tinyint     default 1                 not null comment '1-文本 2-系统消息 3-游戏消息',
+    status           tinyint     default 0                 not null comment '0-正常 1-已撤回 2-AI审核拦截',
+    is_host          tinyint(1)  default 0                 not null comment '发送者是否为房主',
+    create_time      datetime    default CURRENT_TIMESTAMP not null comment '发送时间',
+    constraint uk_msg_id
+        unique (msg_id)
+)
+    comment '聊天消息表' charset = utf8mb4;
+
+create index idx_room_id
+    on t_message (room_id, id);

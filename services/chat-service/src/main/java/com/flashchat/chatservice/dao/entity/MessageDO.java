@@ -63,7 +63,19 @@ public class MessageDO {
     private String content;
 
     /**
-     * 消息类型：1-文本 2-系统消息 3-游戏消息
+     * 媒体消息 = vue-advanced-chat files 数组格式的 JSON 字符串
+     */
+    private String body;
+
+    /**
+     * NULL 表示非回复消息
+     */
+    private Long replyMsgId;
+
+    /**
+     * 消息类型
+     * 1-文本  2-系统消息  3-游戏消息
+     * 4-图片  5-语音  6-视频  7-文件
      */
     private Integer msgType;
 

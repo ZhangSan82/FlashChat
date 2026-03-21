@@ -25,6 +25,12 @@ spring:
       host: 127.0.0.1
       port: 6379
 
+    # ====================文件上传 ====================
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
 # ==================== MyBatis-Plus ====================
 mybatis-plus:
   global-config:
@@ -48,3 +54,12 @@ flashchat:
     redis:
       value-timeout: 60000
       value-time-unit: MILLISECONDS
+
+
+  file:
+    # 文件存储根路径（相对路径或绝对路径）
+    # 生产环境建议配置为绝对路径：/data/flashchat/uploads
+    upload-path: ./uploads
+    # 文件访问 URL 前缀
+    # 生产环境配置为 Nginx 域名：https://files.flashchat.com/uploads
+    url-prefix: http://localhost:8081/uploads
