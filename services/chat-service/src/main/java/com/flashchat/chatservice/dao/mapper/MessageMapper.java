@@ -38,13 +38,13 @@ public interface MessageMapper extends BaseMapper<MessageDO> {
      */
     @Insert("<script>" +
             "INSERT IGNORE INTO t_message " +
-            "(id, msg_id, room_id, sender_user_id, sender_member_id, " +
+            "(id, msg_id, room_id, sender_id, " +
             " nickname, avatar_color, content, body, reply_msg_id, " +
             " msg_type, status, is_host, create_time) " +
             "VALUES " +
             "<foreach collection='list' item='item' separator=','>" +
             "(#{item.id}, #{item.msgId}, #{item.roomId}, " +
-            " #{item.senderUserId}, #{item.senderMemberId}, " +
+            " #{item.senderId}, " +
             " #{item.nickname}, #{item.avatarColor}, " +
             " #{item.content}, #{item.body}, #{item.replyMsgId}, " +
             " #{item.msgType}, #{item.status}, #{item.isHost}, " +

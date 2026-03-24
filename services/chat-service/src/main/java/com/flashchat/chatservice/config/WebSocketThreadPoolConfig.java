@@ -24,9 +24,9 @@ public class WebSocketThreadPoolConfig {
     @Bean("wsBusinessExecutor")
     public ThreadPoolTaskExecutor wsBusinessExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(16);
-        executor.setMaxPoolSize(32);
-        executor.setQueueCapacity(1024);
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(512);
         executor.setKeepAliveSeconds(60);
         executor.setThreadNamePrefix("ws-biz-");
 

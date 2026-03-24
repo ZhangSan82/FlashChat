@@ -6,9 +6,6 @@ import com.flashchat.user.constant.UserTypeConstant;
 /**
  * SaToken loginId 编解码工具
  * SaToken 的 loginId 支持任意类型（Long、String 等）。
- * FlashChat 有两类用户（匿名成员、注册用户），它们的数据库主键可能重叠
- * （member.id=1 和 user.id=1），如果直接用裸 Long 作为 loginId 会冲突。
- * 解决方案：loginId 用 "类型前缀_数据库ID" 格式的 String：
  * <ul>
  *   <li>匿名成员：{@code "member_123"}</li>
  *   <li>注册用户：{@code "user_456"}</li>
@@ -36,7 +33,7 @@ public final class LoginIdUtil {
 
     /**
      * 构建匿名成员的 loginId
-     * @param memberId t_member.id
+     * @param memberId t_account.id
      * @return "member_123"
      */
     public static String memberLoginId(Long memberId) {
@@ -48,7 +45,7 @@ public final class LoginIdUtil {
 
     /**
      * 构建注册用户的 loginId
-     * @param userId t_user.id
+     * @param userId t_account.id
      * @return "user_456"
      */
     public static String userLoginId(Long userId) {

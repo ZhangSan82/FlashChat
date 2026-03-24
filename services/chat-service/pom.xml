@@ -20,6 +20,10 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.flashchat</groupId>
+            <artifactId>FlashChat-framework-user</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>com.flashchat</groupId>
