@@ -1,0 +1,111 @@
+
+server:
+  port: 8081
+  tomcat:
+    # --------- 2核4G Tomcat 调优 ---------
+    threads:
+      max: 50              # 默认200太多，2核用50足够
+      min-spare: 5
+    max-connections: 2000   # 最大连接数
+    accept-count: 100       # 等待队列
+    connection-timeout: 5000
+
+spring:
+  application:
+    name: flashchat-chat-service
+
+  # ==================== 数据源 ====================
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/flashchat?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: root
+    password: 123456
+    hikari:
+      minimum-idle: 3          # 测试环境缩小: 5→3
+      maximum-pool-size: 8     # 2核4G推荐: 20→8 (公式: cores*2+spindles)
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 3000 # 缩短超时: 5000→3000
+      pool-name: FlashChatHikariPool
+      # ---- 连接池监控(测试时开启，生产关闭) ----
+      register-mbeans: true
+
+  # ==================== Redis ====================
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      # password:              # 如有密码取消注释
+      timeout: 3000            # 连接超时3秒
+      lettuce:
+        pool:
+          max-active: 16       # 最大活跃连接
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms     # 获取连接最大等待
+
+  # ==================== 文件上传 ====================
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+# ==================== MyBatis-Plus ====================
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: delFlag
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      id-type: auto
+    banner: false
+  configuration:
+    map-underscore-to-camel-case: true
+    # ★ 测试环境关闭SQL日志！开着会严重影响QPS（IO瓶颈）
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+# ==================== FlashChat 业务配置 ====================
+flashchat:
+  cache:
+    redis:
+      value-timeout: 60000
+      value-time-unit: MILLISECONDS
+  file:
+    upload-path: ./uploads
+    url-prefix: http://localhost:8081/uploads
+
+# ==================== 日志级别 ====================
+logging:
+  level:
+    root: WARN
+    com.flashchat: INFO
+    # 关闭框架噪音日志
+    org.springframework: WARN
+    com.baomidou: WARN
+    org.redisson: WARN
+    io.netty: WARN
+    com.zaxxer.hikari: INFO          # 保留连接池日志
+    org.apache.ibatis: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{20} - %msg%n"
+  file:
+    name: logs/flashchat-test.log
+    max-size: 100MB
+    max-history: 3
+
+# ==================== 监控 Actuator ====================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,threaddump,heapdump,env,hikaricp
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+

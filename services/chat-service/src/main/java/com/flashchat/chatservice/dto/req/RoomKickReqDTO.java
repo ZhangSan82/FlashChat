@@ -19,5 +19,5 @@ public class RoomKickReqDTO {
 
 
     @NotNull(message = "被踢人 ID 不能为空")
-    private Long targetMemberId;
+    private Long targetAccountId;
 }

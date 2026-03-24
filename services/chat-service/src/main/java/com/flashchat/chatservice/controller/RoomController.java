@@ -70,7 +70,7 @@ public class RoomController {
     @PostMapping("/kick")
     public Result<Void> kickMember(@Valid @RequestBody RoomKickReqDTO request) {
         log.info("[踢人] roomId={}, operator={}, target={}",
-                request.getRoomId(), request.getAccountId(), request.getTargetMemberId());
+                request.getRoomId(), request.getAccountId(), request.getTargetAccountId());
         roomService.kickMember(request);
         return Results.success();
     }
@@ -81,7 +81,7 @@ public class RoomController {
     @PostMapping("/mute")
     public Result<Void> muteMember(@Valid @RequestBody RoomMuteReqDTO request) {
         log.info("[禁言] roomId={}, operator={}, target={}",
-                request.getRoomId(), request.getAccountId(), request.getTargetMemberId());
+                request.getRoomId(), request.getAccountId(), request.getTargetAccountId());
         roomService.muteMember(request);
         return Results.success();
     }
@@ -92,7 +92,7 @@ public class RoomController {
     @PostMapping("/unmute")
     public Result<Void> unmuteMember(@Valid @RequestBody RoomMuteReqDTO request) {
         log.info("[解禁] roomId={}, operator={}, target={}",
-                request.getRoomId(), request.getAccountId(), request.getTargetMemberId());
+                request.getRoomId(), request.getAccountId(), request.getTargetAccountId());
         roomService.unmuteMember(request);
         return Results.success();
     }

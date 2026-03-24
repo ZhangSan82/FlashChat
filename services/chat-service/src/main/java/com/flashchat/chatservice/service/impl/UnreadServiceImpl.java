@@ -34,8 +34,8 @@ public class UnreadServiceImpl implements UnreadService {
     /** Key 过期时间（小时），防止僵尸数据 */
     private static final long KEY_EXPIRE_HOURS = 72;
 
-    private String getKey(Long memberId) {
-        return UNREAD_KEY_PREFIX + memberId;
+    private String getKey(Long accountId) {
+        return UNREAD_KEY_PREFIX + accountId;
     }
 
     // ================================================================
@@ -77,12 +77,12 @@ public class UnreadServiceImpl implements UnreadService {
      * ACK 后清零
      */
     @Override
-    public void clearUnread(Long memberId, String roomId) {
+    public void clearUnread(Long accountId, String roomId) {
         try {
-            stringRedisTemplate.opsForHash().delete(getKey(memberId), roomId);
-            log.debug("[未读清零] memberId={}, room={}", memberId, roomId);
+            stringRedisTemplate.opsForHash().delete(getKey(accountId), roomId);
+            log.debug("[未读清零] memberId={}, room={}", accountId, roomId);
         } catch (Exception e) {
-            log.error("[未读清零失败] memberId={}, room={}", memberId, roomId, e);
+            log.error("[未读清零失败] memberId={}, room={}", accountId, roomId, e);
         }
     }
 
@@ -90,8 +90,8 @@ public class UnreadServiceImpl implements UnreadService {
      * 离开房间 / 被踢出
      */
     @Override
-    public void removeRoomUnread(Long memberId, String roomId) {
-        clearUnread(memberId, roomId);
+    public void removeRoomUnread(Long accountId, String roomId) {
+        clearUnread(accountId, roomId);
     }
 
     /**
@@ -129,19 +129,19 @@ public class UnreadServiceImpl implements UnreadService {
      *   兜底：Redis 无数据 → DB COUNT → 回写 Redis
      */
     @Override
-    public Map<String, Integer> getAllUnreadCounts(Long memberId) {
+    public Map<String, Integer> getAllUnreadCounts(Long accountId) {
         // 1. 先查 Redis
-        Map<String, Integer> redisResult = getFromRedis(memberId);
+        Map<String, Integer> redisResult = getFromRedis(accountId);
         if (redisResult != null) {
             return redisResult;
         }
 
         // 2. Redis 无数据 → DB 兜底
-        log.info("[未读-DB兜底] memberId={}", memberId);
-        Map<String, Integer> dbResult = computeAllFromDB(memberId);
+        log.info("[未读-DB兜底] memberId={}", accountId);
+        Map<String, Integer> dbResult = computeAllFromDB(accountId);
 
         // 3. 回写 Redis
-        writeBackToRedis(memberId, dbResult);
+        writeBackToRedis(accountId, dbResult);
 
         return dbResult;
     }
@@ -150,18 +150,18 @@ public class UnreadServiceImpl implements UnreadService {
      * 获取单个房间的未读数
      */
     @Override
-    public int getUnreadCount(Long memberId, String roomId) {
+    public int getUnreadCount(Long accountId, String roomId) {
         try {
-            Object val = stringRedisTemplate.opsForHash().get(getKey(memberId), roomId);
+            Object val = stringRedisTemplate.opsForHash().get(getKey(accountId), roomId);
             if (val != null) {
                 return Math.max(0, Integer.parseInt(val.toString()));
             }
         } catch (Exception e) {
-            log.error("[查单房间未读失败] memberId={}, room={}", memberId, roomId, e);
+            log.error("[查单房间未读失败] memberId={}, room={}", accountId, roomId, e);
         }
 
         // Redis 没有 → DB 兜底
-        return computeOneFromDB(memberId, roomId);
+        return computeOneFromDB(accountId, roomId);
     }
 
     // ================================================================
@@ -172,9 +172,9 @@ public class UnreadServiceImpl implements UnreadService {
      * 从 Redis 读取所有未读数
      * @return null 表示 key 不存在（需要 DB 兜底）
      */
-    private Map<String, Integer> getFromRedis(Long memberId) {
+    private Map<String, Integer> getFromRedis(Long accountId) {
         try {
-            String key = getKey(memberId);
+            String key = getKey(accountId);
             Boolean exists = stringRedisTemplate.hasKey(key);
             if (exists == null || !exists) {
                 return null;
@@ -194,7 +194,7 @@ public class UnreadServiceImpl implements UnreadService {
             });
             return result;
         } catch (Exception e) {
-            log.error("[Redis读未读失败] memberId={}", memberId, e);
+            log.error("[Redis读未读失败] memberId={}", accountId, e);
             return null;
         }
     }
@@ -202,9 +202,9 @@ public class UnreadServiceImpl implements UnreadService {
     /**
      * 将 DB 计算结果回写 Redis
      */
-    private void writeBackToRedis(Long memberId, Map<String, Integer> unreadMap) {
+    private void writeBackToRedis(Long accountId, Map<String, Integer> unreadMap) {
         try {
-            String key = getKey(memberId);
+            String key = getKey(accountId);
             Map<String, String> writeMap = new HashMap<>();
 
             if (unreadMap.isEmpty()) {
@@ -218,9 +218,9 @@ public class UnreadServiceImpl implements UnreadService {
             stringRedisTemplate.opsForHash().putAll(key, writeMap);
             stringRedisTemplate.expire(key, KEY_EXPIRE_HOURS, TimeUnit.HOURS);
 
-            log.debug("[未读回写Redis] memberId={}, rooms={}", memberId, unreadMap.size());
+            log.debug("[未读回写Redis] memberId={}, rooms={}", accountId, unreadMap.size());
         } catch (Exception e) {
-            log.error("[未读回写Redis失败] memberId={}", memberId, e);
+            log.error("[未读回写Redis失败] memberId={}", accountId, e);
         }
     }
 
@@ -231,9 +231,9 @@ public class UnreadServiceImpl implements UnreadService {
     /**
      * 从 DB 计算所有房间的未读数
      */
-    private Map<String, Integer> computeAllFromDB(Long memberId) {
+    private Map<String, Integer> computeAllFromDB(Long accountId) {
         List<RoomMemberDO> activeMembers = roomMemberService.lambdaQuery()
-                .eq(RoomMemberDO::getMemberId, memberId)
+                .eq(RoomMemberDO::getAccountId, accountId)
                 .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
                 .list();
 
@@ -254,8 +254,8 @@ public class UnreadServiceImpl implements UnreadService {
     /**
      * 从 DB 计算单个房间的未读数
      */
-    private int computeOneFromDB(Long memberId, String roomId) {
-        RoomMemberDO rm = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, memberId);
+    private int computeOneFromDB(Long accountId, String roomId) {
+        RoomMemberDO rm = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
 
         if (rm == null || rm.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) return 0;
         return doCount(roomId, rm.getLastAckMsgId());

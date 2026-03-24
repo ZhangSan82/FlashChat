@@ -14,8 +14,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class RoomMemberRespDTO {
 
-    /** 成员 ID（匿名成员 = t_member.id，注册用户 = t_user.id） */
-    private Long memberId;
+    /** 账号 ID（t_account.id） */
+    private Long accountId;
 
     /** 昵称（优先从内存取最新值，fallback 到 DB） */
     private String nickname;

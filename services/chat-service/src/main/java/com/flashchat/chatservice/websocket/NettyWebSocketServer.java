@@ -1,7 +1,7 @@
 package com.flashchat.chatservice.websocket;
 
 
-import com.flashchat.chatservice.service.MemberService;
+import com.flashchat.chatservice.service.AccountService;
 import com.flashchat.chatservice.service.RoomService;
 import com.flashchat.chatservice.websocket.handlers.HttpHeadersHandler;
 import com.flashchat.chatservice.websocket.handlers.NettyWebSocketServerHandler;
@@ -39,7 +39,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @RequiredArgsConstructor
 public class NettyWebSocketServer {
     private final RoomChannelManager roomManager;
-    private final MemberService memberService;
+    //private final MemberService memberService;
+    private final AccountService accountService;
     private final RoomService roomService;
 
     @Qualifier("wsBusinessExecutor")
@@ -51,7 +52,8 @@ public class NettyWebSocketServer {
 
     // 创建线程池执行器
     private EventLoopGroup bossGroup = new NioEventLoopGroup(1);
-    private EventLoopGroup workerGroup = new NioEventLoopGroup(NettyRuntime.availableProcessors());
+   // private EventLoopGroup workerGroup = new NioEventLoopGroup(NettyRuntime.availableProcessors());
+    private EventLoopGroup workerGroup = new NioEventLoopGroup(2);
 
     /**
      * 启动 ws server
@@ -64,7 +66,7 @@ public class NettyWebSocketServer {
         try {
             NETTY_WEB_SOCKET_SERVER_HANDLER = new NettyWebSocketServerHandler(
                     roomManager,
-                    memberService,
+                    accountService,
                     roomService,
                     wsBusinessExecutor
             );

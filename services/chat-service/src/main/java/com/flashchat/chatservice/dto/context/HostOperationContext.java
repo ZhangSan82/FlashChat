@@ -17,8 +17,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class HostOperationContext {
     private RoomDO room;
-    private Long operatorId;
-    private Long targetId;
+    /** 操作者 t_account.id */
+    private Long operatorAccountId;
+    /** 目标 t_account.id */
+    private Long targetAccountId;
     private RoomMemberDO operatorMember;
     private RoomMemberDO targetMember;
 }

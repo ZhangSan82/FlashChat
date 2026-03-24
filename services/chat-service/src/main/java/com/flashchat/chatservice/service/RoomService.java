@@ -37,7 +37,7 @@ public interface RoomService extends IService<RoomDO> {
     /**
      * 用户重新登录恢复房间
      */
-    void restoreRoomMemberships(Long memberId);
+    void restoreRoomMemberships(Long accountId);
 
     /**
      *踢人

@@ -25,12 +25,12 @@ public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMem
      * 通过缓存查询用户
      */
     @Override
-    public RoomMemberDO getRoomMemberByRoomIdAndMemberId(String roomId, Long memberId) {
-        RoomMemberDO roomMemberDO = distributedCache.safeGet(buildCacheKey(roomId, memberId),
+    public RoomMemberDO getRoomMemberByRoomIdAndAccountId(String roomId, Long accountId) {
+        RoomMemberDO roomMemberDO = distributedCache.safeGet(buildCacheKey(roomId, accountId),
                 RoomMemberDO.class,
                 ()->this.lambdaQuery()
                         .eq(RoomMemberDO::getRoomId,roomId)
-                        .eq(RoomMemberDO::getMemberId,memberId)
+                        .eq(RoomMemberDO::getAccountId,accountId)
                         .one(),
                 CACHE_TIMEOUT
                 );
@@ -44,15 +44,12 @@ public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMem
     @Override
     public boolean saveWithCache(RoomMemberDO entity) {
         boolean result = this.save(entity);
-        if (result) {
-            Long memberId = extractMemberId(entity);
-            if (entity.getRoomId() != null && memberId != null) {
-                distributedCache.put(
-                        buildCacheKey(entity.getRoomId(), memberId),
-                        entity,
-                        CACHE_TIMEOUT
-                );
-            }
+        if (result && entity.getRoomId() != null && entity.getAccountId() != null) {
+            distributedCache.put(
+                    buildCacheKey(entity.getRoomId(),entity.getAccountId()),
+                    entity,
+                    CACHE_TIMEOUT
+            );
         }
         return result;
     }
@@ -65,12 +62,9 @@ public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMem
     @Override
     public boolean updateWithCacheEvict(RoomMemberDO entity) {
         boolean result = this.updateById(entity);
-        if (result) {
-            Long memberId = extractMemberId(entity);
-            if (entity.getRoomId() != null && memberId != null) {
-                evictCache(entity.getRoomId(), memberId);
-                log.debug("[缓存失效] roomMember room={}, memberId={}", entity.getRoomId(), memberId);
-            }
+        if (result && entity.getRoomId() != null && entity.getAccountId() != null) {
+            evictCache(entity.getRoomId(), entity.getAccountId());
+            log.debug("[缓存失效] roomMember room={}, accountId={}", entity.getRoomId(), entity.getAccountId());
         }
         return result;
     }
@@ -79,11 +73,11 @@ public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMem
      * 手动失效缓存（用于 lambdaUpdate 等无法走 updateWithCacheEvict 的场景）
      */
     @Override
-    public void evictCache(String roomId, Long memberId) {
+    public void evictCache(String roomId,Long accountId) {
         try {
-            distributedCache.delete(buildCacheKey(roomId, memberId));
+            distributedCache.delete(buildCacheKey(roomId, accountId));
         } catch (Exception e) {
-            log.error("[缓存失效异常] room={}, memberId={}", roomId, memberId, e);
+            log.error("[缓存失效异常] room={}, memberId={}", roomId, accountId, e);
         }
     }
 
@@ -103,9 +97,8 @@ public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMem
 
         int count = 0;
         for (RoomMemberDO member : members) {
-            Long memberId = extractMemberId(member);
-            if (memberId != null) {
-                evictCache(roomId, memberId);
+            if (member.getAccountId() != null) {
+                evictCache(roomId, member.getAccountId());
                 count++;
             }
         }
@@ -115,14 +108,9 @@ public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMem
 
 
 
-    private String buildCacheKey(String roomId, Long memberId) {
-        return CacheUtil.buildKey("flashchat", "roomMember", roomId, String.valueOf(memberId));
+    private String buildCacheKey(String roomId, Long accountId) {
+        return CacheUtil.buildKey("flashchat", "roomMember", roomId, String.valueOf(accountId));
     }
 
-    /**
-     * 从实体中提取 memberId（兼容匿名成员和注册用户）
-     */
-    private Long extractMemberId(RoomMemberDO entity) {
-        return entity.getMemberId() != null ? entity.getMemberId() : entity.getUserId();
-    }
+
 }

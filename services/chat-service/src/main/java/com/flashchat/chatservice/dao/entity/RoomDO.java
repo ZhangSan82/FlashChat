@@ -33,9 +33,7 @@ public class RoomDO {
      */
     private String roomId;
 
-    /**
-     * 创建者用户 ID → t_user.id
-     */
+    /** 创建者（t_account.id） */
     private Long creatorId;
 
     /**

@@ -34,16 +34,10 @@ public class RoomMemberDO {
     private String roomId;
 
     /**
-     * 注册用户 ID → t_user.id
-     * 与 member_id 互斥，二选一有值
+     * 账号 ID → t_account.id（统一外键）
      */
-    private Long userId;
+    private Long accountId;
 
-    /**
-     * 匿名成员 ID → t_member.id
-     * 与 user_id 互斥，二选一有值
-     */
-    private Long memberId;
 
     /**
      * 角色：0-普通成员 1-房主

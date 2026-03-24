@@ -20,12 +20,12 @@ public interface UnreadService {
     /**
      * ACK 后，清除该用户该房间的未读数
      */
-    void clearUnread(Long memberId, String roomId);
+    void clearUnread(Long accountId, String roomId);
 
     /**
      * 离开房间 / 被踢出
      */
-    void removeRoomUnread(Long memberId, String roomId);
+    void removeRoomUnread(Long accountId, String roomId);
 
     /**
      * 房间关闭，批量清除所有成员的该房间未读数
@@ -36,10 +36,10 @@ public interface UnreadService {
      * 获取用户所有房间的未读数
      * @return roomId → unreadCount（只包含 > 0 的）
      */
-    Map<String, Integer> getAllUnreadCounts(Long memberId);
+    Map<String, Integer> getAllUnreadCounts(Long accountId);
 
     /**
      * 获取用户在某个房间的未读数
      */
-    int getUnreadCount(Long memberId, String roomId);
+    int getUnreadCount(Long accountId, String roomId);
 }

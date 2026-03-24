@@ -8,6 +8,7 @@ import com.flashchat.chatservice.dto.resp.WsRespDTO;
 import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 import com.flashchat.convention.exception.ClientException;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.util.concurrent.GlobalEventExecutor;
@@ -40,6 +41,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class RoomChannelManager {
 
+
+    private final MeterRegistry meterRegistry;
+
     // ==================== 用户连接映射 ====================
 
     /**
@@ -69,6 +73,10 @@ public class RoomChannelManager {
      *
      */
     private final ConcurrentHashMap<Long, Set<String>> userRooms = new ConcurrentHashMap<>();
+
+    public RoomChannelManager(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
 
     // ===========================================================
     //                    连接生命周期
@@ -117,6 +125,7 @@ public class RoomChannelManager {
         } else {
             log.info("[用户上线] userId={}", userId);
         }
+        meterRegistry.gauge("websocket.online.users", userChannels.size());
     }
 
     /**

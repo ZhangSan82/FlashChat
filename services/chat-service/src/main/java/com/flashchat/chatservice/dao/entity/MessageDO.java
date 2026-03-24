@@ -36,16 +36,9 @@ public class MessageDO {
     private String roomId;
 
     /**
-     * 发送者注册用户 ID → t_user.id
-     * 与 sender_member_id 互斥
+     * 发送者（t_account.id，统一外键）
      */
-    private Long senderUserId;
-
-    /**
-     * 发送者匿名成员 ID → t_member.id
-     * 与 sender_user_id 互斥
-     */
-    private Long senderMemberId;
+    private Long senderId;
 
     /**
      * 发送时昵称（冗余快照）

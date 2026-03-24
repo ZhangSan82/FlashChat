@@ -60,7 +60,6 @@ public class StringRedisTemplateProxy implements DistributedCache {
     }
 
 
-
     @Override
     public Boolean delete(String key) {
         return stringRedisTemplate.delete(key);
@@ -82,7 +81,6 @@ public class StringRedisTemplateProxy implements DistributedCache {
     }
 
 
-
     @Override
     public <T> T get(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader, long timeout) {
         return get(key, clazz, cacheLoader, timeout, redisProperties.getValueTimeUnit());
@@ -99,7 +97,6 @@ public class StringRedisTemplateProxy implements DistributedCache {
         // 2. 缓存没命中，加载并写入（不加锁）
         return loadAndSet(key, cacheLoader, timeout, timeUnit, false, null);
     }
-
 
 
     @Override
@@ -197,7 +194,6 @@ public class StringRedisTemplateProxy implements DistributedCache {
     }
 
 
-
     @Override
     public void put(@NotBlank String key, Object value, long timeout) {
         put(key, value, timeout, redisProperties.getValueTimeUnit());
@@ -209,7 +205,6 @@ public class StringRedisTemplateProxy implements DistributedCache {
         String actual = value instanceof String ? (String) value : JSON.toJSONString(value);
         stringRedisTemplate.opsForValue().set(key, actual, timeout, timeUnit);
     }
-
 
 
     @Override
@@ -226,7 +221,6 @@ public class StringRedisTemplateProxy implements DistributedCache {
             bloomFilter.add(key);
         }
     }
-
 
 
     @Override

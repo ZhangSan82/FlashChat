@@ -9,7 +9,7 @@ public interface RoomMemberService extends IService<RoomMemberDO> {
     /**
      * 通过缓存查询用户
      */
-    RoomMemberDO getRoomMemberByRoomIdAndMemberId(String roomId, Long memberId);
+    RoomMemberDO getRoomMemberByRoomIdAndAccountId(String roomId, Long accountId);
 
 
     /**
@@ -21,7 +21,7 @@ public interface RoomMemberService extends IService<RoomMemberDO> {
     /**
      * 手动失效缓存（用于 lambdaUpdate 等无法走 updateWithCacheEvict 的场景）
      */
-    void evictCache(String roomId, Long memberId);
+    void evictCache(String roomId, Long accountId);
 
     /**
      * 批量失效某个房间所有成员的缓存（关闭房间时使用）

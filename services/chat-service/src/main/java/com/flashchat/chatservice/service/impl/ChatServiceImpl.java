@@ -5,7 +5,7 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.DistributedCache;
 import com.flashchat.chatservice.config.MsgIdGenerator;
-import com.flashchat.chatservice.dao.entity.MemberDO;
+import com.flashchat.chatservice.dao.entity.AccountDO;
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
@@ -45,7 +45,8 @@ import java.util.stream.Collectors;
 public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implements ChatService {
 
     private final RoomChannelManager roomChannelManager;
-    private final MemberService  memberService;
+    //private final MemberService  memberService;
+    private final AccountService accountService;
     private final MessagePersistServiceImpl messagePersistServiceImpl;
     private final RoomService roomService;
     private final RoomMemberService roomMemberService;
@@ -59,18 +60,18 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     public ChatBroadcastMsgRespDTO sendMsg(SendMsgReqDTO request) {
 
 
-        MemberDO memberDO = memberService.getByAccountId(request.getAccountId());
-        Long memberId = memberDO.getId();
+        AccountDO account = accountService.getByAccountId(request.getAccountId());
+        Long accountId = account.getId();
         String roomId = request.getRoomId();
 
         // ===== 1. 公共前置校验 =====
         validateRoomCanSendMsg(roomId);
 
-        if (!roomChannelManager.isInRoom(roomId, memberId)) {
+        if (!roomChannelManager.isInRoom(roomId, accountId)) {
             throw new ClientException("你不在该房间中，请先加入房间");
         }
 
-        RoomMemberInfo memberInfo = roomChannelManager.getRoomMemberInfo(roomId, memberId);
+        RoomMemberInfo memberInfo = roomChannelManager.getRoomMemberInfo(roomId, accountId);
         if (memberInfo != null && memberInfo.isMuted()) {
             throw new ClientException("你已被禁言，无法发送消息");
         }
@@ -123,7 +124,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .avatarColor(memberInfo != null ? memberInfo.getAvatar() : "")
                 .msgType(msgType)
                 .nickname(memberInfo != null ? memberInfo.getNickname() : "匿名")
-                .senderMemberId(memberId)
+                .senderId(accountId)
                 .status(0)
                 .isHost(isHost)
                 .build();
@@ -143,7 +144,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             msgSeqId = fallbackId;
 
             log.warn("[发消息-降级] Redis不可用，使用本地ID={}, room={}, memberId={}",
-                    fallbackId, roomId, memberId);
+                    fallbackId, roomId, accountId);
         }
         // ===== 9. 构建回复消息 DTO =====
         ReplyMessageDTO replyMessageDTO = buildReplyMessageDTO(replyMsg);
@@ -153,7 +154,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 ._id(msgId)
                 .indexId(msgSeqId)
                 .content(contentSummary)
-                .senderId(memberId.toString())
+                .senderId(accountId.toString())
                 .username(memberInfo != null ? memberInfo.getNickname() : "匿名")
                 .avatar(memberInfo != null ? memberInfo.getAvatar() : "")
                 .timestamp(System.currentTimeMillis())
@@ -171,10 +172,10 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 WsRespDTO.of(roomId, WsRespDTOTypeEnum.CHAT_BROADCAST, broadcastMsg));
 
         log.info("[发消息] room={}, memberId={}, dbId={}, content={}",
-                roomId, memberId, msgSeqId, request.getContent());
+                roomId, accountId, msgSeqId, request.getContent());
 
         // ===== 12. 未读计数 +1 =====
-        unreadService.incrementUnread(roomId, memberId);
+        unreadService.incrementUnread(roomId, accountId);
 
         return broadcastMsg;
     }
@@ -244,12 +245,12 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     @Override
     public void ackMessages(MsgAckReqDTO request) {
         // 1. 查找用户
-        MemberDO member = memberService.getByAccountId(request.getAccountId());
-        Long memberId = member.getId();
+        AccountDO account = accountService.getByAccountId(request.getAccountId());
+        Long accountId = account.getId();
         String roomId = request.getRoomId();
 
         // 2. 查找房间成员记录
-        RoomMemberDO roomMember = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, memberId);
+        RoomMemberDO roomMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
 
         if (roomMember == null) {
             throw new ClientException("你不在该房间中");
@@ -261,8 +262,8 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
 
         if (currentAckId >= request.getLastMsgId()) {
             // 当前已读位置 >= 请求的位置，说明已经确认过了，直接忽略
-            log.debug("[ACK 跳过] room={}, memberId={}, current={}, request={}（未前进）",
-                    roomId, memberId, currentAckId, request.getLastMsgId());
+            log.debug("[ACK 跳过] room={}, accountId={}, current={}, request={}（未前进）",
+                    roomId, accountId, currentAckId, request.getLastMsgId());
             return;
         }
 
@@ -278,13 +279,13 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .update();
 
         if (updated) {
-            roomMemberService.evictCache(roomId, memberId);
-            unreadService.clearUnread(memberId, roomId);
+            roomMemberService.evictCache(roomId, accountId);
+            unreadService.clearUnread(accountId, roomId);
             log.info("[ACK 成功] room={}, memberId={}, {} → {}",
-                    roomId, memberId, currentAckId, request.getLastMsgId());
+                    roomId, accountId, currentAckId, request.getLastMsgId());
         } else {
             log.debug("[ACK 并发跳过] room={}, memberId={}, 可能被其他请求抢先更新",
-                    roomId, memberId);
+                    roomId, accountId);
         }
     }
 
@@ -299,10 +300,10 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         validateRoomExists(roomId);
 
         // ===== 2. 查找用户的已读位置 =====
-        MemberDO member = memberService.getByAccountId(accountId);
-        Long memberId = member.getId();
+        AccountDO account = accountService.getByAccountId(accountId);
+        Long acctId = account.getId();
 
-        RoomMemberDO roomMember = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, memberId);
+        RoomMemberDO roomMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, acctId);
 
         if (roomMember == null) {
             throw new ClientException("你不在该房间中");
@@ -332,8 +333,8 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         );
 
         if (page.getList().isEmpty()) {
-            log.info("[拉新消息] room={}, memberId={}, lastAck={}, 无新消息",
-                    roomId, memberId, lastAckMsgId);
+            log.info("[拉新消息] room={}, acctId={}, lastAck={}, 无新消息",
+                    roomId, acctId, lastAckMsgId);
             return CursorPageBaseResp.<ChatBroadcastMsgRespDTO>builder()
                     .list(List.of())
                     .cursor(null)
@@ -350,10 +351,10 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                     .set(RoomMemberDO::getLastAckMsgId, latestMsg.getId())
                     .update();
            if (updated) {
-               roomMemberService.evictCache(roomId, memberId);
-               unreadService.clearUnread(memberId, roomId);
-               log.info("[自动ACK] room={}, memberId={}, {} → {}",
-                       roomId, memberId, lastAckMsgId, latestMsg.getId());
+               roomMemberService.evictCache(roomId, acctId);
+               unreadService.clearUnread(acctId, roomId);
+               log.info("[自动ACK] room={}, acctId={}, {} → {}",
+                       roomId, acctId, lastAckMsgId, latestMsg.getId());
            }
         }
 
@@ -363,7 +364,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
 
 
         log.info("[拉新消息] room={}, memberId={}, lastAck={}, 拉到 {} 条, isLast={}",
-                roomId, memberId, lastAckMsgId, respList.size(), page.getIsLast());
+                roomId, acctId, lastAckMsgId, respList.size(), page.getIsLast());
 
         return CursorPageBaseResp.<ChatBroadcastMsgRespDTO>builder()
                 .list(respList)
@@ -377,8 +378,8 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
      */
     @Override
     public Map<String, Integer> getUnreadCounts(String accountId) {
-        MemberDO member = memberService.getByAccountId(accountId);
-        return unreadService.getAllUnreadCounts(member.getId());
+        AccountDO account = accountService.getByAccountId(accountId);
+        return unreadService.getAllUnreadCounts(account.getId());
     }
 
     /**
@@ -499,10 +500,8 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
      * 从 MessageDO 提取发送者 ID
      */
     private String getSenderId(MessageDO msg) {
-        if (msg.getSenderMemberId() != null) {
-            return msg.getSenderMemberId().toString();
-        } else if (msg.getSenderUserId() != null) {
-            return msg.getSenderUserId().toString();
+        if (msg.getSenderId() != null) {
+            return msg.getSenderId().toString();
         }
         return "0";
     }

@@ -63,3 +63,18 @@ flashchat:
     # 文件访问 URL 前缀
     # 生产环境配置为 Nginx 域名：https://files.flashchat.com/uploads
     url-prefix: http://localhost:8081/uploads
+
+# ==================== 监控 Actuator ====================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

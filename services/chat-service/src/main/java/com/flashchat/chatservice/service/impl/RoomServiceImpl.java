@@ -3,13 +3,10 @@ package com.flashchat.chatservice.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.DistributedCache;
 import com.flashchat.cache.toolkit.CacheUtil;
-import com.flashchat.chatservice.dao.entity.MemberDO;
+import com.flashchat.chatservice.dao.entity.AccountDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
-import com.flashchat.chatservice.dao.enums.RoomDurationEnum;
-import com.flashchat.chatservice.dao.enums.RoomMemberRoleEnum;
-import com.flashchat.chatservice.dao.enums.RoomMemberStatusEnum;
-import com.flashchat.chatservice.dao.enums.RoomStatusEnum;
+import com.flashchat.chatservice.dao.enums.*;
 import com.flashchat.chatservice.dao.mapper.RoomMapper;
 import com.flashchat.chatservice.delay.producer.RoomDelayProducer;
 import com.flashchat.chatservice.dto.context.HostOperationContext;
@@ -18,10 +15,7 @@ import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
-import com.flashchat.chatservice.service.MemberService;
-import com.flashchat.chatservice.service.RoomMemberService;
-import com.flashchat.chatservice.service.RoomService;
-import com.flashchat.chatservice.service.UnreadService;
+import com.flashchat.chatservice.service.*;
 import com.flashchat.chatservice.toolkit.HashUtil;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
@@ -36,7 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -47,8 +40,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Qualifier("flashChatRoomRegisterCachePenetrationBloomFilter")
     private final RBloomFilter<String> flashChatRoomRegisterCachePenetrationBloomFilter;
     private final RoomMemberService roomMemberService;
-    private final MemberService memberService;
+    //private final MemberService memberService;
     private final UnreadService unreadService;
+    private final AccountService accountService;
     private final DistributedCache distributedCache;
     private final RoomDelayProducer roomDelayProducer;
     private static final long CACHE_TIMEOUT = 60000L;
@@ -62,7 +56,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     public RoomInfoRespDTO createRoom(RoomCreateReqDTO request) {
 
 
-        MemberDO creator = memberService.getByAccountId(request.getAccountId());
+        AccountDO creator = accountService.getByAccountId(request.getAccountId());
 
 
         // TODO 未来：检查是否为注册用户（主持人）+ 扣除积分
@@ -78,7 +72,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         //t_room
         RoomDO room = RoomDO.builder()
                 .roomId(roomId)
-                .creatorId(creator.getId())
+                .creatorId(creator.getId())//t_account.id
                 .title(request.getTitle())
                 .maxMembers(request.getMaxMembers() != null ? request.getMaxMembers() : 50)
                 .isPublic(request.getIsPublic() != null ? request.getIsPublic() : 0)
@@ -107,8 +101,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         RoomMemberDO hostMember = RoomMemberDO.builder()
                 .roomId(roomId)
-                .userId(null)//TODO注册用户ID暂时没有
-                .memberId(creator.getId())
+                .accountId(creator.getId())
                 .role(RoomMemberRoleEnum.HOST.getCode())
                 .isMuted(0)
                 .status(RoomMemberStatusEnum.ACTIVE.getCode())
@@ -133,10 +126,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     public RoomInfoRespDTO joinRoom(RoomJoinReqDTO request) {
         String roomId = request.getRoomId();
 
-        MemberDO memberDO = memberService.getByAccountId(request.getAccountId());
+        AccountDO account = accountService.getByAccountId(request.getAccountId());
 
 
-        Long memberId = memberDO.getId();
+
+        Long accountId = account.getId();
         // 1. 查房间
         RoomDO room = getRoomByRoomId(roomId);
         if (room == null) {
@@ -156,12 +150,12 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         }
 
         // 4. 检查是否已有记录（处理重复加入、重新加入）
-        RoomMemberDO existingMember = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId,memberId);
+        RoomMemberDO existingMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
 
         if (existingMember != null) {
             if (existingMember.getStatus() == RoomMemberStatusEnum.ACTIVE.getCode()) {
                 // 已在房间中，幂等返回
-                log.info("[重复加入] room={}, memberId={}, 已在房间中", roomId, memberId);
+                log.info("[重复加入] room={}, memberId={}, 已在房间中", roomId, accountId);
                 return buildRoomInfoResp(room);
             }
             //之前离开过（LEFT）或被踢过（KICKED），恢复为 ACTIVE
@@ -169,15 +163,14 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             existingMember.setLeaveTime(null);
             existingMember.setJoinTime(LocalDateTime.now());
             roomMemberService.updateWithCacheEvict(existingMember);
-            log.info("[重新加入] room={}, memberId={}, 原状态={}",
-                    roomId, memberId, existingMember.getStatus());
+            log.info("[重新加入] room={}, accountId={}, 原状态={}",
+                    roomId, accountId, existingMember.getStatus());
 
         } else {
             // 首次加入 → 插入新行
             RoomMemberDO newMember = RoomMemberDO.builder()
                     .roomId(roomId)
-                    .memberId(memberId)
-                    .userId(null) // 匿名成员，user_id 为 null
+                    .accountId(accountId)
                     .role(RoomMemberRoleEnum.MEMBER.getCode())
                     .isMuted(0)
                     .status(RoomMemberStatusEnum.ACTIVE.getCode())
@@ -185,7 +178,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                     .joinTime(LocalDateTime.now())
                     .build();
             roomMemberService.saveWithCache(newMember);
-            log.info("[首次加入] room={}, memberId={}", roomId, memberId);
+            log.info("[首次加入] room={}, accountId={}", roomId, accountId);
         }
 
         // 5. 如果房间是 WAITING → 改为 ACTIVE
@@ -202,7 +195,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         // 6. 同步到内存（RoomChannelManager）
         //    从 Channel 属性获取昵称/头像（WS 连接时已分配）
 
-        roomChannelManager.joinRoom(roomId, memberId, memberDO.getNickname() ,memberDO.getAvatarColor() , false);
+        roomChannelManager.joinRoom(roomId, accountId, account.getNickname() ,account.getAvatarColor() , false);
 
         return buildRoomInfoResp(room);
     }
@@ -211,13 +204,13 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Transactional
     public void leaveRoom(RoomLeaveReqDTO request) {
         String roomId = request.getRoomId();
-        MemberDO memberDO = memberService.getByAccountId(request.getAccountId());
+        AccountDO account = accountService.getByAccountId(request.getAccountId());
+        Long accountId = account.getId();
 
-        if (memberDO == null) {
+        if (account == null) {
             throw new ClientException("账号不存在");
         }
 
-        Long memberId = memberDO.getId();
 
         // ===== 1. 校验房间存在 =====
         RoomDO room = getRoomByRoomId(roomId);
@@ -226,9 +219,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         }
 
         // ===== 2. 查成员记录 =====
-        RoomMemberDO member = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, memberId);
+        RoomMemberDO member = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
         if (member == null || member.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
-            log.info("[离开房间-幂等] room={}, memberId={}, 不在房间中或已离开", roomId, memberId);
+            log.info("[离开房间-幂等] room={}, memberId={}, 不在房间中或已离开", roomId, accountId);
             return;
         }
 
@@ -243,10 +236,10 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         roomMemberService.updateWithCacheEvict(member);
 
         // ===== 5. 同步内存 =====
-        roomChannelManager.leaveRoom(roomId, memberId);
-        unreadService.removeRoomUnread(memberId, roomId);
+        roomChannelManager.leaveRoom(roomId,accountId);
+        unreadService.removeRoomUnread(accountId, roomId);
 
-        log.info("[离开房间] room={}, memberId={}", roomId, memberId);
+        log.info("[离开房间] room={}, accountId={}", roomId, accountId);
 
     }
 
@@ -274,7 +267,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         List<RoomMemberRespDTO> result = new ArrayList<>();
 
         for (RoomMemberDO dbMember : dbMembers) {
-            Long id = dbMember.getMemberId() != null ? dbMember.getMemberId() : dbMember.getUserId();
+            Long id = dbMember.getAccountId();
 
             // 优先从内存取
             RoomMemberInfo memoryInfo = roomChannelManager.getRoomMemberInfo(roomId, id);
@@ -286,9 +279,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 nickname = memoryInfo.getNickname();
                 avatar = memoryInfo.getAvatar();
             } else {
-                MemberDO memberDO = memberService.getByMemberId(id);
-                nickname = memberDO != null ? memberDO.getNickname() : "匿名用户";
-                avatar = memberDO != null ? memberDO.getAvatarColor() : "#999999";
+                AccountDO account = accountService.getAccountByDbId(id);
+                nickname = account != null ? account.getNickname() : "匿名用户";
+                avatar = account != null ? account.getAvatarColor() : "#999999";
             }
 
             boolean isMuted = memoryInfo != null ? memoryInfo.isMuted() : dbMember.getIsMuted() == 1;
@@ -296,7 +289,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             boolean isOnline = roomChannelManager.isOnline(id);
 
             result.add(RoomMemberRespDTO.builder()
-                    .memberId(id)
+                    .accountId(id)
                     .nickname(nickname)
                     .avatar(avatar)
                     .role(dbMember.getRole())
@@ -316,22 +309,22 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     }
 
     @Override
-    public void restoreRoomMemberships(Long memberId) {
+    public void restoreRoomMemberships(Long accountId) {
         // 1. 查 DB：该用户所有 ACTIVE 的房间成员记录
         List<RoomMemberDO> activeMembers = roomMemberService.lambdaQuery()
-                .eq(RoomMemberDO::getMemberId, memberId)
+                .eq(RoomMemberDO::getAccountId, accountId)
                 .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
                 .list();
 
         if (activeMembers == null || activeMembers.isEmpty()) {
-            log.debug("[恢复房间] memberId={}, 无活跃房间", memberId);
+            log.debug("[恢复房间] memberId={}, 无活跃房间", accountId);
             return;
         }
 
         // 2. 获取用户信息（走缓存）
-        MemberDO member = memberService.getByMemberId(memberId);
-        String nickname = member != null ? member.getNickname() : "匿名用户";
-        String avatar = member != null ? member.getAvatarColor() : "#999999";
+        AccountDO account = accountService.getAccountByDbId(accountId);
+        String nickname = account != null ? account.getNickname() : "匿名用户";
+        String avatar = account != null ? account.getAvatarColor() : "#999999";
 
         int count = 0;
         for (RoomMemberDO rm : activeMembers) {
@@ -342,11 +335,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             }
 
             boolean isHost = rm.getRole() == RoomMemberRoleEnum.HOST.getCode();
-            roomChannelManager.joinRoomSilent(rm.getRoomId(), memberId, nickname, avatar, isHost);
+            roomChannelManager.joinRoomSilent(rm.getRoomId(), accountId, nickname, avatar, isHost);
             count++;
         }
 
-        log.info("[恢复房间] memberId={}, 恢复了 {} 个房间", memberId, count);
+        log.info("[恢复房间] memberId={}, 恢复了 {} 个房间", accountId, count);
     }
 
     /**
@@ -356,7 +349,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Transactional
     public void kickMember(RoomKickReqDTO request) {
         HostOperationContext ctx = validateHostOperation(
-                request.getRoomId(), request.getAccountId(), request.getTargetMemberId());
+                request.getRoomId(), request.getAccountId(), request.getTargetAccountId());
 
         // 更新 DB
         ctx.getTargetMember().setStatus(RoomMemberStatusEnum.KICKED.getCode());
@@ -364,11 +357,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         roomMemberService.updateWithCacheEvict(ctx.getTargetMember());
 
         // 同步内存
-        roomChannelManager.kickMember(request.getRoomId(), ctx.getTargetId());
-        unreadService.removeRoomUnread(ctx.getTargetId(), request.getRoomId());
+        roomChannelManager.kickMember(request.getRoomId(), ctx.getTargetAccountId());
+        unreadService.removeRoomUnread(ctx.getTargetAccountId(), request.getRoomId());
 
         log.info("[踢人成功] room={}, operator={}, target={}",
-                request.getRoomId(), ctx.getOperatorId(), ctx.getTargetId());
+                request.getRoomId(), ctx.getOperatorMember(), ctx.getTargetMember());
     }
 
     @Override
@@ -378,7 +371,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         // 公共校验
         HostOperationContext ctx = validateHostOperation(
-                roomId, request.getAccountId(), request.getTargetMemberId());
+                roomId, request.getAccountId(), request.getTargetAccountId());
 
         // 不能禁言房主（理论上公共校验已排除自己，这里防止多房主场景）
         if (ctx.getTargetMember().getRole() == RoomMemberRoleEnum.HOST.getCode()) {
@@ -386,20 +379,20 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         }
 
         // 幂等：已经禁言的不重复处理
-        if (ctx.getTargetMember().getIsMuted() == 1) {
-            log.info("[重复禁言] room={}, target={}, 已处于禁言状态", roomId, ctx.getTargetId());
+        if (ctx.getTargetMember().getIsMuted() == RoomMemberMuteStatusEnum.MUTE.getCode()) {
+            log.info("[重复禁言] room={}, target={}, 已处于禁言状态", roomId, ctx.getTargetAccountId());
             return;
         }
 
         // 更新 DB
-        ctx.getTargetMember().setIsMuted(1);
+        ctx.getTargetMember().setIsMuted(RoomMemberMuteStatusEnum.MUTE.getCode());
         roomMemberService.updateWithCacheEvict(ctx.getTargetMember());
 
         // 同步内存 + WS 通知
-        roomChannelManager.muteMember(roomId, ctx.getTargetId());
+        roomChannelManager.muteMember(roomId, ctx.getTargetAccountId());
 
         log.info("[禁言成功] room={}, operator={}, target={}",
-                roomId, ctx.getOperatorId(), ctx.getTargetId());
+                roomId, ctx.getOperatorAccountId(), ctx.getTargetAccountId());
     }
 
     @Override
@@ -409,23 +402,23 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         // 公共校验
         HostOperationContext ctx = validateHostOperation(
-                roomId, request.getAccountId(), request.getTargetMemberId());
+                roomId, request.getAccountId(), request.getTargetAccountId());
 
         // 幂等：没有被禁言的不重复处理
-        if (ctx.getTargetMember().getIsMuted() == 0) {
-            log.info("[重复解禁] room={}, target={}, 未处于禁言状态", roomId, ctx.getTargetId());
+        if (ctx.getTargetMember().getIsMuted() == RoomMemberMuteStatusEnum.UNMUTE.getCode()) {
+            log.info("[重复解禁] room={}, target={}, 未处于禁言状态", roomId, ctx.getTargetAccountId());
             return;
         }
 
         // 更新 DB
-        ctx.getTargetMember().setIsMuted(0);
+        ctx.getTargetMember().setIsMuted(RoomMemberMuteStatusEnum.UNMUTE.getCode());
         roomMemberService.updateWithCacheEvict(ctx.getTargetMember());
 
         // 同步内存 + WS 通知
-        roomChannelManager.unmuteMember(roomId, ctx.getTargetId());
+        roomChannelManager.unmuteMember(roomId, ctx.getTargetAccountId());
 
         log.info("[解禁成功] room={}, operator={}, target={}",
-                roomId, ctx.getOperatorId(), ctx.getTargetId());
+                roomId, ctx.getOperatorAccountId(), ctx.getTargetMember());
     }
 
     /**
@@ -434,11 +427,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Override
     public void closeRoom(RoomCloseReqDTO request) {
         String roomId = request.getRoomId();
-        MemberDO operator = memberService.getByAccountId(request.getAccountId());
+        AccountDO operator = accountService.getByAccountId(request.getAccountId());
 
         // ===== 权限校验 =====
         RoomMemberDO operatorMember =
-                roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, operator.getId());
+                roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, operator.getId());
         if (operatorMember == null || operatorMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
             throw new ClientException("你不在该房间中");
         }
@@ -578,12 +571,12 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
     @Override
     public List<RoomInfoRespDTO> getMyRooms(String accountId) {
-        MemberDO member = memberService.getByAccountId(accountId);
-        Long memberId = member.getId();
+        AccountDO account = accountService.getByAccountId(accountId);
+        Long acctId = account.getId();
 
         // 查所有 ACTIVE 的房间成员记录
         List<RoomMemberDO> activeMembers = roomMemberService.lambdaQuery()
-                .eq(RoomMemberDO::getMemberId, memberId)
+                .eq(RoomMemberDO::getAccountId, acctId)
                 .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
                 .list();
 
@@ -591,7 +584,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             return List.of();
         }
 
-        Map<String, Integer> unreadMap = unreadService.getAllUnreadCounts(memberId);
+        Map<String, Integer> unreadMap = unreadService.getAllUnreadCounts(acctId);
 
         List<RoomInfoRespDTO> result = new ArrayList<>();
         for (RoomMemberDO rm : activeMembers) {
@@ -659,14 +652,14 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
      * 房主操作公共校验（踢人/禁言/解禁共用）
      */
     private HostOperationContext validateHostOperation(
-            String roomId, String operatorAccountId, Long targetMemberId) {
+            String roomId, String operatorAccountId, Long targetAccountId) {
 
         // 1. 验证操作者
-        MemberDO operator = memberService.getByAccountId(operatorAccountId);
+        AccountDO operator = accountService.getByAccountId(operatorAccountId);
         Long operatorId = operator.getId();
 
         // 2. 不能操作自己
-        if (operatorId.equals(targetMemberId)) {
+        if (operatorId.equals(targetAccountId)) {
             throw new ClientException("不能对自己执行此操作");
         }
 
@@ -681,7 +674,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         }
 
         // 4. 验证操作者是房主
-        RoomMemberDO operatorMember = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, operatorId);
+        RoomMemberDO operatorMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, operatorId);
         if (operatorMember == null || operatorMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
             throw new ClientException("你不在该房间中");
         }
@@ -690,15 +683,15 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         }
 
         // 5. 验证目标在房间中
-        RoomMemberDO targetMember = roomMemberService.getRoomMemberByRoomIdAndMemberId(roomId, targetMemberId);
+        RoomMemberDO targetMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, targetAccountId);
         if (targetMember == null || targetMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
             throw new ClientException("该用户不在房间中");
         }
 
         return HostOperationContext.builder()
                 .room(room)
-                .operatorId(operatorId)
-                .targetId(targetMemberId)
+                .operatorAccountId(operatorId)
+                .targetAccountId(targetAccountId)
                 .operatorMember(operatorMember)
                 .targetMember(targetMember)
                 .build();

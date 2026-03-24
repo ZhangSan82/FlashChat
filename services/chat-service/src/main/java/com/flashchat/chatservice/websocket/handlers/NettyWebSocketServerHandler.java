@@ -3,12 +3,13 @@ package com.flashchat.chatservice.websocket.handlers;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.flashchat.chatservice.dao.entity.MemberDO;
+import com.flashchat.chatservice.dao.entity.AccountDO;
+import com.flashchat.chatservice.dao.enums.AccountStatusEnum;
 import com.flashchat.chatservice.dto.enums.WsReqDTOTypeEnum;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.resp.IdentityInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
-import com.flashchat.chatservice.service.MemberService;
+import com.flashchat.chatservice.service.AccountService;
 import com.flashchat.chatservice.service.RoomService;
 import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
@@ -54,7 +55,8 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
 
 
 
-    private final MemberService memberService;
+    //private final MemberService memberService;
+    private final AccountService accountService;
     private final RoomChannelManager roomManager;
     private final RoomService roomService;
     private final ThreadPoolTaskExecutor wsBusinessExecutor;
@@ -70,9 +72,9 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
      */
     private static final int QUEUE_CAPACITY_THRESHOLD = 10;
 
-    public NettyWebSocketServerHandler(RoomChannelManager roomManager, MemberService memberService, RoomService roomService, ThreadPoolTaskExecutor wsBusinessExecutor) {
+    public NettyWebSocketServerHandler(RoomChannelManager roomManager, AccountService accountService, RoomService roomService, ThreadPoolTaskExecutor wsBusinessExecutor) {
         this.roomManager = roomManager;
-        this.memberService = memberService;
+        this.accountService = accountService;
         this.roomService = roomService;
         this.wsBusinessExecutor = wsBusinessExecutor;
     }
@@ -157,22 +159,22 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
                 }
 
                 // ===== 1. 查 DB（阻塞操作，现在在业务线程池中执行）=====
-                MemberDO member;
+                AccountDO account;
                 try {
-                    member = memberService.getByAccountId(accountId);
+                    account = accountService.getByAccountId(accountId);
                 } catch (Exception e) {
                     log.warn("[握手失败] accountId={}, 查询异常: {}", accountId, e.getMessage());
                     sendErrorAndClose(channel, "账号不存在，请先注册");
                     return;
                 }
 
-                if (member == null) {
+                if (account == null) {
                     log.warn("[握手失败] accountId={} 不存在", accountId);
                     sendErrorAndClose(channel, "账号不存在，请先调用 /member/auto-register 注册");
                     return;
                 }
 
-                if (member.getStatus() != null && member.getStatus() == 0) {
+                if (account.getStatus() != null && account.getStatus() == AccountStatusEnum.BANNED.getCode()) {
                     log.warn("[握手失败] accountId={} 已被封禁", accountId);
                     sendErrorAndClose(channel, "账号已被封禁");
                     return;
@@ -185,31 +187,31 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
                 }
 
                 // ===== 2. 绑定身份（内存操作，安全）=====
-                Long memberId = member.getId();
-                String nickname = member.getNickname();
-                String avatar = member.getAvatarColor();
+                Long acctId = account.getId();
+                String nickname = account.getNickname();
+                String avatar = account.getAvatarColor();
 
-                ChannelAttrUtil.bindIdentity(channel, memberId, 0, nickname, avatar);
+                ChannelAttrUtil.bindIdentity(channel, acctId, 0, nickname, avatar);
 
                 // ===== 3. 注册在线（内存操作，安全）=====
-                roomManager.online(memberId, channel);
+                roomManager.online(acctId, channel);
 
                 // ===== 4. 从 DB 恢复房间成员关系（阻塞操作，在业务线程池中执行）=====
                 try {
-                    roomService.restoreRoomMemberships(memberId);
+                    roomService.restoreRoomMemberships(acctId);
                 } catch (Exception e) {
-                    log.error("[恢复房间失败] memberId={}", memberId, e);
+                    log.error("[恢复房间失败] acctId={}", acctId, e);
                     // 恢复失败不影响连接，用户可以重新加入房间
                 }
 
-                log.info("[匿名连接成功] memberId={}, accountId={}, nickname={}",
-                        memberId, accountId, nickname);
+                log.info("[匿名连接成功] acctId={}, accountId={}, nickname={}",
+                        acctId, accountId, nickname);
 
                 // ===== 5. 通知客户端（writeAndFlush 从任何线程调用都是线程安全的）=====
                 roomManager.sendToChannel(channel,
                         WsRespDTO.ofGlobal(WsRespDTOTypeEnum.LOGIN_SUCCESS,
                                 IdentityInfoRespDTO.builder()
-                                        .userId(memberId)
+                                        .userId(acctId)
                                         .nickname(nickname)
                                         .avatar(avatar)
                                         .build()));

@@ -20,5 +20,5 @@ public class RoomMuteReqDTO {
 
     /** 被操作人的 memberId */
     @NotNull(message = "目标成员 ID 不能为空")
-    private Long targetMemberId;
+    private Long targetAccountId;
 }
