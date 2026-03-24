@@ -31,7 +31,7 @@ public class ChatController {
      */
     @PostMapping("/msg")
     public Result<ChatBroadcastMsgRespDTO> sendMsg(@Valid @RequestBody SendMsgReqDTO request) {
-        log.info("[发消息] roomId={}, accountId={}", request.getRoomId(), request.getAccountId());
+        log.info("[发消息] roomId={}", request.getRoomId());
 
         return Results.success(chatService.sendMsg(request));
 
@@ -63,8 +63,8 @@ public class ChatController {
      */
     @PostMapping("/ack")
     public Result<Void> ackMessages(@Valid @RequestBody MsgAckReqDTO request) {
-        log.info("[ACK] roomId={}, accountId={}, lastMsgId={}",
-                request.getRoomId(), request.getAccountId(), request.getLastMsgId());
+        log.info("[ACK] roomId={}, lastMsgId={}",
+                request.getRoomId(), request.getLastMsgId());
         chatService.ackMessages(request);
         return Results.success();
     }
@@ -85,11 +85,10 @@ public class ChatController {
      */
     @GetMapping("/new")
     public Result<CursorPageBaseResp<ChatBroadcastMsgRespDTO>> getNewMessages(
-            @RequestParam("roomId") String roomId,
-            @RequestParam("accountId") String accountId) {
+            @RequestParam("roomId") String roomId) {
 
-        log.info("[拉新消息] roomId={}, accountId={}", roomId, accountId);
-        return Results.success(chatService.getNewMessages(roomId, accountId));
+        log.info("[拉新消息] roomId={}", roomId);
+        return Results.success(chatService.getNewMessages(roomId));
     }
 
     /**
@@ -99,9 +98,8 @@ public class ChatController {
      * 未读数为 0 的房间不返回
      */
     @GetMapping("/unread")
-    public Result<Map<String, Integer>> getUnreadCounts(
-            @RequestParam("accountId") String accountId) {
-        log.info("[查未读] accountId={}", accountId);
-        return Results.success(chatService.getUnreadCounts(accountId));
+    public Result<Map<String, Integer>> getUnreadCounts() {
+        log.info("[查未读]");
+        return Results.success(chatService.getUnreadCounts());
     }
 }

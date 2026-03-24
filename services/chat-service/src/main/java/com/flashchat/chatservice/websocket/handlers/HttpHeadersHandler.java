@@ -16,10 +16,12 @@ import java.util.Map;
 import java.util.Optional;
 /**
  * HTTP 握手阶段提取连接参数
- *
- * 连接URL：ws://host:8090/?token=xxx
- * 只提取 token 和 IP，不再提取 roomId
- * 因为一个连接对应多个房间，roomId 不在连接时确定
+ * <p>
+ *  改造后：ws://host:8090/?token=xxx（SaToken 校验 token 有效性）</li>
+ * <p>
+ * 只提取 token 和 IP，不再提取 accountId。
+ * 身份识别在 {@link NettyWebSocketServerHandler#handleConnect} 中通过
+ * SaToken API 校验 token 完成。
  */
 @Slf4j
 public class HttpHeadersHandler extends ChannelInboundHandlerAdapter {
@@ -34,9 +36,6 @@ public class HttpHeadersHandler extends ChannelInboundHandlerAdapter {
             Map<String, List<String>> params = decoder.parameters();
 
             String token = getParam(params, "token");
-
-            //提取账号ID
-            String accountId = getParam(params, "accountId");
 
             // ===== 2. 提取 IP =====
             HttpHeaders headers = request.headers();
@@ -54,7 +53,6 @@ public class HttpHeadersHandler extends ChannelInboundHandlerAdapter {
             // ===== 3. 存入 Channel 属性（仅用户级信息） =====
             ChannelAttrUtil.set(ctx.channel(), ChannelAttrUtil.TOKEN, token);
             ChannelAttrUtil.set(ctx.channel(), ChannelAttrUtil.IP, ip);
-            ChannelAttrUtil.set(ctx.channel(),ChannelAttrUtil.ACCOUNT_ID, accountId);
 
             log.info("[WS握手] 提取连接参数: token={}, ip={}", token, ip);
 

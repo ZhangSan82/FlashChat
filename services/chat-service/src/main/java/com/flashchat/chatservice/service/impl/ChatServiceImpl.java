@@ -28,6 +28,7 @@ import com.flashchat.chatservice.toolkit.CursorUtils;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
 import com.flashchat.convention.exception.ClientException;
+import com.flashchat.user.core.UserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
@@ -45,7 +46,6 @@ import java.util.stream.Collectors;
 public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implements ChatService {
 
     private final RoomChannelManager roomChannelManager;
-    //private final MemberService  memberService;
     private final AccountService accountService;
     private final MessagePersistServiceImpl messagePersistServiceImpl;
     private final RoomService roomService;
@@ -60,8 +60,8 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     public ChatBroadcastMsgRespDTO sendMsg(SendMsgReqDTO request) {
 
 
-        AccountDO account = accountService.getByAccountId(request.getAccountId());
-        Long accountId = account.getId();
+
+        Long accountId = UserContext.getRequiredLoginId();
         String roomId = request.getRoomId();
 
         // ===== 1. 公共前置校验 =====
@@ -245,8 +245,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     @Override
     public void ackMessages(MsgAckReqDTO request) {
         // 1. 查找用户
-        AccountDO account = accountService.getByAccountId(request.getAccountId());
-        Long accountId = account.getId();
+        Long accountId = UserContext.getRequiredLoginId();
         String roomId = request.getRoomId();
 
         // 2. 查找房间成员记录
@@ -293,15 +292,13 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
      * 拉取新消息（断线重连后补齐）
      */
     @Override
-    public CursorPageBaseResp<ChatBroadcastMsgRespDTO> getNewMessages(
-            String roomId, String accountId) {
+    public CursorPageBaseResp<ChatBroadcastMsgRespDTO> getNewMessages(String roomId) {
 
         // ===== 1. 校验房间存在 =====
         validateRoomExists(roomId);
 
         // ===== 2. 查找用户的已读位置 =====
-        AccountDO account = accountService.getByAccountId(accountId);
-        Long acctId = account.getId();
+        Long acctId = UserContext.getRequiredLoginId();
 
         RoomMemberDO roomMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, acctId);
 
@@ -377,9 +374,8 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
      * 查询所有房间的未读消息数
      */
     @Override
-    public Map<String, Integer> getUnreadCounts(String accountId) {
-        AccountDO account = accountService.getByAccountId(accountId);
-        return unreadService.getAllUnreadCounts(account.getId());
+    public Map<String, Integer> getUnreadCounts() {
+        return unreadService.getAllUnreadCounts(UserContext.getRequiredLoginId());
     }
 
     /**

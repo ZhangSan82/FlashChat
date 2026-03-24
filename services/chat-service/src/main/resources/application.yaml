@@ -78,3 +78,41 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+
+# ==================== SaToken 认证 ====================
+sa-token:
+  # token 名称：前端通过 Header 传递时的 key 名
+  # 请求示例：Header → satoken: abc123-xxx-xxx
+  token-name: satoken
+
+  # token 有效期：30 天（单位：秒）
+  # 30 天后 Redis 中的 token 映射自动过期，用户需重新登录
+  timeout: 2592000
+
+  # 临时活跃超时：-1 表示不限制
+  # 如果设为 1800，则 30 分钟不操作 token 就失效
+  # 匿名社交场景用户可能挂着不操作，所以关闭此限制
+  active-timeout: -1
+
+  # 是否允许同一账号多端同时登录
+  # true：手机和电脑同时登录互不影响
+  is-concurrent: true
+
+  # 多端登录是否共享 token
+  # false：每个设备独立 token，A 设备登出不影响 B 设备
+  # true：所有设备共享一个 token，任一设备登出全部失效
+  is-share: false
+
+  # token 风格：uuid 格式
+  token-style: uuid
+
+  # 是否从 HTTP Header 中读取 token
+  is-read-header: true
+
+  # 是否从 Cookie 中读取 token
+  # 前后端分离架构，token 走 Header，关闭 Cookie 读取
+  is-read-cookie: false
+
+  # 是否输出操作日志（开发阶段可开启调试，生产关闭）
+  is-log: true

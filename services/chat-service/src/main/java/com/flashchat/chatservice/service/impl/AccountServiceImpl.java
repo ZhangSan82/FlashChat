@@ -1,5 +1,6 @@
 package com.flashchat.chatservice.service.impl;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.DistributedCache;
 import com.flashchat.cache.toolkit.CacheUtil;
@@ -7,16 +8,21 @@ import com.flashchat.chatservice.dao.entity.AccountDO;
 import com.flashchat.chatservice.dao.enums.AccountStatusEnum;
 import com.flashchat.chatservice.dao.mapper.AccountMapper;
 import com.flashchat.chatservice.dto.resp.AccountInfoRespDTO;
+import com.flashchat.chatservice.dto.resp.AuthRespDTO;
 import com.flashchat.chatservice.service.AccountService;
 import com.flashchat.chatservice.toolkit.HashUtil;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
+import com.flashchat.user.constant.UserTypeConstant;
+import com.flashchat.user.core.LoginUserInfoDTO;
+import com.flashchat.user.toolkit.LoginIdUtil;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -29,6 +35,9 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
 
     @Qualifier("flashChatAccountRegisterCachePenetrationBloomFilter")
     private final RBloomFilter<String> accountBloomFilter;
+
+    /** 编程式事务，替代 @Transactional 解决同类内部调用不走代理的问题 */
+    private final TransactionTemplate transactionTemplate;
 
     private final DistributedCache distributedCache;
 
@@ -46,59 +55,91 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
             "柴犬", "考拉", "树懒", "浣熊", "刺猬"
     };
 
-    @Transactional
+
+    /**
+     * 匿名注册 + 自动登录（门面方法）
+     * <p>
+     * 不加 @Transactional，内部编排三步调用，每步职责独立：
+     * <ol>
+     *   <li>doRegister：编程式事务内完成 DB save，事务提交后才继续</li>
+     *   <li>postRegisterCache：Redis 操作（布隆过滤器 + 缓存），失败不影响注册</li>
+     *   <li>doLogin：SaToken 登录，签发 token</li>
+     * </ol>
+     * <p>
+     * 为什么 doRegister 用编程式事务而不是 @Transactional：
+     * Spring 的声明式事务基于 AOP 代理，同类内部方法调用不走代理，
+     * 导致 @Transactional 失效。TransactionTemplate 不依赖代理，直接控制事务边界。
+     */
     @Override
-    public AccountInfoRespDTO autoRegister() {
-        // 1. 生成 accountId，确保唯一
-        String accountId = generateUniqueAccountId();
+    public AuthRespDTO autoRegister() {
+        // 1. DB 事务
+        AccountDO account = doRegister();
 
-        // 2. 生成随机昵称 + 头像色
-        String nickname = generateNickname();
-        String avatarColor = generateAvatarColor();
+        // 2. 缓存（事务已提交，Redis 失败不影响注册结果）
+        postRegisterCache(account);
 
-        // 3. 创建记录（匿名阶段）
-        AccountDO account = AccountDO.builder()
-                .accountId(accountId)
-                .nickname(nickname)
-                .avatarColor(avatarColor)
-                .avatarUrl("")
-                .password("")           // 未设置密码
-                .email(null)            // 匿名用户
-                .inviteCode(null)       // 匿名用户
-                .invitedBy(null)
-                .credits(0)
-                .isRegistered(0)        // 匿名
-                .status(1)              // 正常
-                .build();
-
-        try {
-            this.save(account);
-
-            // 布隆过滤器 + 缓存
-            String cacheKeyByBizId = CacheUtil.buildKey("flashchat", "account", accountId);
-            String cacheKeyByDbId = CacheUtil.buildKey("flashchat", "account", "id", String.valueOf(account.getId()));
-
-            accountBloomFilter.add(cacheKeyByBizId);
-            accountBloomFilter.add(cacheKeyByDbId);
-
-            distributedCache.put(cacheKeyByBizId, account, CACHE_TIMEOUT);
-            distributedCache.put(cacheKeyByDbId, account, CACHE_TIMEOUT);
-
-        } catch (Exception e) {
-            log.error("[注册失败] {}", e.getMessage(), e);
-            throw new ServiceException(e.getMessage());
-        }
-
-        log.info("[匿名注册] id={}, accountId={}, nickname={}", account.getId(), accountId, nickname);
-
-        return AccountInfoRespDTO.builder()
-                .accountId(accountId)
-                .nickname(nickname)
-                .avatarColor(avatarColor)
-                .avatarUrl("")
-                .isRegistered(false)
-                .build();
+        // 3. SaToken 登录
+        return doLogin(account, UserTypeConstant.MEMBER);
     }
+
+
+    /**
+     * 执行 SaToken 登录
+     * <p>
+     * 三步操作必须配对：login → session.set → getTokenValue
+     * <ol>
+     *   <li>StpUtil.login(loginId)：在 Redis 中创建 token↔loginId 双向映射</li>
+     *   <li>session.set：将用户信息存入 SaSession（Redis 中以 loginId 为 key 的 Hash）</li>
+     *   <li>getTokenValue：获取刚签发的 token，放入响应返回前端</li>
+     * </ol>
+     */
+    @Override
+    public AuthRespDTO doLogin(AccountDO account, int userType) {
+        // 1. 构建 loginId（前缀格式：member_7 或 user_7）
+        String loginId = LoginIdUtil.toLoginId(account.getId(), userType);
+
+        // 2. SaToken 登录 → Redis 写入 token↔loginId 映射
+        StpUtil.login(loginId);
+
+        // 3. 构建用户信息并存入 SaSession
+        //    后续每次 HTTP 请求，UserContextInterceptor 从 Session 取出此对象
+        LoginUserInfoDTO userInfo = LoginUserInfoDTO.builder()
+                .loginId(account.getId())
+                .userType(userType)
+                .accountId(account.getAccountId())
+                .nickname(account.getNickname())
+                .build();
+        StpUtil.getSession().set(LoginUserInfoDTO.SESSION_KEY, userInfo);
+
+        log.info("[登录成功] accountId={}, loginId={}", account.getAccountId(), loginId);
+
+        // 4. 构建带 token 的响应
+        return AuthRespDTO.from(account, StpUtil.getTokenValue());
+    }
+
+    /**
+     * 登出当前用户
+     * <p>
+     * 当前阶段：仅失效 SaToken（Redis 中删除 token 和 Session）。
+     * <p>
+     * TODO Phase D/6：登出前通知 RoomChannelManager 关闭 WS 连接。
+     *   当前阶段 WS 还没改造为 token 认证，所以暂不处理。
+     *   拆模块后改为发布 MemberLogoutEvent，由 chat-service 的 @EventListener 处理。
+     *   此方法依赖 SaHolder，只能在 HTTP 请求线程中调用。
+     * 批量踢人场景应使用 StpUtil.kickout(loginId)，不走此方法。
+     */
+    @Override
+    public void doLogout() {
+        if (StpUtil.isLogin()) {
+            String loginId = StpUtil.getLoginIdAsString();
+            StpUtil.logout();
+            log.info("[登出成功] loginId={}", loginId);
+        }
+    }
+
+
+
+
 
     @Override
     public AccountInfoRespDTO getAccountInfoByAccountId(String accountId) {
@@ -145,6 +186,66 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
     }
 
     // ==================== 私有方法 ====================
+
+
+    /**
+     * 创建匿名账号 — 编程式事务
+     * <p>
+     * 使用 TransactionTemplate 而非 @Transactional：
+     * 此方法被同类的 autoRegister() 调用，声明式事务在同类内部调用时不走代理，
+     * @Transactional 会失效。TransactionTemplate 直接控制事务，不依赖代理。
+     */
+    private AccountDO doRegister() {
+        return transactionTemplate.execute(status -> {
+            String accountId = generateUniqueAccountId();
+            String nickname = generateNickname();
+            String avatarColor = generateAvatarColor();
+
+            AccountDO account = AccountDO.builder()
+                    .accountId(accountId)
+                    .nickname(nickname)
+                    .avatarColor(avatarColor)
+                    .avatarUrl("")
+                    .password("")
+                    .email(null)
+                    .inviteCode(null)
+                    .invitedBy(null)
+                    .credits(0)
+                    .isRegistered(0)
+                    .status(1)
+                    .build();
+
+            this.save(account);
+
+            log.info("[匿名注册] id={}, accountId={}, nickname={}",
+                    account.getId(), accountId, nickname);
+
+            return account;
+        });
+    }
+
+    /**
+     * 注册后的缓存操作
+     * <p>
+     * 即使 Redis 异常，账号已在 DB 中，后续查询通过 CacheLoader 从 DB 加载回填。
+     * 布隆过滤器缺失的影响仅是"多穿透一次到 DB"。
+     */
+    private void postRegisterCache(AccountDO account) {
+        try {
+            String cacheKeyByBizId = CacheUtil.buildKey("flashchat", "account",
+                    account.getAccountId());
+            String cacheKeyByDbId = CacheUtil.buildKey("flashchat", "account",
+                    "id", String.valueOf(account.getId()));
+
+            accountBloomFilter.add(cacheKeyByBizId);
+            accountBloomFilter.add(cacheKeyByDbId);
+            distributedCache.put(cacheKeyByBizId, account, CACHE_TIMEOUT);
+            distributedCache.put(cacheKeyByDbId, account, CACHE_TIMEOUT);
+        } catch (Exception e) {
+            log.error("[注册缓存写入失败] accountId={}, 不影响注册，后续查询自动回填",
+                    account.getAccountId(), e);
+        }
+    }
 
     private String generateUniqueAccountId() {
         int retryCount = 0;

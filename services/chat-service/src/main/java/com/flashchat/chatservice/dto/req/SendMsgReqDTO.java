@@ -27,8 +27,6 @@ public class SendMsgReqDTO {
     @NotBlank(message = "房间 ID 不能为空")
     private String roomId;
 
-    @NotBlank(message = "账号 ID 不能为空")
-    private String accountId;
 
     /**
      * 文本内容

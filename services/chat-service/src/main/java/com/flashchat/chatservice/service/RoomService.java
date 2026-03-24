@@ -68,7 +68,7 @@ public interface RoomService extends IService<RoomDO> {
     /** 系统触发：正式关闭（无权限校验） */
     void doCloseRoom(String roomId);
 
-    List<RoomInfoRespDTO> getMyRooms(String accountId);
+    List<RoomInfoRespDTO> getMyRooms();
 
     /**
      *用缓存查询房间

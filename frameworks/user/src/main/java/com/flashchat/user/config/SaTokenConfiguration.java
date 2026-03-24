@@ -36,11 +36,14 @@ public class SaTokenConfiguration implements WebMvcConfigurer {
         registry.addInterceptor(new SaInterceptor(handle -> {
             SaRouter.match("/api/**")
                     .notMatch(
-                            // 认证接口（无 Token 才需要调这些）
-                            "/api/**/account/auto-register",
-                            "/api/**/account/login",
-                            // 公开数据
-                            "/api/**/room/public",
+                            // 精确放行（推荐写法，避免 ** 混用导致解析失败）
+                            "/api/FlashChat/v1/account/auto-register",
+                            "/api/FlashChat/v1/account/login",
+
+                            // 公开房间列表（支持 /public 和 /public/xxx）
+                            "/api/FlashChat/v1/room/public",
+                            "/api/FlashChat/v1/room/public/**",
+
                             // Spring 错误页
                             "/error"
                     )
@@ -48,8 +51,6 @@ public class SaTokenConfiguration implements WebMvcConfigurer {
         })).addPathPatterns("/api/**").order(0);
 
         // ========== 2. UserContext 上下文透传（order=1）==========
-        // 对所有 /api/** 路径生效，包括放行路径
-        // 放行路径如果碰巧带了有效 Token，也会设置 UserContext
         registry.addInterceptor(new UserContextInterceptor())
                 .addPathPatterns("/api/**")
                 .order(1);

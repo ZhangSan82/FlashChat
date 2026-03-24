@@ -49,7 +49,7 @@ public class RoomController {
      */
     @PostMapping("/leave")
     public Result<Void> leaveRoom(@Valid @RequestBody RoomLeaveReqDTO request) {
-        log.info("[离开房间] roomId={}, memberId={}", request.getRoomId(), request.getAccountId());
+        log.info("[离开房间] roomId={}", request.getRoomId());
         roomService.leaveRoom(request);
         return Results.success();
     }
@@ -69,8 +69,8 @@ public class RoomController {
      */
     @PostMapping("/kick")
     public Result<Void> kickMember(@Valid @RequestBody RoomKickReqDTO request) {
-        log.info("[踢人] roomId={}, operator={}, target={}",
-                request.getRoomId(), request.getAccountId(), request.getTargetAccountId());
+        log.info("[踢人] roomId={}, target={}",
+                request.getRoomId(), request.getTargetAccountId());
         roomService.kickMember(request);
         return Results.success();
     }
@@ -80,8 +80,8 @@ public class RoomController {
      */
     @PostMapping("/mute")
     public Result<Void> muteMember(@Valid @RequestBody RoomMuteReqDTO request) {
-        log.info("[禁言] roomId={}, operator={}, target={}",
-                request.getRoomId(), request.getAccountId(), request.getTargetAccountId());
+        log.info("[禁言] roomId={},target={}",
+                request.getRoomId(), request.getTargetAccountId());
         roomService.muteMember(request);
         return Results.success();
     }
@@ -91,8 +91,8 @@ public class RoomController {
      */
     @PostMapping("/unmute")
     public Result<Void> unmuteMember(@Valid @RequestBody RoomMuteReqDTO request) {
-        log.info("[解禁] roomId={}, operator={}, target={}",
-                request.getRoomId(), request.getAccountId(), request.getTargetAccountId());
+        log.info("[解禁] roomId={}, target={}",
+                request.getRoomId(),  request.getTargetAccountId());
         roomService.unmuteMember(request);
         return Results.success();
     }
@@ -101,15 +101,15 @@ public class RoomController {
      * 获取我加入的所有房间
      */
     @GetMapping("/my-rooms")
-    public Result<List<RoomInfoRespDTO>> getMyRooms(@RequestParam("accountId") String accountId) {
-        log.info("[我的房间] accountId={}", accountId);
-        return Results.success(roomService.getMyRooms(accountId));
+    public Result<List<RoomInfoRespDTO>> getMyRooms() {
+        log.info("[我的房间]");
+        return Results.success(roomService.getMyRooms());
     }
 
 
     @PostMapping("/close")
     public Result<Void> closeRoom(@Valid @RequestBody RoomCloseReqDTO request) {
-        log.info("[关闭房间] roomId={}, operator={}", request.getRoomId(), request.getAccountId());
+        log.info("[关闭房间] roomId={}", request.getRoomId());
         roomService.closeRoom(request);
         return Results.success();
     }

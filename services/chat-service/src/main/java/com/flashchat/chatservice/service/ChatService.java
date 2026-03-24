@@ -33,11 +33,11 @@ public interface ChatService extends IService<MessageDO> {
     /**
      *断线重连拉取消息
      */
-    CursorPageBaseResp<ChatBroadcastMsgRespDTO> getNewMessages(String roomId, String accountId);
+    CursorPageBaseResp<ChatBroadcastMsgRespDTO> getNewMessages(String roomId);
 
 /**
  * 查询所有房间的未读消息数
  */
-    Map<String, Integer> getUnreadCounts(String accountId);
+    Map<String, Integer> getUnreadCounts();
 
 }

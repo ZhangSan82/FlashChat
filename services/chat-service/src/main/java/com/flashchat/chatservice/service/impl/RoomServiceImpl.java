@@ -21,6 +21,7 @@ import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
+import com.flashchat.user.core.UserContext;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
@@ -56,7 +57,8 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     public RoomInfoRespDTO createRoom(RoomCreateReqDTO request) {
 
 
-        AccountDO creator = accountService.getByAccountId(request.getAccountId());
+        Long creatorId = UserContext.getRequiredLoginId();
+        AccountDO creator = accountService.getAccountByDbId(creatorId);
 
 
         // TODO 未来：检查是否为注册用户（主持人）+ 扣除积分
@@ -72,7 +74,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         //t_room
         RoomDO room = RoomDO.builder()
                 .roomId(roomId)
-                .creatorId(creator.getId())//t_account.id
+                .creatorId(creatorId)//t_account.id
                 .title(request.getTitle())
                 .maxMembers(request.getMaxMembers() != null ? request.getMaxMembers() : 50)
                 .isPublic(request.getIsPublic() != null ? request.getIsPublic() : 0)
@@ -101,9 +103,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         RoomMemberDO hostMember = RoomMemberDO.builder()
                 .roomId(roomId)
-                .accountId(creator.getId())
+                .accountId(creatorId)
                 .role(RoomMemberRoleEnum.HOST.getCode())
-                .isMuted(0)
+                .isMuted(RoomMemberMuteStatusEnum.UNMUTE.getCode())
                 .status(RoomMemberStatusEnum.ACTIVE.getCode())
                 .lastAckMsgId(0L)
                 .joinTime(LocalDateTime.now())
@@ -126,11 +128,10 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     public RoomInfoRespDTO joinRoom(RoomJoinReqDTO request) {
         String roomId = request.getRoomId();
 
-        AccountDO account = accountService.getByAccountId(request.getAccountId());
+        Long accountId = UserContext.getRequiredLoginId();
+        AccountDO account = accountService.getAccountByDbId(accountId);
 
 
-
-        Long accountId = account.getId();
         // 1. 查房间
         RoomDO room = getRoomByRoomId(roomId);
         if (room == null) {
@@ -204,13 +205,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Transactional
     public void leaveRoom(RoomLeaveReqDTO request) {
         String roomId = request.getRoomId();
-        AccountDO account = accountService.getByAccountId(request.getAccountId());
-        Long accountId = account.getId();
-
-        if (account == null) {
-            throw new ClientException("账号不存在");
-        }
-
+        Long accountId = UserContext.getRequiredLoginId();
 
         // ===== 1. 校验房间存在 =====
         RoomDO room = getRoomByRoomId(roomId);
@@ -348,8 +343,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Override
     @Transactional
     public void kickMember(RoomKickReqDTO request) {
-        HostOperationContext ctx = validateHostOperation(
-                request.getRoomId(), request.getAccountId(), request.getTargetAccountId());
+        HostOperationContext ctx = validateHostOperation(request.getRoomId(), request.getTargetAccountId());
 
         // 更新 DB
         ctx.getTargetMember().setStatus(RoomMemberStatusEnum.KICKED.getCode());
@@ -371,7 +365,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         // 公共校验
         HostOperationContext ctx = validateHostOperation(
-                roomId, request.getAccountId(), request.getTargetAccountId());
+                roomId,request.getTargetAccountId());
 
         // 不能禁言房主（理论上公共校验已排除自己，这里防止多房主场景）
         if (ctx.getTargetMember().getRole() == RoomMemberRoleEnum.HOST.getCode()) {
@@ -401,8 +395,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         String roomId = request.getRoomId();
 
         // 公共校验
-        HostOperationContext ctx = validateHostOperation(
-                roomId, request.getAccountId(), request.getTargetAccountId());
+        HostOperationContext ctx = validateHostOperation(roomId, request.getTargetAccountId());
 
         // 幂等：没有被禁言的不重复处理
         if (ctx.getTargetMember().getIsMuted() == RoomMemberMuteStatusEnum.UNMUTE.getCode()) {
@@ -427,11 +420,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Override
     public void closeRoom(RoomCloseReqDTO request) {
         String roomId = request.getRoomId();
-        AccountDO operator = accountService.getByAccountId(request.getAccountId());
+        Long operatorId = UserContext.getRequiredLoginId();
 
         // ===== 权限校验 =====
         RoomMemberDO operatorMember =
-                roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, operator.getId());
+                roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, operatorId);
         if (operatorMember == null || operatorMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
             throw new ClientException("你不在该房间中");
         }
@@ -442,7 +435,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         // ===== 执行关闭 =====
         doCloseRoom(roomId);
 
-        log.info("[手动关闭房间] room={}, operator={}", roomId, request.getAccountId());
+        log.info("[手动关闭房间] room={}, operator={}", roomId, operatorId);
     }
 
     /**
@@ -570,9 +563,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     }
 
     @Override
-    public List<RoomInfoRespDTO> getMyRooms(String accountId) {
-        AccountDO account = accountService.getByAccountId(accountId);
-        Long acctId = account.getId();
+    public List<RoomInfoRespDTO> getMyRooms() {
+
+        Long acctId = UserContext.getRequiredLoginId();
 
         // 查所有 ACTIVE 的房间成员记录
         List<RoomMemberDO> activeMembers = roomMemberService.lambdaQuery()
@@ -605,7 +598,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
      */
     @Override
     public RoomDO getRoomByRoomId(String roomId) {
-        RoomDO roomDO =   distributedCache.safeGet(
+        return   distributedCache.safeGet(
                 CacheUtil.buildKey("flashchat","room",roomId),
                 RoomDO.class,
                 ()->this.lambdaQuery()
@@ -614,7 +607,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 60000L,
                 flashChatRoomRegisterCachePenetrationBloomFilter
         );
-        return roomDO;
     }
 
 
@@ -651,12 +643,10 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     /**
      * 房主操作公共校验（踢人/禁言/解禁共用）
      */
-    private HostOperationContext validateHostOperation(
-            String roomId, String operatorAccountId, Long targetAccountId) {
+    private HostOperationContext validateHostOperation(String roomId,Long targetAccountId) {
 
         // 1. 验证操作者
-        AccountDO operator = accountService.getByAccountId(operatorAccountId);
-        Long operatorId = operator.getId();
+        Long operatorId = UserContext.getRequiredLoginId();
 
         // 2. 不能操作自己
         if (operatorId.equals(targetAccountId)) {
@@ -697,7 +687,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .build();
     }
     /**
-     * ★ 新增：Room 缓存失效
+     *  新增：Room 缓存失效
      */
     private void evictRoomCache(String roomId) {
         try {
@@ -721,7 +711,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             {
                 throw new ServiceException("房间ID频繁生成,请稍后再试");
             }
-            roomId = HashUtil.hashToBase62(SEED_PREFIX + UUID.randomUUID().toString());
+            roomId = HashUtil.hashToBase62(SEED_PREFIX + UUID.randomUUID());
             if (!flashChatRoomRegisterCachePenetrationBloomFilter.contains(
                     CacheUtil.buildKey("flashchat", "room", roomId)))
             {

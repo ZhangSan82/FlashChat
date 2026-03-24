@@ -1,6 +1,7 @@
 package com.flashchat.chatservice.websocket.handlers;
 
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.flashchat.chatservice.dao.entity.AccountDO;
@@ -15,6 +16,7 @@ import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
+import com.flashchat.user.toolkit.LoginIdUtil;
 import io.netty.channel.*;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
@@ -28,51 +30,47 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * WebSocket 业务处理器
- *
- * 职责精简为 3 件事：
- *   1. 握手完成 → 分配身份 + 注册在线
- *   2. 心跳保活
- *   3. 发送聊天消息
- *
- * 以下操作全部移到 HTTP 接口（RoomController）：
- *   加入房间   → POST /api/room/join
- *   离开房间   → POST /api/room/leave
- *   禁言/解禁  → POST /api/room/mute、/unmute
- *   踢人      → POST /api/room/kick
- *   关闭房间   → POST /api/room/close
- *
- * 断线行为：
- *   断线 = 标记离线 + 广播 USER_OFFLINE，成员关系保留
- *   重连 = 自动恢复在线 + 广播 USER_ONLINE
- *
- * 客户端 WS 消息格式（只有 2 种）：
- *   心跳：  "ping" 或 {"type":1}
- *   发消息：{"type":2, "data":{"roomId":"room_abc", "content":"大家好"}}
+ * <p>
+ * 改造后：统一用 token 认证，StpUtil.getLoginIdByToken() 校验</li>
+ * <p>
+ * 职责：
+ * <ol>
+ *   <li>握手完成 → token 认证 + 注册在线</li>
+ *   <li>心跳保活</li>
+ *   <li>消息路由（发消息走 HTTP 接口）</li>
+ * </ol>
+ * <p>
+ * SaToken 在 Netty 中的 API 限制：
+ * <ul>
+ *   <li>StpUtil.getLoginIdByToken(token) — 纯 Redis 查询，不依赖 HttpServletRequest</li>
+ *   <li>StpUtil.getSessionByLoginId(loginId) — 纯 Redis 查询</li>
+ *   <li> StpUtil.isLogin() / getLoginId() / getSession() — 依赖 SaHolder，Netty 中不可用</li>
+ * </ul>
  */
 @Slf4j
 @ChannelHandler.Sharable
 public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
 
-
-
-    //private final MemberService memberService;
     private final AccountService accountService;
     private final RoomChannelManager roomManager;
     private final RoomService roomService;
     private final ThreadPoolTaskExecutor wsBusinessExecutor;
 
     /**
-     * 正在处理连接的 accountId 集合
-     * 防止同一用户快速刷新页面导致并发处理同一个 accountId
+     * 正在处理连接的 token 集合（防止同一 token 并发握手）
      */
-    private final Set<String> connectingAccounts = ConcurrentHashMap.newKeySet();
+    private final Set<String> connectingTokens = ConcurrentHashMap.newKeySet();
+
 
     /**
      * 队列剩余容量低于此值时拒绝新连接
      */
     private static final int QUEUE_CAPACITY_THRESHOLD = 10;
 
-    public NettyWebSocketServerHandler(RoomChannelManager roomManager, AccountService accountService, RoomService roomService, ThreadPoolTaskExecutor wsBusinessExecutor) {
+    public NettyWebSocketServerHandler(RoomChannelManager roomManager,
+                                       AccountService accountService,
+                                       RoomService roomService,
+                                       ThreadPoolTaskExecutor wsBusinessExecutor) {
         this.roomManager = roomManager;
         this.accountService = accountService;
         this.roomService = roomService;
@@ -98,142 +96,140 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
      * 连接建立：分配身份 + 注册在线
      */
     private void handleConnect(Channel channel) {
-        log.info("channel:{}", channel);
-        String accountId = ChannelAttrUtil.getAccountId(channel);
         String token = ChannelAttrUtil.getToken(channel);
-
-        if (accountId != null && !accountId.isBlank()) {
-            // ===== 匿名成员 =====
-            handleAnonymousConnectAsync(channel, accountId);
-
-        } else if (token != null && !token.isBlank()) {
-            // ===== 注册用户（未来实现）=====
-            handleRegisteredUserConnect(channel, token);
-
-        } else {
-            // ===== 都没传 =====
-            log.warn("[握手失败] 缺少 accountId 或 token 参数");
-            sendErrorAndClose(channel, "连接失败：请传入 accountId 或 token");
+        if (token == null || token.isBlank()) {
+            log.warn("[握手失败]缺少token");
+            sendErrorAndClose(channel,"连接失败:请传入token参数");
+            return;
         }
+        handleTokenConnect(channel,token);
     }
 
-
     /**
-     * 匿名成员连接 — 异步执行
+     * token 认证连接 — 异步执行
+     * <p>
+     * EventLoop 线程做轻量操作（防重复、队列预检查），
+     * 阻塞操作（Redis 查询、DB 查询）提交到 wsBusinessExecutor。
+     * <p>
+     * SaToken API 选择：
+     * StpUtil.getLoginIdByToken(token) — 纯 Redis 查询，不依赖 HttpServletRequest
+     * 内部流程：查 Redis Key satoken:login:token:{token} → 返回 loginId 或 null
      */
-    private void handleAnonymousConnectAsync(Channel channel, String accountId) {
+    private void handleTokenConnect(Channel channel, String token) {
 
-        // ============================
-        // 以下 3 个防护在 EventLoop 线程执行（纳秒级，不阻塞）
-        // ============================
+        // ====== 以下在 EventLoop 线程执行======
 
-        // 防护1：防重复连接
-        if (!connectingAccounts.add(accountId)) {
-            log.warn("[重复连接] accountId={} 正在处理中，拒绝本次", accountId);
+        // 防护 1：防重复连接（同一 token 并发握手）
+        if (!connectingTokens.add(token)) {
+            log.warn("[重复连接] token={}*** 正在处理中", token.substring(0, Math.min(8, token.length())));
             sendErrorAndClose(channel, "正在连接中，请勿重复操作");
             return;
         }
 
-        // 防护2：队列容量预检查
-        if (wsBusinessExecutor.getThreadPoolExecutor().getQueue().remainingCapacity() < QUEUE_CAPACITY_THRESHOLD) {
-            log.warn("[线程池繁忙] 拒绝连接 accountId={}, 剩余容量不足", accountId);
-            connectingAccounts.remove(accountId);
+        // 防护 2：队列容量预检查
+        if (wsBusinessExecutor.getThreadPoolExecutor().getQueue().remainingCapacity()
+                < QUEUE_CAPACITY_THRESHOLD) {
+            log.warn("[线程池繁忙] 拒绝连接，剩余容量不足");
+            connectingTokens.remove(token);
             sendErrorAndClose(channel, "服务器繁忙，请稍后重试");
             return;
         }
 
-        // ============================
-        // 提交到业务线程池（EventLoop 立即返回）
-        // ============================
+        // ====== 以下提交到业务线程池（EventLoop 立即返回）======
+
         wsBusinessExecutor.execute(() -> {
             try {
-                // ============================
-                // 以下全部在 ws-biz 线程中执行
-                // 即使阻塞也不影响 Netty EventLoop
-                // ============================
-
-                // 防护3：执行前检查连接（用户可能在排队期间已断开）
+                // 防护 3：执行前检查连接是否已断开
                 if (!channel.isActive()) {
-                    log.info("[连接已断开] accountId={}, 放弃处理", accountId);
+                    log.info("[连接已断开] 放弃处理");
                     return;
                 }
 
-                // ===== 1. 查 DB（阻塞操作，现在在业务线程池中执行）=====
+                // ===== 1. SaToken 校验 token（Redis 查询）=====
+                Object loginId = StpUtil.getLoginIdByToken(token);
+                if (loginId == null) {
+                    log.warn("[握手失败] token 无效或已过期");
+                    sendErrorAndClose(channel, "Token 无效或已过期，请重新登录");
+                    return;
+                }
+
+                // ===== 2. 解析 loginId =====
+                // loginId 格式："member_7" 或 "user_7"
+                Long accountDbId = LoginIdUtil.extractId(loginId);
+                int userType = LoginIdUtil.extractUserType(loginId);
+
+                // ===== 3. 查询账号信息（走缓存）=====
                 AccountDO account;
                 try {
-                    account = accountService.getByAccountId(accountId);
+                    account = accountService.getAccountByDbId(accountDbId);
                 } catch (Exception e) {
-                    log.warn("[握手失败] accountId={}, 查询异常: {}", accountId, e.getMessage());
-                    sendErrorAndClose(channel, "账号不存在，请先注册");
+                    log.warn("[握手失败] 查询账号异常, loginId={}", loginId, e);
+                    sendErrorAndClose(channel, "账号信息获取失败，请重试");
                     return;
                 }
 
                 if (account == null) {
-                    log.warn("[握手失败] accountId={} 不存在", accountId);
-                    sendErrorAndClose(channel, "账号不存在，请先调用 /member/auto-register 注册");
+                    log.warn("[握手失败] 账号不存在, loginId={}", loginId);
+                    sendErrorAndClose(channel, "账号不存在");
                     return;
                 }
 
-                if (account.getStatus() != null && account.getStatus() == AccountStatusEnum.BANNED.getCode()) {
-                    log.warn("[握手失败] accountId={} 已被封禁", accountId);
+                if (account.getStatus() != null
+                        && account.getStatus() == AccountStatusEnum.BANNED.getCode()) {
+                    log.warn("[握手失败] 账号已封禁, loginId={}", loginId);
                     sendErrorAndClose(channel, "账号已被封禁");
                     return;
                 }
 
-                // 防护4：DB 查询后再检查连接（查询可能耗时较长）
+                // 防护 4：DB 查询后再检查连接
                 if (!channel.isActive()) {
-                    log.info("[连接已断开] accountId={}, DB查询后发现连接已关闭", accountId);
+                    log.info("[连接已断开] 查询后发现连接已关闭, loginId={}", loginId);
                     return;
                 }
 
-                // ===== 2. 绑定身份（内存操作，安全）=====
-                Long acctId = account.getId();
+                // ===== 4. 绑定身份到 Channel =====
+                // 存入 ChannelAttrUtil，不碰 UserContext（ThreadLocal）
+                // 原因：Netty EventLoop 和业务线程池都是线程复用的，
+                // ThreadLocal 的 set-use-clear 窗口中如果穿插其他任务会导致身份错乱
                 String nickname = account.getNickname();
                 String avatar = account.getAvatarColor();
 
-                ChannelAttrUtil.bindIdentity(channel, acctId, 0, nickname, avatar);
+                ChannelAttrUtil.bindIdentity(channel, accountDbId, userType, nickname, avatar);
 
-                // ===== 3. 注册在线（内存操作，安全）=====
-                roomManager.online(acctId, channel);
+                // ===== 5. 注册在线 =====
+                roomManager.online(accountDbId, channel);
 
-                // ===== 4. 从 DB 恢复房间成员关系（阻塞操作，在业务线程池中执行）=====
+                // ===== 6. 恢复房间成员关系（阻塞操作）=====
                 try {
-                    roomService.restoreRoomMemberships(acctId);
+                    roomService.restoreRoomMemberships(accountDbId);
                 } catch (Exception e) {
-                    log.error("[恢复房间失败] acctId={}", acctId, e);
+                    log.error("[恢复房间失败] accountId={}", accountDbId, e);
                     // 恢复失败不影响连接，用户可以重新加入房间
                 }
 
-                log.info("[匿名连接成功] acctId={}, accountId={}, nickname={}",
-                        acctId, accountId, nickname);
+                log.info("[WS 连接成功] accountId={}, accountBizId={}, nickname={}, userType={}",
+                        accountDbId, account.getAccountId(), nickname, userType);
 
-                // ===== 5. 通知客户端（writeAndFlush 从任何线程调用都是线程安全的）=====
+                // ===== 7. 通知客户端 =====
+                // writeAndFlush 从任何线程调用都是线程安全的（Netty 保证）
                 roomManager.sendToChannel(channel,
                         WsRespDTO.ofGlobal(WsRespDTOTypeEnum.LOGIN_SUCCESS,
                                 IdentityInfoRespDTO.builder()
-                                        .userId(acctId)
+                                        .userId(accountDbId)
                                         .nickname(nickname)
                                         .avatar(avatar)
                                         .build()));
 
             } catch (Exception e) {
-                log.error("[匿名连接异常] accountId={}", accountId, e);
+                log.error("[WS 连接异常] token={}***", token.substring(0, Math.min(8, token.length())), e);
                 sendErrorAndClose(channel, "服务器内部错误，请重试");
             } finally {
-                // 防护5：必须在 finally 中移除，否则该 accountId 永远无法再连接
-                connectingAccounts.remove(accountId);
+                // 防护 5：必须在 finally 中移除，否则该 token 永远无法再连接
+                connectingTokens.remove(token);
             }
         });
     }
 
-    /**
-     * 注册用户连接（Phase 5 实现）* 未来实现时也需要提交到 wsBusinessExecutor
-     */
-    private void handleRegisteredUserConnect(Channel channel, String token) {
-        // TODO Phase 5：Sa-Token 验证 token → 查 t_user → 绑定身份（userType=1）
-        log.info("[注册用户连接] token={}, 功能暂未开放", token);
-        sendErrorAndClose(channel, "注册用户登录暂未开放，敬请期待");
-    }
 
     /**
      * 发送错误消息并关闭连接
