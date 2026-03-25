@@ -7,15 +7,6 @@ import lombok.NoArgsConstructor;
 
 /**
  * 用户在某个房间中的身份信息
- *
- * 旧方案：这些信息存在 Channel 属性上，一个 Channel 只能在一个房间
- * 新方案：存在 RoomChannelManager 的内存结构中，同一个用户在不同房间可以有不同状态
- *
- * 举例：
- *   用户 Alice 同时在 room_1 和 room_2 中
- *   - room_1 中她是房主（isHost=true），没被禁言
- *   - room_2 中她是普通成员（isHost=false），被禁言了
- *   这两份状态由两个独立的 RoomMemberInfo 对象管理
  */
 @Data
 @Builder
@@ -37,4 +28,11 @@ public class RoomMemberInfo {
 
     /** 是否在该房间被禁言 */
     private volatile boolean isMuted;
+
+    /**
+     * 最后活跃时间（毫秒时间戳）
+     * 更新时机：joinRoom、online 重连、发消息时 touchMember
+     * 用途：RoomMemberCleanupJob 判断是否为僵尸成员
+     */
+    private volatile long lastActiveTime;
 }

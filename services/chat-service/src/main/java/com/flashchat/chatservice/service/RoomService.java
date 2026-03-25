@@ -10,6 +10,7 @@ import com.flashchat.convention.result.Result;
 import jakarta.validation.Valid;
 
 import java.util.List;
+import java.util.Set;
 
 public interface RoomService extends IService<RoomDO> {
 
@@ -74,4 +75,10 @@ public interface RoomService extends IService<RoomDO> {
      *用缓存查询房间
      */
     RoomDO getRoomByRoomId(String roomId);
+
+    /**
+     * 查询所有已关闭状态的房间 ID
+     * 供内存清理任务使用
+     */
+    Set<String> listClosedRoomIds();
 }

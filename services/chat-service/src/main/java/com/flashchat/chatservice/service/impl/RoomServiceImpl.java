@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -607,6 +608,17 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 60000L,
                 flashChatRoomRegisterCachePenetrationBloomFilter
         );
+    }
+
+    @Override
+    public Set<String> listClosedRoomIds() {
+        List<RoomDO> rooms = this.lambdaQuery()
+                .eq(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
+                .select(RoomDO::getRoomId)
+                .list();
+        return rooms.stream()
+                .map(RoomDO::getRoomId)
+                .collect(Collectors.toSet());
     }
 
 

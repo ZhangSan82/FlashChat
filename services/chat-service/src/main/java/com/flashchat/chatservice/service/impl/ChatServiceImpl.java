@@ -174,7 +174,10 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         log.info("[发消息] room={}, memberId={}, dbId={}, content={}",
                 roomId, accountId, msgSeqId, request.getContent());
 
-        // ===== 12. 未读计数 +1 =====
+        // ===== 12. 更新发送者活跃时间 =====
+        roomChannelManager.touchMember(roomId, accountId);
+
+        // ===== 13. 未读计数 +1 =====
         unreadService.incrementUnread(roomId, accountId);
 
         return broadcastMsg;
