@@ -70,6 +70,18 @@ flashchat:
     redis:
       value-timeout: 60000
       value-time-unit: MILLISECONDS
+    local:
+      enabled: true
+      null-value-ttl-seconds: 15
+      room:
+        max-size: 10000
+        ttl-seconds: 30
+      room-member:
+        max-size: 5000
+        ttl-seconds: 15
+      account:
+        max-size: 10000
+        ttl-seconds: 45
   file:
     upload-path: ./uploads
     url-prefix: http://localhost:8081/uploads

@@ -7,6 +7,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
+import jakarta.annotation.Nullable;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
@@ -73,10 +74,11 @@ public class CacheAutoConfiguration {
     public MultistageCacheProxy multistageCacheProxy(
             StringRedisTemplate stringRedisTemplate,
             RedissonClient redissonClient,
-            LocalCacheManager localCacheManager) {
+            LocalCacheManager localCacheManager,
+            @Nullable MeterRegistry meterRegistry) {
         StringRedisTemplateProxy redisProxy = new StringRedisTemplateProxy(
                 stringRedisTemplate, cacheProperties, redissonClient);
-        return new MultistageCacheProxy(redisProxy, localCacheManager);
+        return new MultistageCacheProxy(redisProxy, localCacheManager, meterRegistry);
     }
 
     /**

@@ -2,7 +2,7 @@ package com.flashchat.chatservice.service.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.flashchat.cache.DistributedCache;
+import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.cache.toolkit.CacheUtil;
 import com.flashchat.chatservice.dao.entity.AccountDO;
 import com.flashchat.chatservice.dao.enums.AccountStatusEnum;
@@ -21,7 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.UUID;
@@ -39,7 +38,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
     /** 编程式事务，替代 @Transactional 解决同类内部调用不走代理的问题 */
     private final TransactionTemplate transactionTemplate;
 
-    private final DistributedCache distributedCache;
+    private final MultistageCacheProxy multistageCacheProxy;
 
     private static final long CACHE_TIMEOUT = 60000L;
 
@@ -155,7 +154,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
 
     @Override
     public AccountDO getByAccountId(String accountId) {
-        AccountDO account = distributedCache.safeGet(
+        AccountDO account = multistageCacheProxy.safeGet(
                 CacheUtil.buildKey("flashchat", "account", accountId),
                 AccountDO.class,
                 () -> this.lambdaQuery().eq(AccountDO::getAccountId, accountId).one(),
@@ -176,7 +175,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         if (id == null) {
             return null;
         }
-        return distributedCache.safeGet(
+        return multistageCacheProxy.safeGet(
                 CacheUtil.buildKey("flashchat", "account", "id", String.valueOf(id)),
                 AccountDO.class,
                 () -> this.getById(id),
@@ -239,8 +238,8 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
 
             accountBloomFilter.add(cacheKeyByBizId);
             accountBloomFilter.add(cacheKeyByDbId);
-            distributedCache.put(cacheKeyByBizId, account, CACHE_TIMEOUT);
-            distributedCache.put(cacheKeyByDbId, account, CACHE_TIMEOUT);
+            multistageCacheProxy.put(cacheKeyByBizId, account, CACHE_TIMEOUT);
+            multistageCacheProxy.put(cacheKeyByDbId, account, CACHE_TIMEOUT);
         } catch (Exception e) {
             log.error("[注册缓存写入失败] accountId={}, 不影响注册，后续查询自动回填",
                     account.getAccountId(), e);

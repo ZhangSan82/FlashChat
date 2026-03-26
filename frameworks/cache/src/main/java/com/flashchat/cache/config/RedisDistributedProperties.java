@@ -18,6 +18,33 @@ public class RedisDistributedProperties {
      */
     private RedisProperties redis = new RedisProperties();
 
+    // ====================分布式锁超时配置 ====================
+
+    /**
+     * safeGet 获取分布式锁的最大等待时间（ms）
+     * 建议与 HikariPool connectionTimeout 保持同一量级
+     */
+    private long lockWaitTime = 3000L;
+
+    /**
+     * safeGet 持有分布式锁的最大时间（ms），超时自动释放防止死锁
+     * 必须大于 lockWaitTime + 数据源最坏查询耗时
+     */
+    private long lockLeaseTime = 8000L;
+
+// ==================== 防雪崩配置 ====================
+
+    /**
+     * 是否开启过期时间随机化（防雪崩）
+     */
+    private boolean timeoutRandomEnabled = true;
+
+    /**
+     * 过期时间随机化浮动比例
+     * 0.1 表示 ±10%，如 timeout=60s → 实际 TTL 范围 [54s, 66s]
+     */
+    private double timeoutRandomRatio = 0.1;
+
     /**
      * 本地缓存配置
      */
@@ -93,16 +120,6 @@ public class RedisDistributedProperties {
             props.setTtlSeconds(ttlSeconds);
             return props;
         }
-    }
-
-    // ==================== 便捷方法 ====================
-
-    public Long getValueTimeout() {
-        return redis.getValueTimeout();
-    }
-
-    public TimeUnit getValueTimeUnit() {
-        return redis.getValueTimeUnit();
     }
 
 }

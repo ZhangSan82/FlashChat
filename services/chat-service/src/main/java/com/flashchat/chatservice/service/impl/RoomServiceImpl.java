@@ -1,7 +1,7 @@
 package com.flashchat.chatservice.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.flashchat.cache.DistributedCache;
+import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.cache.toolkit.CacheUtil;
 import com.flashchat.chatservice.dao.entity.AccountDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
@@ -42,10 +42,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Qualifier("flashChatRoomRegisterCachePenetrationBloomFilter")
     private final RBloomFilter<String> flashChatRoomRegisterCachePenetrationBloomFilter;
     private final RoomMemberService roomMemberService;
-    //private final MemberService memberService;
     private final UnreadService unreadService;
     private final AccountService accountService;
-    private final DistributedCache distributedCache;
+    private final MultistageCacheProxy multistageCacheProxy;
     private final RoomDelayProducer roomDelayProducer;
     private static final long CACHE_TIMEOUT = 60000L;
 
@@ -87,7 +86,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             this.save(room);
             flashChatRoomRegisterCachePenetrationBloomFilter.add(
                     CacheUtil.buildKey("flashchat", "room", roomId));
-            distributedCache.put(CacheUtil.buildKey("flashchat","room",roomId),
+            multistageCacheProxy.put(CacheUtil.buildKey("flashchat","room",roomId),
                     room,
                     CACHE_TIMEOUT);
         } catch (Exception e) {
@@ -599,7 +598,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
      */
     @Override
     public RoomDO getRoomByRoomId(String roomId) {
-        return   distributedCache.safeGet(
+        return  multistageCacheProxy.safeGet(
                 CacheUtil.buildKey("flashchat","room",roomId),
                 RoomDO.class,
                 ()->this.lambdaQuery()
@@ -703,7 +702,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
      */
     private void evictRoomCache(String roomId) {
         try {
-            distributedCache.delete(CacheUtil.buildKey("flashchat", "room", roomId));
+            multistageCacheProxy.delete(CacheUtil.buildKey("flashchat", "room", roomId));
         } catch (Exception e) {
             log.error("[Room缓存失效异常] roomId={}", roomId, e);
         }

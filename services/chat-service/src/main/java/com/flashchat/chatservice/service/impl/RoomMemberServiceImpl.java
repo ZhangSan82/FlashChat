@@ -1,7 +1,7 @@
 package com.flashchat.chatservice.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.flashchat.cache.DistributedCache;
+import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.cache.toolkit.CacheUtil;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
 import com.flashchat.chatservice.dao.mapper.RoomMemberMapper;
@@ -17,7 +17,7 @@ import java.util.List;
 @Slf4j
 public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMemberDO> implements RoomMemberService {
 
-    private final DistributedCache distributedCache;
+    private final MultistageCacheProxy multistageCacheProxy;
     private static final long CACHE_TIMEOUT = 60000L;
 
 
@@ -26,7 +26,7 @@ public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMem
      */
     @Override
     public RoomMemberDO getRoomMemberByRoomIdAndAccountId(String roomId, Long accountId) {
-        RoomMemberDO roomMemberDO = distributedCache.safeGet(buildCacheKey(roomId, accountId),
+        RoomMemberDO roomMemberDO = multistageCacheProxy.safeGet(buildCacheKey(roomId, accountId),
                 RoomMemberDO.class,
                 ()->this.lambdaQuery()
                         .eq(RoomMemberDO::getRoomId,roomId)
@@ -45,7 +45,7 @@ public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMem
     public boolean saveWithCache(RoomMemberDO entity) {
         boolean result = this.save(entity);
         if (result && entity.getRoomId() != null && entity.getAccountId() != null) {
-            distributedCache.put(
+           multistageCacheProxy.put(
                     buildCacheKey(entity.getRoomId(),entity.getAccountId()),
                     entity,
                     CACHE_TIMEOUT
@@ -75,7 +75,7 @@ public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMem
     @Override
     public void evictCache(String roomId,Long accountId) {
         try {
-            distributedCache.delete(buildCacheKey(roomId, accountId));
+            multistageCacheProxy.delete(buildCacheKey(roomId, accountId));
         } catch (Exception e) {
             log.error("[缓存失效异常] room={}, memberId={}", roomId, accountId, e);
         }

@@ -3,16 +3,14 @@ package com.flashchat.chatservice.service.impl;
 
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.flashchat.cache.DistributedCache;
+import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.chatservice.config.MsgIdGenerator;
-import com.flashchat.chatservice.dao.entity.AccountDO;
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
 import com.flashchat.chatservice.dao.enums.RoomStatusEnum;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
-
 import com.flashchat.chatservice.dto.msg.FileDTO;
 import com.flashchat.chatservice.dto.req.CursorPageBaseReq;
 import com.flashchat.chatservice.dto.req.MsgAckReqDTO;
@@ -31,8 +29,6 @@ import com.flashchat.convention.exception.ClientException;
 import com.flashchat.user.core.UserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RBloomFilter;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.time.ZoneId;
@@ -46,14 +42,11 @@ import java.util.stream.Collectors;
 public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implements ChatService {
 
     private final RoomChannelManager roomChannelManager;
-    private final AccountService accountService;
     private final MessagePersistServiceImpl messagePersistServiceImpl;
     private final RoomService roomService;
     private final RoomMemberService roomMemberService;
     private final UnreadService unreadService;
-    private final DistributedCache distributedCache;
-    @Qualifier("flashChatRoomRegisterCachePenetrationBloomFilter")
-    private final RBloomFilter<String> flashChatRoomRegisterCachePenetrationBloomFilter;
+    private final MultistageCacheProxy  multistageCacheProxy;
     private final MsgIdGenerator msgIdGenerator;
 
     @Override
