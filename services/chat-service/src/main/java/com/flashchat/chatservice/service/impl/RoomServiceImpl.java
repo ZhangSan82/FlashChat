@@ -323,14 +323,15 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         int count = 0;
         for (RoomMemberDO rm : activeMembers) {
-            // ★ 改造：逐个走缓存查询，替代批量 lambdaQuery
+            //逐个走缓存查询，替代批量 lambdaQuery
             RoomDO room = getRoomByRoomId(rm.getRoomId());
             if (room == null || room.getStatus() == RoomStatusEnum.CLOSED.getCode()) {
                 continue;
             }
 
             boolean isHost = rm.getRole() == RoomMemberRoleEnum.HOST.getCode();
-            roomChannelManager.joinRoomSilent(rm.getRoomId(), accountId, nickname, avatar, isHost);
+            boolean isMuted = rm.getIsMuted() != null && rm.getIsMuted() == RoomMemberMuteStatusEnum.MUTE.getCode();
+            roomChannelManager.joinRoomSilent(rm.getRoomId(), accountId, nickname, avatar, isHost, isMuted);
             count++;
         }
 
@@ -528,6 +529,8 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             log.info("[关闭房间-跳过] room={}, 已经是 CLOSED 状态", roomId);
             return;
         }
+        // 先拿成员ID
+        Set<Long> memberIds = roomChannelManager.getRoomMemberIds(roomId);
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -555,9 +558,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .update();
         roomMemberService.evictAllMemberCacheInRoom(roomId);
 
+
+        unreadService.clearRoomForAllMembers(roomId, memberIds);
+
         // 清理内存 + WS 通知
         roomChannelManager.closeRoom(roomId);
-        unreadService.clearRoomForAllMembers(roomId);
 
         log.info("[关闭房间] room={}, → CLOSED", roomId);
     }

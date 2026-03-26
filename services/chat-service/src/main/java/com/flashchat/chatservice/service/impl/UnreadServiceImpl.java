@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -95,12 +96,26 @@ public class UnreadServiceImpl implements UnreadService {
     }
 
     /**
-     * 房间关闭，批量清除所有成员
+     * 房间关闭，批量清除所有成员（从内存获取成员列表）
+     * 新增 DB 兜底，防止内存已被 closeRoom 清空的情况
      */
     @Override
     public void clearRoomForAllMembers(String roomId) {
         Set<Long> memberIds = roomChannelManager.getRoomMemberIds(roomId);
-        if (memberIds.isEmpty()) return;
+        if (memberIds.isEmpty()) {
+            // 兜底：内存已清空（可能 closeRoom 先执行了），从 DB 查
+            log.warn("[清未读-兜底] room={}, 内存无成员数据，从DB查询", roomId);
+            memberIds = queryMemberIdsFromDB(roomId);
+        }
+        clearRoomForAllMembers(roomId, memberIds);
+    }
+
+    /**
+     *接收调用方传入的成员 ID 快照，不依赖内存状态
+     */
+    @Override
+    public void clearRoomForAllMembers(String roomId, Set<Long> memberIds) {
+        if (memberIds == null || memberIds.isEmpty()) return;
 
         try {
             stringRedisTemplate.executePipelined((RedisCallback<Object>) connection -> {
@@ -114,6 +129,28 @@ public class UnreadServiceImpl implements UnreadService {
             log.info("[房间关闭-清未读] room={}, 清理 {} 人", roomId, memberIds.size());
         } catch (Exception e) {
             log.error("[房间关闭-清未读失败] room={}", roomId, e);
+        }
+    }
+
+    /**
+     * 从 DB 查询房间所有成员 ID（兜底方法）
+     * <p>
+     * 不限制 status 条件：因为调用时成员状态可能已被 doCloseRoom 批量更新为 LEFT，
+     * 如果加 ACTIVE 条件会查不到任何人。
+     * LEFT/KICKED 成员执行 HDEL 时如果 Redis 中没有对应 field，HDEL 是幂等的，无副作用。
+     */
+    private Set<Long> queryMemberIdsFromDB(String roomId) {
+        try {
+            List<RoomMemberDO> members = roomMemberService.lambdaQuery()
+                    .eq(RoomMemberDO::getRoomId, roomId)
+                    .select(RoomMemberDO::getAccountId)
+                    .list();
+            return members.stream()
+                    .map(RoomMemberDO::getAccountId)
+                    .collect(Collectors.toSet());
+        } catch (Exception e) {
+            log.error("[查成员ID失败] room={}", roomId, e);
+            return Set.of();
         }
     }
 

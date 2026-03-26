@@ -2,6 +2,7 @@ package com.flashchat.chatservice.service;
 
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 未读消息计数服务
@@ -31,6 +32,13 @@ public interface UnreadService {
      * 房间关闭，批量清除所有成员的该房间未读数
      */
     void clearRoomForAllMembers(String roomId);
+
+    /**
+     * 房间关闭，批量清除指定成员的未读数
+     * <p>
+     * 接收调用方提前获取的成员 ID 快照，不依赖 roomChannelManager 的内存状态。
+     */
+    void clearRoomForAllMembers(String roomId, Set<Long> memberIds);
 
     /**
      * 获取用户所有房间的未读数

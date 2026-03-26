@@ -375,7 +375,7 @@ public class RoomChannelManager {
     /**
      * 静默恢复成员关系（重新登录时恢复 DB 中的活跃成员，不广播）
      */
-    public void joinRoomSilent(String roomId, Long userId, String nickname, String avatar, boolean isHost) {
+    public void joinRoomSilent(String roomId, Long userId, String nickname, String avatar, boolean isHost,boolean isMuted) {
         if (roomId == null || roomId.isBlank() || userId == null) return;
 
         ConcurrentHashMap<Long, RoomMemberInfo> members =
@@ -389,7 +389,7 @@ public class RoomChannelManager {
                 .nickname(nickname != null ? nickname : "匿名用户")
                 .avatar(avatar != null ? avatar : "")
                 .isHost(isHost)
-                .isMuted(false)
+                .isMuted(isMuted)
                 .lastActiveTime(System.currentTimeMillis())
                 .build();
 
