@@ -47,6 +47,8 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final MultistageCacheProxy multistageCacheProxy;
     private final RoomDelayProducer roomDelayProducer;
     private static final long CACHE_TIMEOUT = 60000L;
+    /**单用户最多同时加入的房间数 */
+    private static final int MAX_ROOMS_PER_USER = 50;
 
 
     /**
@@ -142,6 +144,15 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
         if (status == null || !status.canJoin()) {
             throw new ClientException("房间当前不允许加入（状态：" + (status != null ? status.getDesc() : "未知") + "）");
+        }
+
+        // 检查用户已加入的房间数（防止单用户 Hash 膨胀）
+        long activeRoomCount = roomMemberService.lambdaQuery()
+                .eq(RoomMemberDO::getAccountId, accountId)
+                .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
+                .count();
+        if (activeRoomCount >= MAX_ROOMS_PER_USER) {
+            throw new ClientException("最多同时加入 " + MAX_ROOMS_PER_USER + " 个房间");
         }
 
         // 3. 检查人数TODO从数据库中查询用户人数

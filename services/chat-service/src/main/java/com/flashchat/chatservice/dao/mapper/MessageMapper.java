@@ -53,4 +53,14 @@ public interface MessageMapper extends BaseMapper<MessageDO> {
             "</script>")
     int insertBatchIgnore(@Param("list") List<MessageDO> list);
 
+
+    /**
+     * 查询未读消息 ID 列表（带 LIMIT，配合 999+ 上限）
+     * <p>
+     * ORDER BY id ASC 利用索引 idx_room_id (room_id, id) 的排序，无额外排序开销
+     * MySQL 扫到第 1000 行即停止，避免全表 COUNT
+     */
+    @Select("SELECT id FROM t_message WHERE room_id = #{roomId} AND id > #{ackId} AND status = 0 ORDER BY id ASC LIMIT 1000")
+    List<Long> selectUnreadMsgIds(@Param("roomId") String roomId, @Param("ackId") long ackId);
+
 }

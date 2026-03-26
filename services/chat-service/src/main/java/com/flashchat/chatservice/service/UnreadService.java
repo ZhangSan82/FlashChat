@@ -14,6 +14,12 @@ import java.util.Set;
 public interface UnreadService {
 
     /**
+     * 未读数显示上限
+     * 后端统一截断，前端只管展示
+     */
+    int MAX_UNREAD_DISPLAY = 999;
+
+    /**
      * 发消息后，给房间所有成员（除发送者）的未读数 +1
      */
     void incrementUnread(String roomId, Long excludeMemberId);

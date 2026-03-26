@@ -170,6 +170,8 @@ public class UnreadServiceImpl implements UnreadService {
         // 1. 先查 Redis
         Map<String, Integer> redisResult = getFromRedis(accountId);
         if (redisResult != null) {
+            redisResult.replaceAll((roomId,count)->
+                    Math.min(count,MAX_UNREAD_DISPLAY));
             return redisResult;
         }
 
@@ -191,7 +193,7 @@ public class UnreadServiceImpl implements UnreadService {
         try {
             Object val = stringRedisTemplate.opsForHash().get(getKey(accountId), roomId);
             if (val != null) {
-                return Math.max(0, Integer.parseInt(val.toString()));
+                return Math.min(Math.max(0, Integer.parseInt(val.toString())), MAX_UNREAD_DISPLAY);
             }
         } catch (Exception e) {
             log.error("[查单房间未读失败] memberId={}, room={}", accountId, roomId, e);
@@ -304,12 +306,8 @@ public class UnreadServiceImpl implements UnreadService {
      */
     private int doCount(String roomId, Long lastAckMsgId) {
         long ackId = lastAckMsgId != null ? lastAckMsgId : 0L;
-        Long count = messageMapper.selectCount(
-                new LambdaQueryWrapper<MessageDO>()
-                        .eq(MessageDO::getRoomId, roomId)
-                        .gt(MessageDO::getId, ackId)
-                        .eq(MessageDO::getStatus, 0)
-        );
-        return count != null ? count.intValue() : 0;
+        List<Long> ids = messageMapper.selectUnreadMsgIds(roomId, ackId);
+        int count = ids != null ? ids.size() : 0;
+        return Math.min(count, MAX_UNREAD_DISPLAY);
     }
 }
