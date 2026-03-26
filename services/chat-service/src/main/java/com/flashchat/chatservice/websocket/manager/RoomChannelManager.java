@@ -660,7 +660,6 @@ public class RoomChannelManager {
         }
 
         log.info("[关闭房间] room={}, 影响 {} 名成员", roomId, members.size());
-
     }
 
 
