@@ -18,10 +18,10 @@ public class RoomMemberInfo {
     private Long userId;
 
     /** 在该房间使用的昵称 */
-    private String nickname;
+    private volatile String nickname;
 
     /** 在该房间使用的头像 */
-    private String avatar;
+    private volatile String avatar;
 
     /** 是否为该房间的房主 */
     private boolean isHost;

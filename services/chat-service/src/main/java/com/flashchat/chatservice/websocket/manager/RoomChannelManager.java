@@ -408,6 +408,50 @@ public class RoomChannelManager {
         log.debug("[静默恢复] room={}, userId={}, nickname={}", roomId, userId, nickname);
     }
 
+    /**
+     * 更新用户在所有房间的昵称/头像色
+     * 遍历该用户所在的所有房间，逐个更新 RoomMemberInfo。
+     */
+    public int updateMemberInfo(Long accountId, String newNickname, String newAvatar) {
+        if (accountId == null) return 0;
+        if (newNickname == null && newAvatar == null) return 0;
+
+        Set<String> rooms = userRooms.get(accountId);
+        int updatedCount = 0;
+        if (rooms != null) {
+            for (String roomId : rooms) {
+                RoomMemberInfo info = getRoomMemberInfo(roomId, accountId);
+                if (info != null) {
+                    if (newNickname != null) {
+                        info.setNickname(newNickname);
+                    }
+                    if (newAvatar != null) {
+                        info.setAvatar(newAvatar);
+                    }
+                    updatedCount++;
+                }
+            }
+        }
+
+        Channel channel = userChannels.get(accountId);
+        if (channel != null && channel.isActive()) {
+            if (newNickname != null) {
+                ChannelAttrUtil.set(channel, ChannelAttrUtil.NICKNAME, newNickname);
+            }
+            if (newAvatar != null) {
+                ChannelAttrUtil.set(channel, ChannelAttrUtil.AVATAR, newAvatar);
+            }
+        }
+
+        if (updatedCount > 0) {
+            log.info("[更新成员信息] accountId={}, nickname={}, avatar={}, 影响 {} 个房间",
+                    accountId, newNickname, newAvatar, updatedCount);
+        }
+
+        return updatedCount;
+    }
+
+
     // ===========================================================
     //                    消息推送
     // ===========================================================

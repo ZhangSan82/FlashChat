@@ -1,5 +1,6 @@
 package com.flashchat.chatservice.service.impl;
 
+import cn.dev33.satoken.session.SaSession;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.MultistageCacheProxy;
@@ -7,22 +8,32 @@ import com.flashchat.cache.toolkit.CacheUtil;
 import com.flashchat.chatservice.dao.entity.AccountDO;
 import com.flashchat.chatservice.dao.enums.AccountStatusEnum;
 import com.flashchat.chatservice.dao.mapper.AccountMapper;
+import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.AccountInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.AuthRespDTO;
 import com.flashchat.chatservice.service.AccountService;
+import com.flashchat.chatservice.service.InviteCodeService;
 import com.flashchat.chatservice.toolkit.HashUtil;
+import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
 import com.flashchat.user.constant.UserTypeConstant;
 import com.flashchat.user.core.LoginUserInfoDTO;
+import com.flashchat.user.core.UserContext;
 import com.flashchat.user.toolkit.LoginIdUtil;
+import io.netty.channel.Channel;
+import jakarta.annotation.Resource;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -39,6 +50,11 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
     private final TransactionTemplate transactionTemplate;
 
     private final MultistageCacheProxy multistageCacheProxy;
+    private final RoomChannelManager roomChannelManager;
+    private final BCryptPasswordEncoder bCryptPasswordEncoder;
+    @Lazy
+    @Resource
+    private  InviteCodeService inviteCodeService;
 
     private static final long CACHE_TIMEOUT = 60000L;
 
@@ -184,6 +200,244 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         );
     }
 
+    @Override
+    public void updateProfile(UpdateProfileReqDTO request) {
+        Long loginId = UserContext.getRequiredLoginId();
+        AccountDO account = getAccountByDbId(loginId);
+        if (account == null) {
+            throw new ClientException("账号不存在");
+        }
+
+        boolean updated = false;
+        String newNickname = null;
+        String newAvatarColor = null;
+
+        // ===== 1. 校验并设置昵称 =====
+        if (request.getNickname() != null && !request.getNickname().isBlank()) {
+            String trimmed = request.getNickname().trim();
+            if (trimmed.length() > 20) {
+                throw new ClientException("昵称不能超过 20 个字符");
+            }
+            if (!trimmed.equals(account.getNickname())) {
+                account.setNickname(trimmed);
+                newNickname = trimmed;
+                updated = true;
+            }
+        }
+
+        // ===== 2. 校验并设置头像色 =====
+        if (request.getAvatarColor() != null && !request.getAvatarColor().isBlank()) {
+            String color = request.getAvatarColor().trim();
+            if (!color.matches("^#[0-9A-Fa-f]{6}$")) {
+                throw new ClientException("颜色格式错误，应为 #RRGGBB");
+            }
+            if (!color.equals(account.getAvatarColor())) {
+                account.setAvatarColor(color);
+                newAvatarColor = color;
+                updated = true;
+            }
+        }
+
+        // ===== 3. 设置头像 URL =====
+        if (request.getAvatarUrl() != null) {
+            // 允许传空串（清除头像，回退到 avatarColor 方案）
+            if (!request.getAvatarUrl().equals(account.getAvatarUrl())) {
+                account.setAvatarUrl(request.getAvatarUrl().trim());
+                updated = true;
+            }
+        }
+
+        // ===== 4. 无变更直接返回 =====
+        if (!updated) {
+            log.debug("[修改资料-无变更] accountId={}", account.getAccountId());
+            return;
+        }
+
+        // ===== 5. 更新 DB =====
+        this.updateById(account);
+
+        // ===== 6. 失效多级缓存（两个 key） =====
+        evictAccountCache(account);
+
+        // ===== 7. 同步 SaSession（仅昵称变更时需要） =====
+        if (newNickname != null) {
+            syncSessionNickname(account);
+        }
+
+        // ===== 8. 更新 WS 内存（昵称/头像色变更时需要） =====
+        if (newNickname != null || newAvatarColor != null) {
+            roomChannelManager.updateMemberInfo(loginId, newNickname, newAvatarColor);
+        }
+
+        log.info("[修改资料] accountId={}, nickname={}, avatarColor={}, avatarUrl={}",
+                account.getAccountId(),
+                newNickname != null ? newNickname : "(未改)",
+                newAvatarColor != null ? newAvatarColor : "(未改)",
+                request.getAvatarUrl() != null ? "(已更新)" : "(未改)");
+    }
+
+    @Override
+    public MyAccountRespDTO getMyAccount() {
+        Long loginId = UserContext.getRequiredLoginId();
+        AccountDO account = getAccountByDbId(loginId);
+        if (account == null) {
+            throw new ClientException("账号不存在");
+        }
+
+        return MyAccountRespDTO.builder()
+                .id(account.getId())
+                .accountId(account.getAccountId())
+                .nickname(account.getNickname())
+                .avatarColor(account.getAvatarColor())
+                .avatarUrl(account.getAvatarUrl())
+                .email(maskEmail(account.getEmail()))
+                .credits(account.getCredits())
+                .isRegistered(account.registered())
+                .hasPassword(account.hasPassword())
+                .inviteCode(account.getInviteCode())
+                .createTime(account.getCreateTime())
+                .build();
+    }
+
+    @Override
+    public void setPassword(SetPasswordReqDTO request) {
+        Long loginId = UserContext.getRequiredLoginId();
+        AccountDO account = getAccountByDbId(loginId);
+        if (account == null) {
+            throw new ClientException("账号不存在");
+        }
+
+        if (account.hasPassword()) {
+            throw new ClientException("已设置密码，请使用修改密码功能");
+        }
+
+        if (!request.getPassword().equals(request.getConfirmPassword())) {
+            throw new ClientException("两次输入的密码不一致");
+        }
+
+        account.setPassword(bCryptPasswordEncoder.encode(request.getPassword()));
+        this.updateById(account);
+        evictAccountCache(account);
+
+        log.info("[设置密码] accountId={}", account.getAccountId());
+    }
+
+    @Override
+    public void changePassword(ChangePasswordReqDTO request) {
+        Long loginId = UserContext.getRequiredLoginId();
+        AccountDO account = getAccountByDbId(loginId);
+        if (account == null) {
+            throw new ClientException("账号不存在");
+        }
+
+        if (!account.hasPassword()) {
+            throw new ClientException("尚未设置密码，请先使用设置密码功能");
+        }
+
+        if (!bCryptPasswordEncoder.matches(request.getOldPassword(), account.getPassword())) {
+            throw new ClientException("原密码错误");
+        }
+
+        if (!request.getNewPassword().equals(request.getConfirmNewPassword())) {
+            throw new ClientException("两次输入的新密码不一致");
+        }
+
+        if (request.getOldPassword().equals(request.getNewPassword())) {
+            throw new ClientException("新密码不能与原密码相同");
+        }
+
+        account.setPassword(bCryptPasswordEncoder.encode(request.getNewPassword()));
+        this.updateById(account);
+        evictAccountCache(account);
+        log.info("[修改密码] accountId={}", account.getAccountId());
+    }
+
+    @Override
+    public AuthRespDTO upgradeAccount(UpgradeAccountReqDTO request) {
+        Long loginId = UserContext.getRequiredLoginId();
+        AccountDO account = getAccountByDbId(loginId);
+        if (account == null) {
+            throw new ClientException("账号不存在");
+        }
+
+        // ===== 校验（事务外，快速失败） =====
+        if (account.registered()) {
+            throw new ClientException("已是注册用户，无需升级");
+        }
+        if (!request.getPassword().equals(request.getConfirmPassword())) {
+            throw new ClientException("两次输入的密码不一致");
+        }
+        String email = request.getEmail().trim().toLowerCase();
+        Long emailCount = this.lambdaQuery().eq(AccountDO::getEmail, email).count();
+        if (emailCount > 0) {
+            throw new ClientException("该邮箱已被注册");
+        }
+
+        // ===== DB 事务 =====
+        transactionTemplate.executeWithoutResult(status -> {
+            // 邀请码处理
+            Long inviterId = null;
+            if (request.getInviteCode() != null && !request.getInviteCode().isBlank()) {
+                inviterId = inviteCodeService.useCode(request.getInviteCode(), account.getId());
+            }
+
+            // 更新账号
+            account.setPassword(bCryptPasswordEncoder.encode(request.getPassword()));
+            account.setEmail(email);
+            account.setIsRegistered(1);
+            if (inviterId != null) {
+                account.setInvitedBy(inviterId);
+                account.setCredits(account.getCredits() + 100);
+            }
+            this.updateById(account);
+
+            // 生成邀请码
+            inviteCodeService.generateForUser(account.getId(), 3);
+
+            // 邀请人积分
+            if (inviterId != null) {
+                grantInviterCredits(inviterId, 50);
+            }
+        });
+
+        // ===== 事务提交后：缓存 + SaToken =====
+        evictAccountCache(account);
+        StpUtil.logout();
+        log.info("[账号升级] accountId={}, member → user", account.getAccountId());
+        return doLogin(account, UserTypeConstant.USER);
+    }
+
+    //TODO如果房主注销,房间进入5分钟宽限期
+    @Override
+    public void deleteAccount() {
+        Long loginId = UserContext.getRequiredLoginId();
+        AccountDO account = getAccountByDbId(loginId);
+        if (account == null) {
+            throw new ClientException("账号不存在");
+        }
+
+        // 1. 标记封禁（逻辑删除，不物理删除）
+        account.setStatus(AccountStatusEnum.BANNED.getCode());
+        this.updateById(account);
+
+        // 2. 失效缓存
+        evictAccountCache(account);
+
+        Channel channel = roomChannelManager.getChannel(loginId);
+        if (channel != null && channel.isActive()) {
+            channel.close();
+        }
+
+        // 3. 清理 WS 内存中该用户的所有房间成员关系
+        Set<String> rooms = roomChannelManager.getUserRooms(loginId);
+        for (String roomId : rooms) {
+            roomChannelManager.leaveRoom(roomId, loginId);
+        }
+        // 4. 登出 SaToken
+        StpUtil.logout();
+        log.info("[注销账号] accountId={}", account.getAccountId());
+    }
+
     // ==================== 私有方法 ====================
 
 
@@ -243,6 +497,87 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         } catch (Exception e) {
             log.error("[注册缓存写入失败] accountId={}, 不影响注册，后续查询自动回填",
                     account.getAccountId(), e);
+        }
+    }
+
+    /**
+     * 失效账号的多级缓存
+     * 两个缓存 key 必须同时失效：
+     * MultistageCacheProxy.delete() 内部同时清 Redis + Caffeine
+     */
+    private void evictAccountCache(AccountDO account) {
+        try {
+            String keyByBizId = CacheUtil.buildKey("flashchat", "account",
+                    account.getAccountId());
+            String keyByDbId = CacheUtil.buildKey("flashchat", "account",
+                    "id", String.valueOf(account.getId()));
+            multistageCacheProxy.delete(keyByBizId);
+            multistageCacheProxy.delete(keyByDbId);
+        } catch (Exception e) {
+            log.error("[缓存失效异常] accountId={}", account.getAccountId(), e);
+        }
+    }
+
+    /**
+     * 同步 SaToken Session 中的昵称
+     * 修改昵称后必须同步，否则 UserContext.getNickname() 返回旧值。
+     */
+    private void syncSessionNickname(AccountDO account) {
+        try {
+            int userType = account.registered()
+                    ? UserTypeConstant.USER
+                    : UserTypeConstant.MEMBER;
+            String saLoginId = LoginIdUtil.toLoginId(account.getId(), userType);
+
+            SaSession session = StpUtil.getSessionByLoginId(saLoginId, false);
+            if (session != null) {
+                LoginUserInfoDTO userInfo = LoginUserInfoDTO.builder()
+                        .loginId(account.getId())
+                        .userType(userType)
+                        .accountId(account.getAccountId())
+                        .nickname(account.getNickname())
+                        .build();
+                session.set(LoginUserInfoDTO.SESSION_KEY, userInfo);
+                log.debug("[Session 同步] accountId={}, nickname={}",
+                        account.getAccountId(), account.getNickname());
+            }
+        } catch (Exception e) {
+            log.warn("[Session 同步失败] accountId={}, 不影响业务",
+                    account.getAccountId(), e);
+        }
+    }
+
+    private String maskEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 0) {
+            return email;
+        }
+        return email.charAt(0) + "***" + email.substring(atIndex);
+    }
+
+
+    /**
+     * 给邀请人加积分
+     */
+    private void grantInviterCredits(Long inviterId, int credits) {
+        try {
+            boolean updated = this.lambdaUpdate()
+                    .eq(AccountDO::getId, inviterId)
+                    .setSql("credits = credits + " + credits)
+                    .update();
+
+            if (updated) {
+                AccountDO inviter = this.getById(inviterId);
+                if (inviter != null) {
+                    evictAccountCache(inviter);
+                    log.info("[邀请奖励] inviter={}, +{} 积分", inviter.getAccountId(), credits);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[邀请奖励失败] inviterId={}", inviterId, e);
         }
     }
 
