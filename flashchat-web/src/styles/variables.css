@@ -1,0 +1,18 @@
+:root {
+  --fc-bg: #F5F0E8;
+  --fc-bg-light: #FAF7F2;
+  --fc-bg-dark: #EDE8DF;
+  --fc-surface: #F0EBE3;
+  --fc-text: #2C2825;
+  --fc-text-sec: #8A857E;
+  --fc-text-muted: #B5B0A8;
+  --fc-accent: #C8956C;
+  --fc-danger: #D4736C;
+  --fc-success: #7BAF6E;
+  --fc-warn: #D4A84C;
+  --fc-border: #E5E0D8;
+  --fc-shadow-out: 3px 3px 6px #D1CBC3, -3px -3px 6px #FFFFFF;
+  --fc-shadow-in: inset 3px 3px 6px #D1CBC3, inset -3px -3px 6px #FFFFFF;
+  --fc-radius: 12px;
+  --fc-font: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+}

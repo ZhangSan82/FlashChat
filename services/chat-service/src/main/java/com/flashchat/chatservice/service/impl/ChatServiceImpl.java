@@ -15,10 +15,7 @@ import com.flashchat.chatservice.dto.msg.FileDTO;
 import com.flashchat.chatservice.dto.req.CursorPageBaseReq;
 import com.flashchat.chatservice.dto.req.MsgAckReqDTO;
 import com.flashchat.chatservice.dto.req.SendMsgReqDTO;
-import com.flashchat.chatservice.dto.resp.ChatBroadcastMsgRespDTO;
-import com.flashchat.chatservice.dto.resp.CursorPageBaseResp;
-import com.flashchat.chatservice.dto.resp.ReplyMessageDTO;
-import com.flashchat.chatservice.dto.resp.WsRespDTO;
+import com.flashchat.chatservice.dto.resp.*;
 import com.flashchat.chatservice.service.*;
 import com.flashchat.chatservice.service.strategy.msg.AbstractMsgHandler;
 import com.flashchat.chatservice.service.strategy.msg.MsgHandlerFactory;
@@ -48,6 +45,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private final UnreadService unreadService;
     private final MultistageCacheProxy  multistageCacheProxy;
     private final MsgIdGenerator msgIdGenerator;
+    private final MessageWindowService messageWindowService;
 
     @Override
     public ChatBroadcastMsgRespDTO sendMsg(SendMsgReqDTO request) {
@@ -159,6 +157,9 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .system(false)
                 .build();
 
+        // ===== 写入滑动窗口 =====
+        messageWindowService.addToWindow(roomId,msgSeqId,broadcastMsg);
+
 
         // ===== 11. WebSocket 广播 =====
         roomChannelManager.broadcastToRoom(roomId,
@@ -186,7 +187,59 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         // ===== 1. 校验房间存在 =====
         validateRoomExists(roomId);
 
-        // ===== 2. 游标分页查询 =====
+        // ===== 2. 解析 cursor =====
+        Long cursorValue = null;
+        if (request.getCursor() != null && !request.getCursor().isBlank()) {
+            try {
+                cursorValue = Long.parseLong(request.getCursor());
+            } catch (NumberFormatException e) {
+                log.warn("[历史消息] cursor 格式异常: {}, 当作首次加载", request.getCursor());
+            }
+        }
+
+        // ===== 3. 尝试走窗口 =====
+        WindowQueryResult windowResult =
+                messageWindowService.getHistoryFromWindow(roomId, cursorValue, request.getPageSize());
+
+        if (windowResult != null) {
+            List<ChatBroadcastMsgRespDTO> messages = windowResult.getMessages();
+
+            boolean isLast;
+            String nextCursor = null;
+
+            if (messages.size() < request.getPageSize()) {
+                // 不足一页，判断是否到达窗口底部
+                isLast = determineIsLastFromWindow(roomId, messages, windowResult.getWindowMinScore());
+                // 窗口已用尽但 DB 还有更老消息时，提供 cursor 让前端继续翻页
+                // 下一页请求带 cursor=windowMinScore -> getHistoryFromWindow 中 <= 判断成立
+                // -> 返回 null -> 自动降级到 DB cursor 查询
+                if (!isLast && windowResult.getWindowMinScore() != null) {
+                    nextCursor = windowResult.getWindowMinScore().toString();
+                }
+            } else {
+                // 满页
+                isLast = false;
+                // 倒序列表中最后一个元素 score 最小，作为下一页 cursor
+                nextCursor = messages.get(messages.size() - 1).getIndexId().toString();
+            }
+
+            // 翻转为正序（窗口查询返回倒序，前端需要正序渲染）
+            Collections.reverse(messages);
+
+            log.info("[历史消息-窗口命中] room={}, cursor={}, returned={}, isLast={}",
+                    roomId, request.getCursor(), messages.size(), isLast);
+
+            return CursorPageBaseResp.<ChatBroadcastMsgRespDTO>builder()
+                    .list(messages)
+                    .cursor(nextCursor)
+                    .isLast(isLast)
+                    .build();
+        }
+
+        // ===== 4. 降级走 DB =====
+        log.debug("[历史消息-降级DB] room={}, cursor={}", roomId, request.getCursor());
+
+        // ===== 游标分页查询 =====
         //  等价 SQL：
         //    SELECT * FROM t_message
         //    WHERE room_id = #{roomId} AND status = 0 [AND id < #{cursor}]
@@ -307,9 +360,49 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         Long lastAckMsgId = roomMember.getLastAckMsgId() != null
                 ? roomMember.getLastAckMsgId() : 0L;
 
+        // ===== 3. 尝试走窗口 =====
+        // TODO [后续优化] lastAckMsgId == 0 时也可尝试走窗口：
+        //   ZCARD < WINDOW_SIZE -> 窗口覆盖全量 -> 直接返回
+        //   ZCARD >= WINDOW_SIZE -> 窗口可能不够 -> 降级 DB
+        if (lastAckMsgId > 0) {
+            List<ChatBroadcastMsgRespDTO> windowResult =
+                    messageWindowService.getNewFromWindow(roomId, lastAckMsgId);
+
+            if (windowResult != null) {
+                // 窗口命中：自动 ACK
+                if (!windowResult.isEmpty()) {
+                    ChatBroadcastMsgRespDTO latest = windowResult.get(windowResult.size() - 1);
+                    if (latest.getIndexId() != null && latest.getIndexId() > lastAckMsgId) {
+                        boolean updated = roomMemberService.lambdaUpdate()
+                                .eq(RoomMemberDO::getId, roomMember.getId())
+                                .lt(RoomMemberDO::getLastAckMsgId, latest.getIndexId())
+                                .set(RoomMemberDO::getLastAckMsgId, latest.getIndexId())
+                                .update();
+                        if (updated) {
+                            roomMemberService.evictCache(roomId, acctId);
+                            unreadService.clearUnread(acctId, roomId);
+                            log.info("[自动ACK-窗口] room={}, acctId={}, {} -> {}",
+                                    roomId, acctId, lastAckMsgId, latest.getIndexId());
+                        }
+                    }
+                }
+
+                log.info("[拉新消息-窗口命中] room={}, acctId={}, lastAck={}, 拉到 {} 条",
+                        roomId, acctId, lastAckMsgId, windowResult.size());
+
+                return CursorPageBaseResp.<ChatBroadcastMsgRespDTO>builder()
+                        .list(windowResult)
+                        .cursor(null)
+                        .isLast(true)
+                        .build();
+            }
+        }
+
+        // ===== 4. 降级走 DB =====
+
         String afterCursor = lastAckMsgId > 0 ? lastAckMsgId.toString() : null;
 
-        // ===== 3. 反向游标查询 =====
+        // =====  反向游标查询 =====
         //  SQL: SELECT * FROM t_message
         //       WHERE room_id = ? AND status = 0 AND id > last_ack_msg_id
         //       ORDER BY id ASC
@@ -351,7 +444,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
            }
         }
 
-        // ===== 4. DO → DTO（已经是正序，不需要翻转） =====
+        // ===== 5. DO → DTO（已经是正序，不需要翻转） =====
         // 批量转换
         List<ChatBroadcastMsgRespDTO> respList = convertToRespDTOList(page.getList());
 
@@ -372,6 +465,34 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     @Override
     public Map<String, Integer> getUnreadCounts() {
         return unreadService.getAllUnreadCounts(UserContext.getRequiredLoginId());
+    }
+
+
+    /**
+     * 判断窗口查询不足一页时是否为最后一页
+     * <p>
+     * 到达窗口底部时需要额外查 DB 判断是否还有更老的消息。
+     * 只有到达窗口边界才触发 DB 查询（SELECT id ... LIMIT 1），
+     * 99% 的请求（首次加载 / 翻前几页）不会走到这个分支。
+     */
+    private boolean determineIsLastFromWindow(String roomId,
+                                              List<ChatBroadcastMsgRespDTO> messages,
+                                              Long windowMinScore) {
+        if (windowMinScore == null) {
+            return true;
+        }
+
+        // 不足一页时一定到达了窗口边界（要么空结果，要么最小 ID == windowMinScore）
+        // 查 DB 是否还有更老的消息
+        boolean dbHasMore = !this.lambdaQuery()
+                .eq(MessageDO::getRoomId, roomId)
+                .eq(MessageDO::getStatus, 0)
+                .lt(MessageDO::getId, windowMinScore)
+                .select(MessageDO::getId)
+                .last("LIMIT 1")
+                .list()
+                .isEmpty();
+        return !dbHasMore;
     }
 
     /**

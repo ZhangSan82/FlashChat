@@ -46,6 +46,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final AccountService accountService;
     private final MultistageCacheProxy multistageCacheProxy;
     private final RoomDelayProducer roomDelayProducer;
+    private final MessageWindowService messageWindowService;
     private static final long CACHE_TIMEOUT = 60000L;
     /**单用户最多同时加入的房间数 */
     private static final int MAX_ROOMS_PER_USER = 50;
@@ -559,6 +560,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         }
 
         evictRoomCache(roomId);
+
+        // 删除消息滑动窗口
+        messageWindowService.deleteWindow(roomId);
 
         // 批量更新成员 → LEFT
         roomMemberService.lambdaUpdate()
