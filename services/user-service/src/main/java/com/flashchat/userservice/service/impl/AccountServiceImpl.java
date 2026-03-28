@@ -39,7 +39,8 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
-
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
@@ -87,14 +88,11 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
     public AuthRespDTO autoRegister() {
         // 1. DB 事务
         AccountDO account = doRegister();
-
         // 2. 缓存（事务已提交，Redis 失败不影响注册结果）
         postRegisterCache(account);
-
         // 3. SaToken 登录
         return doLogin(account, UserTypeConstant.MEMBER);
     }
-
 
     /**
      * 执行 SaToken 登录
@@ -110,10 +108,8 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
     public AuthRespDTO doLogin(AccountDO account, int userType) {
         // 1. 构建 loginId（前缀格式：member_7 或 user_7）
         String loginId = LoginIdUtil.toLoginId(account.getId(), userType);
-
         // 2. SaToken 登录 → Redis 写入 token↔loginId 映射
         StpUtil.login(loginId);
-
         // 3. 构建用户信息并存入 SaSession
         //    后续每次 HTTP 请求，UserContextInterceptor 从 Session 取出此对象
         LoginUserInfoDTO userInfo = LoginUserInfoDTO.builder()
@@ -123,9 +119,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                 .nickname(account.getNickname())
                 .build();
         StpUtil.getSession().set(LoginUserInfoDTO.SESSION_KEY, userInfo);
-
         log.info("[登录成功] accountId={}, loginId={}", account.getAccountId(), loginId);
-
         // 4. 构建带 token 的响应
         return AuthRespDTO.from(account, StpUtil.getTokenValue());
     }
@@ -149,9 +143,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
             log.info("[登出成功] loginId={}", loginId);
         }
     }
-
-
-
 
 
     @Override
@@ -205,11 +196,9 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         if (account == null) {
             throw new ClientException("账号不存在");
         }
-
         boolean updated = false;
         String newNickname = null;
         String newAvatarColor = null;
-
         // ===== 1. 校验并设置昵称 =====
         if (request.getNickname() != null && !request.getNickname().isBlank()) {
             String trimmed = request.getNickname().trim();
@@ -222,7 +211,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                 updated = true;
             }
         }
-
         // ===== 2. 校验并设置头像色 =====
         if (request.getAvatarColor() != null && !request.getAvatarColor().isBlank()) {
             String color = request.getAvatarColor().trim();
@@ -235,7 +223,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                 updated = true;
             }
         }
-
         // ===== 3. 设置头像 URL =====
         if (request.getAvatarUrl() != null) {
             // 允许传空串（清除头像，回退到 avatarColor 方案）
@@ -244,24 +231,19 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                 updated = true;
             }
         }
-
         // ===== 4. 无变更直接返回 =====
         if (!updated) {
             log.debug("[修改资料-无变更] accountId={}", account.getAccountId());
             return;
         }
-
         // ===== 5. 更新 DB =====
         this.updateById(account);
-
         // ===== 6. 失效多级缓存（两个 key） =====
         evictAccountCache(account);
-
         // ===== 7. 同步 SaSession（仅昵称变更时需要） =====
         if (newNickname != null) {
             syncSessionNickname(account);
         }
-
         // ===== 8. 更新 WS 内存（昵称/头像色变更时需要） =====
         if (newNickname != null || newAvatarColor != null) {
             //roomChannelManager.updateMemberInfo(loginId, newNickname, newAvatarColor);
@@ -269,7 +251,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                     new MemberInfoChangedEvent(this, loginId, newNickname, newAvatarColor)
             );
         }
-
         log.info("[修改资料] accountId={}, nickname={}, avatarColor={}, avatarUrl={}",
                 account.getAccountId(),
                 newNickname != null ? newNickname : "(未改)",
@@ -330,23 +311,18 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         if (account == null) {
             throw new ClientException("账号不存在");
         }
-
         if (!account.hasPassword()) {
             throw new ClientException("尚未设置密码，请先使用设置密码功能");
         }
-
         if (!bCryptPasswordEncoder.matches(request.getOldPassword(), account.getPassword())) {
             throw new ClientException("原密码错误");
         }
-
         if (!request.getNewPassword().equals(request.getConfirmNewPassword())) {
             throw new ClientException("两次输入的新密码不一致");
         }
-
         if (request.getOldPassword().equals(request.getNewPassword())) {
             throw new ClientException("新密码不能与原密码相同");
         }
-
         account.setPassword(bCryptPasswordEncoder.encode(request.getNewPassword()));
         this.updateById(account);
         evictAccountCache(account);
@@ -360,7 +336,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         if (account == null) {
             throw new ClientException("账号不存在");
         }
-
         // ===== 校验（事务外，快速失败） =====
         if (account.registered()) {
             throw new ClientException("已是注册用户，无需升级");
@@ -374,7 +349,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
             throw new ClientException("该邮箱已被注册");
         }
         AtomicReference<Long> inviterIdRef = new AtomicReference<>(null);
-
         // ===== DB 事务 =====
         transactionTemplate.executeWithoutResult(status -> {
             // 邀请码处理
@@ -382,7 +356,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
             if (request.getInviteCode() != null && !request.getInviteCode().isBlank()) {
                 inviterId = inviteCodeService.useCode(request.getInviteCode(), account.getId());
             }
-
             // 更新账号
             account.setPassword(bCryptPasswordEncoder.encode(request.getPassword()));
             account.setEmail(email);
@@ -391,9 +364,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                 account.setInvitedBy(inviterId);
             }
             this.updateById(account);
-
             //  注册赠送积分
-
             creditService.grantCredits(
                     account.getId(),
                     CreditConstants.REGISTER_BONUS_AMOUNT,
@@ -401,7 +372,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                     String.valueOf(account.getId()),
                     "注册赠送"
             );
-
             //  邀请码奖励
             if (inviterId != null) {
                 // 被邀请人额外奖励
@@ -413,7 +383,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                         String.valueOf(account.getId()),
                         "邀请码奖励"
                 );
-
                 // 邀请人奖励
                 // bizId 用被邀请人的 accountId：同一个被邀请人只触发一次邀请人奖励
                 creditService.grantCredits(
@@ -424,17 +393,14 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                         "邀请奖励-被邀请人:" + account.getAccountId()
                 );
             }
-
             // 生成邀请码
             inviteCodeService.generateForUser(account.getId(), 3);
 
             inviterIdRef.set(inviterId);
         });
-
         if (inviterIdRef.get() != null) {
             evictCacheByDbId(inviterIdRef.get());
         }
-
         // ===== 事务提交后：缓存 + SaToken =====
         evictAccountCache(account);
         StpUtil.logout();
@@ -450,15 +416,11 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         if (account == null) {
             throw new ClientException("账号不存在");
         }
-
         // 1. 标记封禁（逻辑删除，不物理删除）
         account.setStatus(AccountStatusEnum.BANNED.getCode());
         this.updateById(account);
-
         // 2. 失效缓存
         evictAccountCache(account);
-
-
         // 3.【改造】发布事件，由 chat-service 监听后关闭 WS 连接 + 清理房间
         applicationEventPublisher.publishEvent(new AccountDeletedEvent(this, loginId));
         // 4. 登出 SaToken
@@ -477,8 +439,31 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         }
     }
 
-    // ==================== 私有方法 ====================
+    @Override
+    public boolean dailyCheckIn() {
+        Long accountId = UserContext.getRequiredLoginId();
+        // bizId 用日期字符串，同一天重复调用会被 CreditService 的幂等键拦截
+        String today = LocalDate.now()
+                .format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String bizId = accountId + ":" + today;
+        boolean granted = creditService.grantCredits(
+                accountId,
+                CreditConstants.DAILY_LOGIN_AMOUNT,
+                CreditTypeEnum.DAILY_LOGIN,
+                bizId,
+                "每日签到-" + today
+        );
+        if (granted) {
+            // 签到成功，积分余额变了，失效缓存
+            evictCacheByDbId(accountId);
+            log.info("[每日签到成功] accountId={}, +{} 积分", accountId, CreditConstants.DAILY_LOGIN_AMOUNT);
+        } else {
+            log.debug("[每日签到-已签] accountId={}, date={}", accountId, today);
+        }
+        return granted;
+    }
 
+    // ==================== 私有方法 ====================
 
     /**
      * 创建匿名账号 — 编程式事务
@@ -492,7 +477,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
             String accountId = generateUniqueAccountId();
             String nickname = generateNickname();
             String avatarColor = generateAvatarColor();
-
             AccountDO account = AccountDO.builder()
                     .accountId(accountId)
                     .nickname(nickname)
@@ -506,12 +490,9 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                     .isRegistered(0)
                     .status(1)
                     .build();
-
             this.save(account);
-
             log.info("[匿名注册] id={}, accountId={}, nickname={}",
                     account.getId(), accountId, nickname);
-
             return account;
         });
     }
@@ -596,7 +577,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         }
         return email.charAt(0) + "***" + email.substring(atIndex);
     }
-
 
     /**
      * 给邀请人加积分

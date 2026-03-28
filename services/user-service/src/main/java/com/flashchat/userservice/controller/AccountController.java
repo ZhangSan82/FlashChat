@@ -193,4 +193,14 @@ public class AccountController {
         log.info("[积分流水] loginId={}, page={}, size={}", loginId, page, size);
         return Results.success(creditService.getTransactions(loginId, page, size));
     }
+
+    /**
+     * 每日签到
+     * 前端调用时机：登录后自动调用，或用户手动点击签到按钮。
+     */
+    @PostMapping("/daily-check-in")
+    public Result<Boolean> dailyCheckIn() {
+        log.info("[每日签到] loginId={}", UserContext.getRequiredLoginId());
+        return Results.success(accountService.dailyCheckIn());
+    }
 }

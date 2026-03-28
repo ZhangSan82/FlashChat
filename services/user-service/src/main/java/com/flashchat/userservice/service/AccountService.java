@@ -86,4 +86,9 @@ public interface AccountService extends IService<AccountDO> {
      */
     void evictCacheByDbId(Long dbId);
 
+    /**
+     * 每日签到
+     */
+    boolean dailyCheckIn();
+
 }
