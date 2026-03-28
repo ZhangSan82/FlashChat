@@ -4,9 +4,7 @@ package com.flashchat.chatservice.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
-import com.flashchat.chatservice.dto.req.CursorPageBaseReq;
-import com.flashchat.chatservice.dto.req.MsgAckReqDTO;
-import com.flashchat.chatservice.dto.req.SendMsgReqDTO;
+import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.ChatBroadcastMsgRespDTO;
 import com.flashchat.chatservice.dto.resp.CursorPageBaseResp;
 import jakarta.validation.Valid;
@@ -40,4 +38,18 @@ public interface ChatService extends IService<MessageDO> {
  */
     Map<String, Integer> getUnreadCounts();
 
+    /**
+     * 撤回消息
+     */
+    void recallMsg(@Valid MsgRecallReqDTO request);
+
+    /**
+     * 删除消息
+     */
+    void deleteMsg(@Valid MsgDeleteReqDTO request);
+
+    /**
+     * 消息表情回应（Toggle）
+     */
+    void toggleReaction(@Valid MsgReactionReqDTO request);
 }

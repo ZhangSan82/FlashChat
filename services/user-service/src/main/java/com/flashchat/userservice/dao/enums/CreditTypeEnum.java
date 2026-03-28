@@ -27,7 +27,10 @@ public enum CreditTypeEnum {
     // ==================== 支出类型 (-) ====================
 
     /** 创建房间消费：根据房间时长档位扣除 */
-    ROOM_CREATE_COST("创建房间消费", -1);
+    ROOM_CREATE_COST("创建房间消费", -1),
+
+    /** 房间延期消费：根据延期时长档位扣除 */
+    ROOM_EXTEND_COST("房间延期消费", -1);
 
     /** 类型描述 */
     private final String desc;

@@ -95,4 +95,15 @@ public interface RoomService extends IService<RoomDO> {
     String getShareUrl(String roomId);
 
     List<RoomPricingRespDTO> getRoomPricing();
+
+    /**
+     * 房间时长延期
+     */
+    RoomInfoRespDTO extendRoom(@Valid RoomExtendReqDTO request);
+
+    /**
+     * 房间人数扩容
+     */
+    void resizeRoom(@Valid RoomResizeReqDTO request);
+
 }

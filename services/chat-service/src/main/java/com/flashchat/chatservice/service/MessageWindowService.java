@@ -55,4 +55,19 @@ public interface MessageWindowService {
      * @param roomId 房间 ID
      */
     void deleteWindow(String roomId);
+
+    /**
+     * 按 score 替换窗口中的消息 JSON（Lua 脚本原子操作）
+     * @param roomId  房间 ID
+     * @param score   消息的 dbId（Sorted Set 的 score）
+     * @param newJson 替换后的完整消息 JSON
+     */
+    void updateMemberByScore(String roomId, Long score, String newJson);
+
+    /**
+     * 按 score 移除窗口中的消息（用于消息删除场景）
+     * @param roomId 房间 ID
+     * @param score  消息的 dbId
+     */
+    void removeMemberByScore(String roomId, Long score);
 }

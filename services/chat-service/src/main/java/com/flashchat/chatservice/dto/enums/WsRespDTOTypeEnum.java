@@ -19,8 +19,11 @@ public enum WsRespDTOTypeEnum {
     SYSTEM_MSG(10, "系统消息"),
     MSG_REJECTED(11, "消息被拒绝"),
     MSG_RECALLED(12, "消息被撤回"),
-    USER_ONLINE(13,"用户上线"),    // ★ 新增：用户上线
-    USER_OFFLINE(14,"用户离线");      // ★ 新增：用户离线
+    USER_ONLINE(13,"用户上线"),    // 用户上线
+    USER_OFFLINE(14,"用户离线"),      // 用户离线
+    MSG_DELETED(15, "消息被删除"),
+    ROOM_EXTENDED(16, "房间已延期"),
+    MSG_REACTION_UPDATE(17, "表情回应更新");
 
     private final Integer type;
     private final String desc;

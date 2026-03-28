@@ -12,10 +12,7 @@ import com.flashchat.chatservice.delay.producer.RoomDelayProducer;
 import com.flashchat.chatservice.dto.context.HostOperationContext;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.req.*;
-import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
-import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
-import com.flashchat.chatservice.dto.resp.RoomPricingRespDTO;
-import com.flashchat.chatservice.dto.resp.WsRespDTO;
+import com.flashchat.chatservice.dto.resp.*;
 import com.flashchat.chatservice.service.*;
 import com.flashchat.chatservice.toolkit.HashUtil;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
@@ -27,12 +24,10 @@ import com.flashchat.userservice.dao.entity.AccountDO;
 import com.flashchat.userservice.dao.enums.CreditTypeEnum;
 import com.flashchat.userservice.service.AccountService;
 import com.flashchat.userservice.service.CreditService;
-import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -720,6 +715,166 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     }
 
     /**
+     * 房间延期
+     */
+    @Override
+    public RoomInfoRespDTO extendRoom(RoomExtendReqDTO request) {
+        String roomId = request.getRoomId();
+        Long operatorId = UserContext.getRequiredLoginId();
+        // ===== 1. 查询房间 =====
+        RoomDO room = getRoomByRoomId(roomId);
+        if (room == null) {
+            throw new ClientException("房间不存在");
+        }
+        // ===== 2. 状态校验：ACTIVE / EXPIRING / WAITING 允许延期 =====
+        RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
+        if (status != RoomStatusEnum.ACTIVE
+                && status != RoomStatusEnum.EXPIRING
+                && status != RoomStatusEnum.WAITING) {
+            String desc = status != null ? status.getDesc() : "未知";
+            throw new ClientException("当前状态（" + desc + "）不允许延期，"
+                    + "仅等待中、活跃和即将到期状态可操作");
+        }
+        // ===== 3. 权限校验：仅房主 =====
+        RoomMemberDO operatorMember = roomMemberService
+                .getRoomMemberByRoomIdAndAccountId(roomId, operatorId);
+        if (operatorMember == null
+                || operatorMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
+            throw new ClientException("你不在该房间中");
+        }
+        if (operatorMember.getRole() != RoomMemberRoleEnum.HOST.getCode()) {
+            throw new ClientException("只有房主可以延期房间");
+        }
+        // ===== 4. 解析延期档位 =====
+        RoomDurationEnum durationEnum = RoomDurationEnum.of(request.getDuration());
+        if (durationEnum == null) {
+            durationEnum = RoomDurationEnum.MIN_30;
+        }
+        int cost = durationEnum.getCost();
+        // ===== 5. 积分校验（免费档位跳过） =====
+        if (cost > 0) {
+            AccountDO creator = accountService.getAccountByDbId(operatorId);
+            if (!creator.registered()) {
+                throw new ClientException("延期房间需要先升级为注册用户");
+            }
+            if (creator.getCredits() == null || creator.getCredits() < cost) {
+                throw new ClientException("积分不足，需要 " + cost + " 积分，当前 "
+                        + (creator.getCredits() != null ? creator.getCredits() : 0));
+            }
+        }
+
+        // ===== 6. 计算新到期时间 =====
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime base = room.getExpireTime().isBefore(now) ? now : room.getExpireTime();
+        LocalDateTime newExpireTime = base.plusMinutes(durationEnum.getMinutes());
+        int oldVersion = room.getExpireVersion() != null ? room.getExpireVersion() : 1;
+        int newVersion = oldVersion + 1;
+        // ===== 7. 事务：积分扣减 + CAS 更新房间 =====
+        final RoomDurationEnum finalDuration = durationEnum;
+        // EXPIRING 回退到 ACTIVE，WAITING 和 ACTIVE 保持原状态
+        final int newStatus = (status == RoomStatusEnum.EXPIRING)
+                ? RoomStatusEnum.ACTIVE.getCode()
+                : room.getStatus();
+        transactionTemplate.executeWithoutResult(txStatus -> {
+            // 7a. 扣积分（免费档位跳过）
+            if (finalDuration.getCost() > 0) {
+                creditService.deductCredits(operatorId, finalDuration.getCost(),
+                        CreditTypeEnum.ROOM_EXTEND_COST,
+                        roomId + ":" + newVersion,
+                        "房间延期-" + finalDuration.getDesc());
+            }
+            // 7b. CAS 更新房间
+            boolean updated = lambdaUpdate()
+                    .eq(RoomDO::getRoomId, roomId)
+                    .eq(RoomDO::getExpireVersion, oldVersion)
+                    .in(RoomDO::getStatus,
+                            RoomStatusEnum.WAITING.getCode(),
+                            RoomStatusEnum.ACTIVE.getCode(),
+                            RoomStatusEnum.EXPIRING.getCode())
+                    .set(RoomDO::getExpireTime, newExpireTime)
+                    .set(RoomDO::getExpireVersion, newVersion)
+                    .set(RoomDO::getStatus, newStatus)
+                    .set(RoomDO::getGraceEndTime, null)
+                    .update();
+            if (!updated) {
+                throw new ClientException("延期失败，请重试（可能有人同时操作或房间状态已变更）");
+            }
+        });
+        // ===== 8. 事务提交后：缓存失效 =====
+        evictRoomCache(roomId);
+        if (cost > 0) {
+            accountService.evictCacheByDbId(operatorId);
+        }
+        // ===== 9. 重新投递延时队列事件 =====
+        try {
+            roomDelayProducer.submitRoomExpireEvents(roomId, newExpireTime, newVersion);
+        } catch (Exception e) {
+            // 投递失败不影响延期结果，由兜底定时任务保障
+            log.error("[延期-延时任务投递失败] room={}, 将由兜底任务保障", roomId, e);
+        }
+        // ===== 10. WS 广播通知 =====
+        RoomExtendRespDTO extendData = RoomExtendRespDTO.builder()
+                .newExpireTime(newExpireTime)
+                .durationDesc(durationEnum.getDesc())
+                .status(RoomStatusEnum.ACTIVE.getCode())
+                .statusDesc(RoomStatusEnum.ACTIVE.getDesc())
+                .build();
+        roomChannelManager.broadcastToRoom(roomId,
+                WsRespDTO.of(roomId, WsRespDTOTypeEnum.ROOM_EXTENDED, extendData));
+        log.info("[房间延期成功] room={}, operator={}, duration={}, newExpire={}, version={}→{}",
+                roomId, operatorId, durationEnum.getDesc(), newExpireTime, oldVersion, newVersion);
+        // ===== 11. 返回最新房间信息 =====
+        return buildRoomInfoResp(getRoomByRoomId(roomId));
+    }
+
+    @Override
+    public void resizeRoom(RoomResizeReqDTO request) {
+        String roomId = request.getRoomId();
+        int newMaxMembers = request.getNewMaxMembers();
+        Long operatorId = UserContext.getRequiredLoginId();
+        // ===== 1. 查询房间 =====
+        RoomDO room = getRoomByRoomId(roomId);
+        if (room == null) {
+            throw new ClientException("房间不存在");
+        }
+        // ===== 2. 状态校验：非 CLOSED =====
+        RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
+        if (status == null || status == RoomStatusEnum.CLOSED) {
+            throw new ClientException("房间已关闭，无法操作");
+        }
+        // ===== 3. 权限校验：仅房主 =====
+        RoomMemberDO operatorMember = roomMemberService
+                .getRoomMemberByRoomIdAndAccountId(roomId, operatorId);
+        if (operatorMember == null
+                || operatorMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
+            throw new ClientException("你不在该房间中");
+        }
+        if (operatorMember.getRole() != RoomMemberRoleEnum.HOST.getCode()) {
+            throw new ClientException("只有房主可以修改房间人数上限");
+        }
+        // ===== 4. 扩容校验：只允许扩大 =====
+        int currentMax = room.getMaxMembers() != null ? room.getMaxMembers() : 50;
+        if (newMaxMembers <= currentMax) {
+            throw new ClientException("新的人数上限必须大于当前上限（当前：" + currentMax + " 人）");
+        }
+        // ===== 5. CAS 更新 =====
+        // WHERE max_members < newMaxMembers 防止并发请求互相覆盖为更小的值
+        boolean updated = this.lambdaUpdate()
+                .eq(RoomDO::getRoomId, roomId)
+                .lt(RoomDO::getMaxMembers, newMaxMembers)
+                .ne(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
+                .set(RoomDO::getMaxMembers, newMaxMembers)
+                .update();
+        if (!updated) {
+            throw new ClientException("扩容失败，当前人数上限可能已被其他操作修改");
+        }
+        // ===== 6. 缓存失效 =====
+        evictRoomCache(roomId);
+        log.info("[房间扩容成功] room={}, operator={}, maxMembers: {} → {}",
+                roomId, operatorId, currentMax, newMaxMembers);
+    }
+
+    /**
      * 构建房间信息响应
      */
     private RoomInfoRespDTO buildRoomInfoResp(RoomDO room) {
@@ -743,7 +898,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .build();
 
 }
-
 
     /**
      * 房主操作公共校验（踢人/禁言/解禁共用）

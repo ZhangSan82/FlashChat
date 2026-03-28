@@ -3,23 +3,23 @@ package com.flashchat.chatservice.service.impl;
 
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.chatservice.config.MsgIdGenerator;
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
+import com.flashchat.chatservice.dao.enums.RoomMemberRoleEnum;
+import com.flashchat.chatservice.dao.enums.RoomMemberStatusEnum;
 import com.flashchat.chatservice.dao.enums.RoomStatusEnum;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.msg.FileDTO;
-import com.flashchat.chatservice.dto.req.CursorPageBaseReq;
-import com.flashchat.chatservice.dto.req.MsgAckReqDTO;
-import com.flashchat.chatservice.dto.req.SendMsgReqDTO;
+import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.*;
 import com.flashchat.chatservice.service.*;
 import com.flashchat.chatservice.service.strategy.msg.AbstractMsgHandler;
 import com.flashchat.chatservice.service.strategy.msg.MsgHandlerFactory;
 import com.flashchat.chatservice.toolkit.CursorUtils;
+import com.flashchat.chatservice.toolkit.JsonUtil;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
 import com.flashchat.convention.exception.ClientException;
@@ -27,11 +27,12 @@ import com.flashchat.user.core.UserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import static java.time.ZoneId.systemDefault;
 
 @Service
 @Slf4j
@@ -43,37 +44,50 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private final RoomService roomService;
     private final RoomMemberService roomMemberService;
     private final UnreadService unreadService;
-    private final MultistageCacheProxy  multistageCacheProxy;
     private final MsgIdGenerator msgIdGenerator;
     private final MessageWindowService messageWindowService;
+    /** 撤回时间窗口：2 分钟（秒级精度） */
+    private static final long RECALL_TIME_LIMIT_SECONDS = 2 * 60;
+    /** 消息状态：正常 */
+    private static final int MSG_STATUS_NORMAL = 0;
+    /** 消息状态：已删除（房主操作，对话流消失） */
+    private static final int MSG_STATUS_DELETED = 1;
+    /** 消息状态：已撤回（发送者操作，显示占位） */
+    private static final int MSG_STATUS_RECALLED = 2;
+
+    /** 单条消息最多支持的不同 emoji 种类 */
+    private static final int MAX_EMOJI_TYPES_PER_MSG = 20;
+    /** 单用户对同一条消息最多可点的 emoji 种类数 */
+    private static final int MAX_EMOJI_PER_USER_PER_MSG = 5;
+    /** CAS 重试次数上限（乐观锁冲突时） */
+    private static final int REACTION_CAS_MAX_RETRY = 3;
+
+    /**
+     * 历史查询包含的消息状态
+     */
+    private static final List<Integer> VISIBLE_MSG_STATUS =
+            List.of(MSG_STATUS_NORMAL, MSG_STATUS_RECALLED);
 
     @Override
     public ChatBroadcastMsgRespDTO sendMsg(SendMsgReqDTO request) {
 
-
-
         Long accountId = UserContext.getRequiredLoginId();
         String roomId = request.getRoomId();
-
         // ===== 1. 公共前置校验 =====
         validateRoomCanSendMsg(roomId);
-
         if (!roomChannelManager.isInRoom(roomId, accountId)) {
             throw new ClientException("你不在该房间中，请先加入房间");
         }
-
         RoomMemberInfo memberInfo = roomChannelManager.getRoomMemberInfo(roomId, accountId);
         if (memberInfo != null && memberInfo.isMuted()) {
             throw new ClientException("你已被禁言，无法发送消息");
         }
-
         // ===== 2. 跨字段校验：content 和 files 不能同时为空 =====
         String content = request.getContent();
         List<FileDTO> files = request.getFiles();
         if ((content == null || content.isBlank()) && (files == null || files.isEmpty())) {
             throw new ClientException("消息内容不能为空");
         }
-
         // ===== 3. Handler 路由 + 校验 + 数据修正 =====
         AbstractMsgHandler handler = MsgHandlerFactory.getHandler(files);
         handler.checkMsg(content, files);
@@ -81,12 +95,10 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         if (files != null && !files.isEmpty()) {
             handler.enrichFiles(files);
         }
-
         // ===== 4. Handler 构建消息体 =====
         String bodyJson = handler.buildBodyJson(files);
         String contentSummary = handler.buildContentSummary(content, files);
         Integer msgType = handler.getMsgTypeEnum().getType();
-
         // ===== 5. 回复消息校验 =====
         MessageDO replyMsg = null;
         if (request.getReplyMsgId() != null) {
@@ -98,13 +110,10 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 throw new ClientException("只能引用同一房间的消息");
             }
         }
-
         // ===== 6. 生成消息 ID =====
         String msgId = UUID.randomUUID().toString().replace("-", "");
         Integer isHost = memberInfo != null && memberInfo.isHost() ? 1 : 0;
         Long msgSeqId = msgIdGenerator.tryNextId();
-
-
         // ===== 7. 构建消息实体 =====
         MessageDO messageDO = MessageDO.builder()
                 .msgId(msgId)
@@ -119,8 +128,6 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .status(0)
                 .isHost(isHost)
                 .build();
-
-
         // ===== 8. 根据 ID 生成结果选择持久化路径 =====
         if (msgSeqId != null) {
             // ------ 正常路径：Redis 预分配 ID，异步写 DB ------
@@ -159,34 +166,26 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
 
         // ===== 写入滑动窗口 =====
         messageWindowService.addToWindow(roomId,msgSeqId,broadcastMsg);
-
-
         // ===== 11. WebSocket 广播 =====
         roomChannelManager.broadcastToRoom(roomId,
                 WsRespDTO.of(roomId, WsRespDTOTypeEnum.CHAT_BROADCAST, broadcastMsg));
 
         log.info("[发消息] room={}, memberId={}, dbId={}, content={}",
                 roomId, accountId, msgSeqId, request.getContent());
-
         // ===== 12. 更新发送者活跃时间 =====
         roomChannelManager.touchMember(roomId, accountId);
-
         // ===== 13. 未读计数 +1 =====
         unreadService.incrementUnread(roomId, accountId);
 
         return broadcastMsg;
     }
 
-    // TODO: 未来实现撤回功能时，需要把 .eq(status, 0) 改为 .in(status, List.of(0, 1))
-    //       让已删除/已撤回消息也出现在历史中，前端通过 deleted: true 展示删除态
-    //       否则对话流会"跳跃"，引用了已删消息的回复会显示"引用的消息不存在"
+    //实现撤回功能时，需要把 .eq(status, 0) 改为 .in(status, List.of(0, 1))
     @Override
     public CursorPageBaseResp<ChatBroadcastMsgRespDTO> getHistoryMessages(
             String roomId, CursorPageBaseReq request) {
-
         // ===== 1. 校验房间存在 =====
         validateRoomExists(roomId);
-
         // ===== 2. 解析 cursor =====
         Long cursorValue = null;
         if (request.getCursor() != null && !request.getCursor().isBlank()) {
@@ -196,17 +195,13 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 log.warn("[历史消息] cursor 格式异常: {}, 当作首次加载", request.getCursor());
             }
         }
-
         // ===== 3. 尝试走窗口 =====
         WindowQueryResult windowResult =
                 messageWindowService.getHistoryFromWindow(roomId, cursorValue, request.getPageSize());
-
         if (windowResult != null) {
             List<ChatBroadcastMsgRespDTO> messages = windowResult.getMessages();
-
             boolean isLast;
             String nextCursor = null;
-
             if (messages.size() < request.getPageSize()) {
                 // 不足一页，判断是否到达窗口底部
                 isLast = determineIsLastFromWindow(roomId, messages, windowResult.getWindowMinScore());
@@ -222,7 +217,6 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 // 倒序列表中最后一个元素 score 最小，作为下一页 cursor
                 nextCursor = messages.get(messages.size() - 1).getIndexId().toString();
             }
-
             // 翻转为正序（窗口查询返回倒序，前端需要正序渲染）
             Collections.reverse(messages);
 
@@ -235,27 +229,19 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                     .isLast(isLast)
                     .build();
         }
-
         // ===== 4. 降级走 DB =====
         log.debug("[历史消息-降级DB] room={}, cursor={}", roomId, request.getCursor());
 
         // ===== 游标分页查询 =====
-        //  等价 SQL：
-        //    SELECT * FROM t_message
-        //    WHERE room_id = #{roomId} AND status = 0 [AND id < #{cursor}]
-        //    ORDER BY id DESC
-        //    LIMIT #{pageSize + 1}
-        //
-        //  命中索引：idx_room_id (room_id, id)
+        // 改造：status IN (0, 2)，包含正常消息和撤回消息，排除已删除消息
         CursorPageBaseResp<MessageDO> page = CursorUtils.getCursorPage(
                 this,
                 request,
                 wrapper -> wrapper
                         .eq(MessageDO::getRoomId, roomId)
-                        .eq(MessageDO::getStatus, 0),
+                        .in(MessageDO::getStatus, VISIBLE_MSG_STATUS),
                 MessageDO::getId
         );
-
         if (page.getList().isEmpty()) {
             return CursorPageBaseResp.<ChatBroadcastMsgRespDTO>builder()
                     .list(List.of())
@@ -263,17 +249,12 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                     .isLast(true)
                     .build();
         }
-
         // ===== 3. 翻转为时间正序 =====
-        //  查询结果：[msg-100, msg-99, msg-98, ..., msg-81]  ← DESC
-        //  翻转后：  [msg-81, msg-82, ..., msg-99, msg-100]  ← ASC
         //  前端直接从上到下渲染即可
         List<MessageDO> messages = new ArrayList<>(page.getList());
         Collections.reverse(messages);
-
         // ===== 4. DO → DTO =====
         List<ChatBroadcastMsgRespDTO> respList = convertToRespDTOList(messages);
-
         log.info("[历史消息] room={}, cursor={}, pageSize={}, returned={}, isLast={}",
                 roomId, request.getCursor(), request.getPageSize(),
                 respList.size(), page.getIsLast());
@@ -296,14 +277,11 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         // 1. 查找用户
         Long accountId = UserContext.getRequiredLoginId();
         String roomId = request.getRoomId();
-
         // 2. 查找房间成员记录
         RoomMemberDO roomMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
-
         if (roomMember == null) {
             throw new ClientException("你不在该房间中");
         }
-
         // 3. 只增不减（幂等 + 防并发回退）
         Long currentAckId = roomMember.getLastAckMsgId() != null
                 ? roomMember.getLastAckMsgId() : 0L;
@@ -316,10 +294,6 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         }
 
         // 4. 原子更新：加上 lt 条件防止并发覆盖
-        //    等价 SQL:
-        //    UPDATE t_room_member
-        //    SET last_ack_msg_id = #{lastMsgId}
-        //    WHERE id = #{id} AND last_ack_msg_id < #{lastMsgId}
         boolean updated = roomMemberService.lambdaUpdate()
                 .eq(RoomMemberDO::getId, roomMember.getId())
                 .lt(RoomMemberDO::getLastAckMsgId, request.getLastMsgId())
@@ -342,24 +316,18 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
      */
     @Override
     public CursorPageBaseResp<ChatBroadcastMsgRespDTO> getNewMessages(String roomId) {
-
         // ===== 1. 校验房间存在 =====
         validateRoomExists(roomId);
-
         // ===== 2. 查找用户的已读位置 =====
         Long acctId = UserContext.getRequiredLoginId();
-
         RoomMemberDO roomMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, acctId);
-
         if (roomMember == null) {
             throw new ClientException("你不在该房间中");
         }
-
         // last_ack_msg_id：用户最后确认看到的消息 ID
         // 0 表示从未 ACK 过 → 拉取所有消息
         Long lastAckMsgId = roomMember.getLastAckMsgId() != null
                 ? roomMember.getLastAckMsgId() : 0L;
-
         // ===== 3. 尝试走窗口 =====
         // TODO [后续优化] lastAckMsgId == 0 时也可尝试走窗口：
         //   ZCARD < WINDOW_SIZE -> 窗口覆盖全量 -> 直接返回
@@ -386,10 +354,8 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                         }
                     }
                 }
-
                 log.info("[拉新消息-窗口命中] room={}, acctId={}, lastAck={}, 拉到 {} 条",
                         roomId, acctId, lastAckMsgId, windowResult.size());
-
                 return CursorPageBaseResp.<ChatBroadcastMsgRespDTO>builder()
                         .list(windowResult)
                         .cursor(null)
@@ -397,24 +363,17 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                         .build();
             }
         }
-
         // ===== 4. 降级走 DB =====
-
         String afterCursor = lastAckMsgId > 0 ? lastAckMsgId.toString() : null;
-
         // =====  反向游标查询 =====
-        //  SQL: SELECT * FROM t_message
-        //       WHERE room_id = ? AND status = 0 AND id > last_ack_msg_id
-        //       ORDER BY id ASC
-        //       LIMIT 101
-        // TODO: 未来实现撤回功能时，同 getHistoryMessages 的 TODO
+        // 改造：status IN (0, 2)
         CursorPageBaseResp<MessageDO> page = CursorUtils.getAfterCursor(
                 this,
                 afterCursor,
-                100,  // 断线重连最多拉 100 条，防止一次返回太多
+                100,
                 wrapper -> wrapper
                         .eq(MessageDO::getRoomId, roomId)
-                        .eq(MessageDO::getStatus, 0),
+                        .in(MessageDO::getStatus, VISIBLE_MSG_STATUS),
                 MessageDO::getId
         );
 
@@ -467,13 +426,268 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         return unreadService.getAllUnreadCounts(UserContext.getRequiredLoginId());
     }
 
+    @Override
+    public void recallMsg(MsgRecallReqDTO request) {
+        Long operatorId = UserContext.getRequiredLoginId();
+        doRecallOrDelete(request.getRoomId(), request.getMsgId(), operatorId, true);
+    }
+
+    @Override
+    public void deleteMsg(MsgDeleteReqDTO request) {
+        Long operatorId = UserContext.getRequiredLoginId();
+        doRecallOrDelete(request.getRoomId(), request.getMsgId(), operatorId, false);
+    }
+
+    @Override
+    public void toggleReaction(MsgReactionReqDTO request) {
+        Long accountId = UserContext.getRequiredLoginId();
+        String roomId = request.getRoomId();
+        Long msgId = request.getMsgId();
+        String emoji = request.getEmoji().trim();
+        // ===== 1. 校验：用户在房间中 =====
+        if (!roomChannelManager.isInRoom(roomId, accountId)) {
+            throw new ClientException("你不在该房间中，请先加入房间");
+        }
+        // ===== 2. 校验：房间状态 =====
+        RoomDO room = roomService.getRoomByRoomId(roomId);
+        if (room == null) {
+            throw new ClientException("房间不存在");
+        }
+        RoomStatusEnum roomStatus = RoomStatusEnum.of(room.getStatus());
+        if (roomStatus == null || roomStatus == RoomStatusEnum.CLOSED) {
+            throw new ClientException("房间已关闭，无法操作");
+        }
+        // ===== 3. 校验：消息存在且属于该房间 =====
+        MessageDO msg = this.getById(msgId);
+        if (msg == null) {
+            throw new ClientException("消息不存在");
+        }
+        if (!msg.getRoomId().equals(roomId)) {
+            throw new ClientException("消息不属于该房间");
+        }
+        // ===== 4. 校验：消息状态正常 =====
+        if (msg.getStatus() != null && msg.getStatus() != MSG_STATUS_NORMAL) {
+            throw new ClientException("该消息已被撤回或删除，无法操作");
+        }
+        // ===== 5. CAS 乐观锁更新 reactions =====
+        String uidStr = accountId.toString();
+        Map<String, List<String>> newReactionsMap = null;
+        for (int retry = 0; retry < REACTION_CAS_MAX_RETRY; retry++) {
+            // 每次重试重新读取最新值
+            if (retry > 0) {
+                msg = this.getById(msgId);
+                if (msg == null) {
+                    throw new ClientException("消息不存在");
+                }
+            }
+            String oldReactions = msg.getReactions();
+            if (oldReactions == null || oldReactions.isBlank()) {
+                oldReactions = "{}";
+            }
+            // 复用 parseReactions，转为可变 Map
+            Map<String, List<String>> parsed = parseReactions(oldReactions);
+            Map<String, List<String>> map = (parsed != null)
+                    ? new LinkedHashMap<>(parsed) : new LinkedHashMap<>();
+            // 确保每个 emoji 的 user list 也是可变的
+            map.replaceAll((k, v) -> new ArrayList<>(v));
+            // ===== 6. Toggle 逻辑 =====
+            List<String> users = map.get(emoji);
+            if (users != null && users.contains(uidStr)) {
+                // 已点过 → 取消
+                users.remove(uidStr);
+                if (users.isEmpty()) {
+                    map.remove(emoji);
+                }
+            } else {
+                // 没点过 → 添加
+                // 限制 1：单条消息的 emoji 种类数
+                if (users == null && map.size() >= MAX_EMOJI_TYPES_PER_MSG) {
+                    throw new ClientException(
+                            "该消息的表情种类已达上限(" + MAX_EMOJI_TYPES_PER_MSG + " 种)");
+                }
+                // 限制 2：单用户对同一条消息的 emoji 种类数
+                long userEmojiCount = map.values().stream()
+                        .filter(list -> list.contains(uidStr))
+                        .count();
+                if (userEmojiCount >= MAX_EMOJI_PER_USER_PER_MSG) {
+                    throw new ClientException(
+                            "每人每条消息最多添加 " + MAX_EMOJI_PER_USER_PER_MSG + " 种表情");
+                }
+                if (users == null) {
+                    users = new ArrayList<>();
+                    map.put(emoji, users);
+                }
+                users.add(uidStr);
+            }
+            // ===== 7. CAS 更新 DB =====
+            String newJson = JSON.toJSONString(map);
+            boolean updated = this.lambdaUpdate()
+                    .eq(MessageDO::getId, msgId)
+                    .eq(MessageDO::getReactions, oldReactions)
+                    .set(MessageDO::getReactions, newJson)
+                    .update();
+            if (updated) {
+                newReactionsMap = map;
+                break;
+            }
+            log.debug("[reaction CAS 重试] msgId={}, retry={}", msgId, retry + 1);
+        }
+        if (newReactionsMap == null) {
+            throw new ClientException("操作冲突，请重试");
+        }
+        // ===== 8. 更新滑动窗口 =====
+        updateWindowReactions(msg, newReactionsMap);
+        // ===== 9. WS 广播 =====
+        Map<String, List<String>> broadcastReactions = newReactionsMap.isEmpty()
+                ? null : newReactionsMap;
+        MsgReactionRespDTO respDTO = MsgReactionRespDTO.builder()
+                .msgId(msg.getMsgId())
+                .indexId(msg.getId())
+                .reactions(broadcastReactions)
+                .build();
+        roomChannelManager.broadcastToRoom(roomId,
+                WsRespDTO.of(roomId, WsRespDTOTypeEnum.MSG_REACTION_UPDATE, respDTO));
+        log.info("[表情回应] room={}, msgId={}, emoji={}, operator={}, reactions={}",
+                roomId, msgId, emoji, accountId, broadcastReactions);
+    }
+
+    /**
+     * 更新滑动窗口中消息的 reactions
+     */
+    private void updateWindowReactions(MessageDO msg, Map<String, List<String>> newReactions) {
+        try {
+            // 更新内存对象的 reactions，让 convertSingleToRespDTO 直接用新值
+            msg.setReactions(newReactions.isEmpty() ? "{}" : JSON.toJSONString(newReactions));
+            ChatBroadcastMsgRespDTO dto = convertSingleToRespDTO(msg, Map.of());
+            messageWindowService.updateMemberByScore(
+                    msg.getRoomId(), msg.getId(), JsonUtil.toJson(dto));
+        } catch (Exception e) {
+            log.error("[reaction 窗口更新失败] msgId={}", msg.getId(), e);
+        }
+    }
+
+    /**
+     * 撤回 / 删除的共享核心逻辑
+     */
+    private void doRecallOrDelete(String roomId, Long msgId, Long operatorId, boolean isRecall) {
+        String opName = isRecall ? "撤回" : "删除";
+
+        // ===== 1. 查询消息 =====
+        MessageDO msg = this.getById(msgId);
+        if (msg == null) {
+            throw new ClientException("消息不存在或尚未处理完成，请稍后再试");
+        }
+        // ===== 2. 消息归属校验 =====
+        if (!msg.getRoomId().equals(roomId)) {
+            throw new ClientException("消息不属于该房间");
+        }
+        // ===== 3. 消息状态校验（幂等） =====
+        if (msg.getStatus() != null && msg.getStatus() != 0) {
+            log.info("[{}幂等] room={}, msgId={}, 当前 status={}",
+                    opName, roomId, msgId, msg.getStatus());
+            return;
+        }
+        // ===== 4. 房间状态校验 =====
+        RoomDO room = roomService.getRoomByRoomId(roomId);
+        if (room == null) {
+            throw new ClientException("房间不存在");
+        }
+        RoomStatusEnum roomStatus = RoomStatusEnum.of(room.getStatus());
+        if (roomStatus == null || roomStatus == RoomStatusEnum.CLOSED) {
+            throw new ClientException("房间已关闭，无法操作");
+        }
+        // ===== 5. 权限 & 时间校验（差异化）=====
+        if (isRecall) {
+            // 撤回：只能撤回自己的消息
+            if (!operatorId.equals(msg.getSenderId())) {
+                throw new ClientException("只能撤回自己发送的消息");
+            }
+            // 撤回：秒级时间限制
+            if (msg.getCreateTime() != null) {
+                long secondsSinceSend = java.time.Duration.between(
+                        msg.getCreateTime(), LocalDateTime.now()).toSeconds();
+                if (secondsSinceSend > RECALL_TIME_LIMIT_SECONDS) {
+                    throw new ClientException("消息发送超过 2 分钟，无法撤回");
+                }
+            }
+        } else {
+            // 删除：只有房主可以操作
+            RoomMemberDO operatorMember = roomMemberService
+                    .getRoomMemberByRoomIdAndAccountId(roomId, operatorId);
+            if (operatorMember == null
+                    || operatorMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
+                throw new ClientException("你不在该房间中");
+            }
+            if (operatorMember.getRole() != RoomMemberRoleEnum.HOST.getCode()) {
+                throw new ClientException("只有房主可以删除消息");
+            }
+        }
+
+        // ===== 6. CAS 更新 DB =====
+        int newStatus = isRecall ? 2 : 1;
+        boolean updated = this.lambdaUpdate()
+                .eq(MessageDO::getId, msgId)
+                .eq(MessageDO::getStatus, 0)
+                .set(MessageDO::getStatus, newStatus)
+                .update();
+
+        if (!updated) {
+            log.info("[{}CAS 跳过] room={}, msgId={}", opName, roomId, msgId);
+            return;
+        }
+
+        // ===== 7. 更新滑动窗口（差异化）=====
+        if (isRecall) {
+            // 撤回：替换为 deleted 占位 JSON（保留在窗口中）
+            ChatBroadcastMsgRespDTO recalledMsg = buildRecalledMsgForWindow(msg);
+            messageWindowService.updateMemberByScore(
+                    roomId, msg.getId(), JsonUtil.toJson(recalledMsg));
+        } else {
+            // 删除：直接从窗口移除（不占位）
+            messageWindowService.removeMemberByScore(roomId, msg.getId());
+        }
+
+        // ===== 8. WS 广播（撤回/删除共用构建逻辑）=====
+        MsgRecallRespDTO broadcastData = MsgRecallRespDTO.builder()
+                .msgId(msg.getMsgId())
+                .indexId(msg.getId())
+                .senderId(getSenderId(msg))
+                .build();
+        WsRespDTOTypeEnum eventType = isRecall
+                ? WsRespDTOTypeEnum.MSG_RECALLED
+                : WsRespDTOTypeEnum.MSG_DELETED;
+        roomChannelManager.broadcastToRoom(roomId,
+                WsRespDTO.of(roomId, eventType, broadcastData));
+        log.info("[{}成功] room={}, msgId={}, operator={}", opName, roomId, msgId, operatorId);
+    }
+
+    /**
+     * 构建撤回态消息 DTO（用于滑动窗口中的占位替换）
+     */
+    private ChatBroadcastMsgRespDTO buildRecalledMsgForWindow(MessageDO msg) {
+        return ChatBroadcastMsgRespDTO.builder()
+                ._id(msg.getMsgId())
+                .indexId(msg.getId())
+                .content("此消息已撤回")
+                .senderId(getSenderId(msg))
+                .username(msg.getNickname())
+                .avatar(msg.getAvatarColor())
+                .timestamp(extractTimestamp(msg))
+                .isHost(msg.getIsHost() != null && msg.getIsHost() == 1)
+                .msgType(msg.getMsgType())
+                .files(null)
+                .replyMessage(null)
+                .reactions(null)
+                .deleted(true)
+                .system(false)
+                .build();
+    }
 
     /**
      * 判断窗口查询不足一页时是否为最后一页
      * <p>
      * 到达窗口底部时需要额外查 DB 判断是否还有更老的消息。
-     * 只有到达窗口边界才触发 DB 查询（SELECT id ... LIMIT 1），
-     * 99% 的请求（首次加载 / 翻前几页）不会走到这个分支。
+     * 查询条件和历史查询保持一致：status IN (0, 2)
      */
     private boolean determineIsLastFromWindow(String roomId,
                                               List<ChatBroadcastMsgRespDTO> messages,
@@ -481,12 +695,10 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         if (windowMinScore == null) {
             return true;
         }
-
-        // 不足一页时一定到达了窗口边界（要么空结果，要么最小 ID == windowMinScore）
-        // 查 DB 是否还有更老的消息
+        // 改造：status IN (0, 2)，和 getHistoryMessages 的 DB 路径保持一致
         boolean dbHasMore = !this.lambdaQuery()
                 .eq(MessageDO::getRoomId, roomId)
-                .eq(MessageDO::getStatus, 0)
+                .in(MessageDO::getStatus, VISIBLE_MSG_STATUS)
                 .lt(MessageDO::getId, windowMinScore)
                 .select(MessageDO::getId)
                 .last("LIMIT 1")
@@ -497,10 +709,6 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
 
     /**
      * 批量转换 MessageDO → ChatBroadcastMsgRespDTO
-     * 关键优化：回复消息批量查询，避免 N+1
-     *   一页 20 条消息，其中 10 条有 replyMsgId
-     *   不批量：10 次额外 DB 查询
-     *   批量：1 次 SELECT ... WHERE id IN (...) + Map 组装
      */
     private List<ChatBroadcastMsgRespDTO> convertToRespDTOList(List<MessageDO> messages) {
         if (messages == null || messages.isEmpty()) {
@@ -514,8 +722,6 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .collect(Collectors.toSet());
 
         // 2. 批量查询回复消息 → Map<id, MessageDO>
-        //    包含已删除消息（status=1），用于展示"原消息已被删除"
-        //    如果过滤掉 status=1，replyMsgMap.get() 返回 null，回复气泡会完全消失
         Map<Long, MessageDO> replyMsgMap;
         if (replyMsgIds.isEmpty()) {
             replyMsgMap = Map.of();
@@ -535,73 +741,86 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
 
     /**
      * 单条转换 MessageDO → ChatBroadcastMsgRespDTO
-     * 用于历史消息拉取场景（从 DB 的 body JSON 反序列化 files）
      */
     private ChatBroadcastMsgRespDTO convertSingleToRespDTO(
             MessageDO msg, Map<Long, MessageDO> replyMsgMap) {
 
-        // 发送者 ID
-        String senderId = getSenderId(msg);
+        // ===== 1. 状态判断 =====
+        int status = msg.getStatus() != null ? msg.getStatus() : MSG_STATUS_NORMAL;
+        boolean isDeleted = (status == MSG_STATUS_DELETED);
+        boolean isRecalled = (status == MSG_STATUS_RECALLED);
+        boolean showDeleted = isDeleted || isRecalled;
 
-        // 时间戳
-        long timestamp = 0L;
-        if (msg.getCreateTime() != null) {
-            timestamp = msg.getCreateTime()
-                    .atZone(ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli();
+        // ===== 2. content 处理 =====
+        String displayContent;
+        if (isDeleted) {
+            displayContent = "";                // 防御性处理，正常查询不会命中 status=1
+        } else if (isRecalled) {
+            displayContent = "此消息已撤回";      // 前端展示撤回占位文案
+        } else {
+            displayContent = msg.getContent();
         }
 
-        // 解析 files（从 DB 的 body JSON 反序列化）
-        List<FileDTO> files = parseFiles(msg.getBody());
+        // ===== 3. files 处理 =====
+        List<FileDTO> files = showDeleted ? null : parseFiles(msg.getBody());
 
-        // 构建回复消息
+        // ===== 4. reactions 处理 =====
+        // 撤回/删除的消息不展示 reactions
+        Map<String, List<String>> reactions = showDeleted
+                ? null
+                : parseReactions(msg.getReactions());
+
+        // ===== 5. 回复消息处理 =====
         ReplyMessageDTO replyMessageDTO = null;
         if (msg.getReplyMsgId() != null) {
             MessageDO replyMsg = replyMsgMap.get(msg.getReplyMsgId());
             replyMessageDTO = buildReplyMessageDTO(replyMsg);
         }
 
-        // 判断消息状态
-        boolean deleted = msg.getStatus() != null && msg.getStatus() == 1;
-        boolean system = msg.getMsgType() != null && msg.getMsgType() == 2;
-
+        // ===== 6. 构建 DTO =====
         return ChatBroadcastMsgRespDTO.builder()
                 ._id(msg.getMsgId())
                 .indexId(msg.getId())
-                .content(deleted ? "" : msg.getContent())
-                .senderId(senderId)
+                .content(displayContent)
+                .senderId(getSenderId(msg))
                 .username(msg.getNickname())
                 .avatar(msg.getAvatarColor())
-                .timestamp(timestamp)
+                .timestamp(extractTimestamp(msg))
                 .isHost(msg.getIsHost() != null && msg.getIsHost() == 1)
                 .msgType(msg.getMsgType())
-                .files(deleted ? null : files)
-                .replyMessage(replyMessageDTO)
-                .deleted(deleted)
-                .system(system)
+                .files(files)
+                .replyMessage(showDeleted ? null : replyMessageDTO)
+                .reactions(reactions)
+                .deleted(showDeleted)
+                .system(msg.getMsgType() != null && msg.getMsgType() == 2)
                 .build();
     }
 
     /**
      * 构建回复消息 DTO
-     * 对齐 vue-advanced-chat 的 replyMessage 对象格式
-     * @param replyMsg 被引用的消息实体（可为 null：消息不存在或被物理删除）
      */
     private ReplyMessageDTO buildReplyMessageDTO(MessageDO replyMsg) {
         if (replyMsg == null) {
             return null;
         }
-
-        // 被引用消息已删除/已撤回
-        if (replyMsg.getStatus() != null && replyMsg.getStatus() == 1) {
+        int status = replyMsg.getStatus() != null ? replyMsg.getStatus() : MSG_STATUS_NORMAL;
+        // 已删除
+        if (status == MSG_STATUS_DELETED) {
             return ReplyMessageDTO.builder()
                     .content("原消息已被删除")
                     .senderId(getSenderId(replyMsg))
                     .files(null)
                     .build();
         }
-
+        // 已撤回
+        if (status == MSG_STATUS_RECALLED) {
+            return ReplyMessageDTO.builder()
+                    .content("原消息已被撤回")
+                    .senderId(getSenderId(replyMsg))
+                    .files(null)
+                    .build();
+        }
+        // 正常
         return ReplyMessageDTO.builder()
                 .content(replyMsg.getContent())
                 .senderId(getSenderId(replyMsg))
@@ -624,9 +843,6 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
      * body 存的是 vue-advanced-chat 的 files 数组格式
      * 仅用于历史消息拉取场景（从 DB 反序列化）
      * 实时广播场景直接用内存中的 files，不走此方法
-     *
-     * @param bodyJson body 字段的 JSON 字符串
-     * @return FileDTO 列表，或 null（文本消息）
      */
     private List<FileDTO> parseFiles(String bodyJson) {
         if (bodyJson == null || bodyJson.isBlank()) {
@@ -639,7 +855,6 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             return null;
         }
     }
-
 
     private void validateRoomExists(String roomId) {
       RoomDO roomDO = roomService.getRoomByRoomId(roomId);
@@ -663,5 +878,34 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         }
     }
 
+    /**
+     * 解析 reactions JSON → Map
+     */
+    private Map<String, List<String>> parseReactions(String reactionsJson) {
+        if (reactionsJson == null || reactionsJson.isBlank() || "{}".equals(reactionsJson)) {
+            return null;
+        }
+        try {
+            Map<String, List<String>> map = JSON.parseObject(reactionsJson,
+                    new com.alibaba.fastjson2.TypeReference<Map<String, List<String>>>() {});
+            // 空 Map 返回 null（前端不需要渲染空 reactions 对象）
+            return (map == null || map.isEmpty()) ? null : map;
+        } catch (Exception e) {
+            log.warn("[解析 reactions] JSON 解析失败: {}", reactionsJson, e);
+            return null;
+        }
+    }
 
+    /**
+     * 从 MessageDO 提取毫秒时间戳
+     */
+    private long extractTimestamp(MessageDO msg) {
+        if (msg.getCreateTime() == null) {
+            return 0L;
+        }
+        return msg.getCreateTime()
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+    }
 }

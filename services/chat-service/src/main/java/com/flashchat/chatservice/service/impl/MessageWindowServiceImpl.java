@@ -6,9 +6,11 @@ import com.flashchat.chatservice.dto.resp.WindowQueryResult;
 import com.flashchat.chatservice.service.MessageWindowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -43,6 +45,28 @@ public class MessageWindowServiceImpl implements MessageWindowService {
      */
     private final ConcurrentHashMap<String, Long> degradedRooms = new ConcurrentHashMap<>();
     private static final long DEGRADE_RECOVER_MS = 5 * 60 * 1000L;
+
+    /**
+     * Lua 脚本：按 score 替换窗口中的 member
+     * 从 classpath:lua/window_update_by_score.lua 加载
+     */
+    private static final DefaultRedisScript<Long> UPDATE_SCRIPT;
+
+    /**
+     * Lua 脚本：按 score 移除窗口中的 member
+     * 从 classpath:lua/window_remove_by_score.lua 加载
+     */
+    private static final DefaultRedisScript<Long> REMOVE_SCRIPT;
+
+    static {
+        UPDATE_SCRIPT = new DefaultRedisScript<>();
+        UPDATE_SCRIPT.setLocation(new ClassPathResource("lua/window_update_by_score.lua"));
+        UPDATE_SCRIPT.setResultType(Long.class);
+
+        REMOVE_SCRIPT = new DefaultRedisScript<>();
+        REMOVE_SCRIPT.setLocation(new ClassPathResource("lua/window_remove_by_score.lua"));
+        REMOVE_SCRIPT.setResultType(Long.class);
+    }
 
     private String buildKey(String roomId) {
         return WINDOW_KEY_PREFIX + roomId;
@@ -242,6 +266,43 @@ public class MessageWindowServiceImpl implements MessageWindowService {
             log.info("[窗口删除] room={}", roomId);
         } catch (Exception e) {
             log.warn("[窗口删除失败] room={}, TTL 24h 兜底清理", roomId, e);
+        }
+    }
+
+    @Override
+    public void updateMemberByScore(String roomId, Long score, String newJson) {
+        if (roomId == null || score == null || newJson == null) {
+            return;
+        }
+        String windowKey = buildKey(roomId);
+        try {
+            stringRedisTemplate.execute(
+                    UPDATE_SCRIPT,
+                    List.of(windowKey),
+                    score.toString(),
+                    newJson
+            );
+            log.debug("[窗口更新] room={}, score={}", roomId, score);
+        } catch (Exception e) {
+            log.error("[窗口更新失败] room={}, score={}", roomId, score, e);
+        }
+    }
+
+    @Override
+    public void removeMemberByScore(String roomId, Long score) {
+        if (roomId == null || score == null) {
+            return;
+        }
+        String windowKey = buildKey(roomId);
+        try {
+            stringRedisTemplate.execute(
+                    REMOVE_SCRIPT,
+                    List.of(windowKey),
+                    score.toString()
+            );
+            log.debug("[窗口移除] room={}, score={}", roomId, score);
+        } catch (Exception e) {
+            log.error("[窗口移除失败] room={}, score={}", roomId, score, e);
         }
     }
 

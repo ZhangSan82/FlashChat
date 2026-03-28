@@ -83,6 +83,11 @@ public class MessageDO {
     private Integer isHost;
 
     /**
+     * emoji reactions JSON
+     */
+    private String reactions;
+
+    /**
      * 发送时间
      */
     @TableField(fill = FieldFill.INSERT)

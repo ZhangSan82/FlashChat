@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 聊天消息广播/历史消息 DTO
@@ -51,8 +52,6 @@ public class ChatBroadcastMsgRespDTO {
     /** 是否房主 */
     private Boolean isHost;
 
-    // ==================== ★ 新增字段 ====================
-
     /** 消息类型编号（1文本 4图片 5语音 6视频 7文件） */
     private Integer msgType;
 
@@ -70,6 +69,11 @@ public class ChatBroadcastMsgRespDTO {
      * null = 非回复消息
      */
     private ReplyMessageDTO replyMessage;
+
+    /**
+     * emoji reactions
+     */
+    private Map<String, List<String>> reactions;
 
     /**
      * 是否已删除

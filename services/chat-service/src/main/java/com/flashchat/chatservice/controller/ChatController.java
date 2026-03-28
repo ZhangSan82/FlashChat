@@ -1,9 +1,7 @@
 package com.flashchat.chatservice.controller;
 
 
-import com.flashchat.chatservice.dto.req.CursorPageBaseReq;
-import com.flashchat.chatservice.dto.req.MsgAckReqDTO;
-import com.flashchat.chatservice.dto.req.SendMsgReqDTO;
+import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.ChatBroadcastMsgRespDTO;
 import com.flashchat.chatservice.dto.resp.CursorPageBaseResp;
 import com.flashchat.chatservice.service.ChatService;
@@ -101,5 +99,38 @@ public class ChatController {
     public Result<Map<String, Integer>> getUnreadCounts() {
         log.info("[查未读]");
         return Results.success(chatService.getUnreadCounts());
+    }
+
+    /**
+     * 撤回消息
+     * 前端调用时机：用户长按自己发的消息 → 点击"撤回"
+     */
+    @PostMapping("/recall")
+    public Result<Void> recallMsg(@Valid @RequestBody MsgRecallReqDTO request) {
+        log.info("[撤回消息] roomId={}, msgId={}", request.getRoomId(), request.getMsgId());
+        chatService.recallMsg(request);
+        return Results.success();
+    }
+
+    /**
+     * 删除消息
+     * 前端调用时机：房主长按任意消息 → 点击"删除"
+     */
+    @PostMapping("/delete")
+    public Result<Void> deleteMsg(@Valid @RequestBody MsgDeleteReqDTO request) {
+        log.info("[删除消息] roomId={}, msgId={}", request.getRoomId(), request.getMsgId());
+        chatService.deleteMsg(request);
+        return Results.success();
+    }
+
+    /**
+     * 消息表情回应
+     */
+    @PostMapping("/reaction")
+    public Result<Void> toggleReaction(@Valid @RequestBody MsgReactionReqDTO request) {
+        log.info("[表情回应] roomId={}, msgId={}, emoji={}",
+                request.getRoomId(), request.getMsgId(), request.getEmoji());
+        chatService.toggleReaction(request);
+        return Results.success();
     }
 }

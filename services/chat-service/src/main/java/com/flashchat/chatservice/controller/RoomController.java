@@ -1,8 +1,5 @@
 package com.flashchat.chatservice.controller;
 
-
-
-import com.flashchat.chatservice.dao.enums.RoomDurationEnum;
 import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
@@ -14,8 +11,6 @@ import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -142,5 +137,25 @@ public class RoomController {
     @GetMapping("/pricing")
     public Result<List<RoomPricingRespDTO>> getRoomPricing() {
         return Results.success(roomService.getRoomPricing());
+    }
+
+    /**
+     * 房间时长延期
+     */
+    @PostMapping("/extend")
+    public Result<RoomInfoRespDTO> extendRoom(@Valid @RequestBody RoomExtendReqDTO request) {
+        log.info("[房间延期] roomId={}, duration={}", request.getRoomId(), request.getDuration());
+        return Results.success(roomService.extendRoom(request));
+    }
+
+    /**
+     * 房间人数扩容
+     */
+    @PostMapping("/resize")
+    public Result<Void> resizeRoom(@Valid @RequestBody RoomResizeReqDTO request) {
+        log.info("[房间扩容] roomId={}, newMaxMembers={}",
+                request.getRoomId(), request.getNewMaxMembers());
+        roomService.resizeRoom(request);
+        return Results.success();
     }
 }
