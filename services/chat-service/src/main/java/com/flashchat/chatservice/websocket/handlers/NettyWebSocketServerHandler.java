@@ -4,19 +4,21 @@ package com.flashchat.chatservice.websocket.handlers;
 import cn.dev33.satoken.stp.StpUtil;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.flashchat.chatservice.dao.entity.AccountDO;
-import com.flashchat.chatservice.dao.enums.AccountStatusEnum;
+
 import com.flashchat.chatservice.dto.enums.WsReqDTOTypeEnum;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.resp.IdentityInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
-import com.flashchat.chatservice.service.AccountService;
+
 import com.flashchat.chatservice.service.RoomService;
 import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.user.toolkit.LoginIdUtil;
+import com.flashchat.userservice.dao.entity.AccountDO;
+import com.flashchat.userservice.dao.enums.AccountStatusEnum;
+import com.flashchat.userservice.service.AccountService;
 import io.netty.channel.*;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;

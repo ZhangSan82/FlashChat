@@ -33,6 +33,10 @@
             <groupId>com.flashchat</groupId>
             <artifactId>FlashChat-framework-cache</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.flashchat</groupId>
+            <artifactId>FlashChat-service-user</artifactId>
+        </dependency>
 
 
         <!-- BCrypt 密码加密 -->

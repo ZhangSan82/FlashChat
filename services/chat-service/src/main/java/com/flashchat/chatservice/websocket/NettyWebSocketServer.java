@@ -1,11 +1,12 @@
 package com.flashchat.chatservice.websocket;
 
 
-import com.flashchat.chatservice.service.AccountService;
+
 import com.flashchat.chatservice.service.RoomService;
 import com.flashchat.chatservice.websocket.handlers.HttpHeadersHandler;
 import com.flashchat.chatservice.websocket.handlers.NettyWebSocketServerHandler;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
+import com.flashchat.userservice.service.AccountService;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;

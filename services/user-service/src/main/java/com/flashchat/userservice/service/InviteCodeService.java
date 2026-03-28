@@ -1,8 +1,9 @@
 package com.flashchat.userservice.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.flashchat.chatservice.dao.entity.InviteCodeDO;
-import com.flashchat.chatservice.dto.resp.InviteCodeRespDTO;
+import com.flashchat.userservice.dao.entity.InviteCodeDO;
+import com.flashchat.userservice.dto.resp.InviteCodeRespDTO;
+
 
 import java.util.List;
 

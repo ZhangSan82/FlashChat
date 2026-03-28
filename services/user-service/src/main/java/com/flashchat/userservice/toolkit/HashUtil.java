@@ -1,4 +1,4 @@
-package com.flashchat.userservice.dto.resp;
+package com.flashchat.userservice.toolkit;
 
 import cn.hutool.core.lang.hash.MurmurHash;
 

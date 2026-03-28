@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>FlashChat-aggregation-service</artifactId>
-    <description>聚合服务 - 唯一部署入口，打成 fat jar</description>
+    <description>聚合服务</description>
 
     <dependencies>
         <dependency>
@@ -23,6 +23,10 @@
         <dependency>
             <groupId>com.flashchat</groupId>
             <artifactId>FlashChat-service-chat</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.flashchat</groupId>
+            <artifactId>FlashChat-service-user</artifactId>
         </dependency>
 
         <dependency>

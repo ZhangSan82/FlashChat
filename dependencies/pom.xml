@@ -67,6 +67,11 @@
                 <artifactId>FlashChat-service-chat</artifactId>
                 <version>${flashchat.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.flashchat</groupId>
+                <artifactId>FlashChat-service-user</artifactId>
+                <version>${flashchat.version}</version>
+            </dependency>
 
             <dependency>
                 <groupId>com.flashchat</groupId>

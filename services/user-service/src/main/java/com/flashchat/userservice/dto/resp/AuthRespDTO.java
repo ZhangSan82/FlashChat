@@ -1,6 +1,7 @@
 package com.flashchat.userservice.dto.resp;
 
-import com.flashchat.chatservice.dao.entity.AccountDO;
+
+import com.flashchat.userservice.dao.entity.AccountDO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

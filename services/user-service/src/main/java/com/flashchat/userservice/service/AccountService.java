@@ -2,6 +2,13 @@ package com.flashchat.userservice.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.flashchat.userservice.dao.entity.AccountDO;
+import com.flashchat.userservice.dto.req.ChangePasswordReqDTO;
+import com.flashchat.userservice.dto.req.SetPasswordReqDTO;
+import com.flashchat.userservice.dto.req.UpdateProfileReqDTO;
+import com.flashchat.userservice.dto.req.UpgradeAccountReqDTO;
+import com.flashchat.userservice.dto.resp.AccountInfoRespDTO;
+import com.flashchat.userservice.dto.resp.AuthRespDTO;
+import com.flashchat.userservice.dto.resp.MyAccountRespDTO;
 
 
 public interface AccountService extends IService<AccountDO> {

@@ -2,7 +2,6 @@ package com.flashchat.userservice.service.impl;
 
 import cn.dev33.satoken.session.SaSession;
 import cn.dev33.satoken.stp.StpUtil;
-import cn.hutool.core.util.HashUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.cache.toolkit.CacheUtil;
@@ -11,6 +10,8 @@ import com.flashchat.convention.exception.ServiceException;
 import com.flashchat.user.constant.UserTypeConstant;
 import com.flashchat.user.core.LoginUserInfoDTO;
 import com.flashchat.user.core.UserContext;
+import com.flashchat.user.event.AccountDeletedEvent;
+import com.flashchat.user.event.MemberInfoChangedEvent;
 import com.flashchat.user.toolkit.LoginIdUtil;
 import com.flashchat.userservice.dao.entity.AccountDO;
 import com.flashchat.userservice.dao.enums.AccountStatusEnum;
@@ -21,21 +22,21 @@ import com.flashchat.userservice.dto.req.UpdateProfileReqDTO;
 import com.flashchat.userservice.dto.req.UpgradeAccountReqDTO;
 import com.flashchat.userservice.dto.resp.AccountInfoRespDTO;
 import com.flashchat.userservice.dto.resp.AuthRespDTO;
+import com.flashchat.userservice.toolkit.HashUtil;
 import com.flashchat.userservice.dto.resp.MyAccountRespDTO;
 import com.flashchat.userservice.service.AccountService;
 import com.flashchat.userservice.service.InviteCodeService;
-import io.netty.channel.Channel;
 import jakarta.annotation.Resource;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -52,8 +53,9 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
     private final TransactionTemplate transactionTemplate;
 
     private final MultistageCacheProxy multistageCacheProxy;
-    private final RoomChannelManager roomChannelManager;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
+
+    private final ApplicationEventPublisher applicationEventPublisher;
     @Lazy
     @Resource
     private InviteCodeService inviteCodeService;
@@ -268,7 +270,10 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
 
         // ===== 8. 更新 WS 内存（昵称/头像色变更时需要） =====
         if (newNickname != null || newAvatarColor != null) {
-            roomChannelManager.updateMemberInfo(loginId, newNickname, newAvatarColor);
+            //roomChannelManager.updateMemberInfo(loginId, newNickname, newAvatarColor);
+            applicationEventPublisher.publishEvent(
+                    new MemberInfoChangedEvent(this, loginId, newNickname, newAvatarColor)
+            );
         }
 
         log.info("[修改资料] accountId={}, nickname={}, avatarColor={}, avatarUrl={}",
@@ -425,7 +430,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         // 2. 失效缓存
         evictAccountCache(account);
 
-        Channel channel = roomChannelManager.getChannel(loginId);
+      /*  Channel channel = roomChannelManager.getChannel(loginId);
         if (channel != null && channel.isActive()) {
             channel.close();
         }
@@ -434,7 +439,10 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         Set<String> rooms = roomChannelManager.getUserRooms(loginId);
         for (String roomId : rooms) {
             roomChannelManager.leaveRoom(roomId, loginId);
-        }
+        }*/
+
+        // 3.【改造】发布事件，由 chat-service 监听后关闭 WS 连接 + 清理房间
+        applicationEventPublisher.publishEvent(new AccountDeletedEvent(this, loginId));
         // 4. 登出 SaToken
         StpUtil.logout();
         log.info("[注销账号] accountId={}", account.getAccountId());
