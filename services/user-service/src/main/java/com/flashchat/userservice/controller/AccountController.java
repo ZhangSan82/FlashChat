@@ -9,11 +9,9 @@ import com.flashchat.user.constant.UserTypeConstant;
 import com.flashchat.user.core.UserContext;
 import com.flashchat.userservice.dao.entity.AccountDO;
 import com.flashchat.userservice.dto.req.*;
-import com.flashchat.userservice.dto.resp.AccountInfoRespDTO;
-import com.flashchat.userservice.dto.resp.AuthRespDTO;
-import com.flashchat.userservice.dto.resp.InviteCodeRespDTO;
-import com.flashchat.userservice.dto.resp.MyAccountRespDTO;
+import com.flashchat.userservice.dto.resp.*;
 import com.flashchat.userservice.service.AccountService;
+import com.flashchat.userservice.service.CreditService;
 import com.flashchat.userservice.service.InviteCodeService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
@@ -33,6 +31,7 @@ public class AccountController {
     private final AccountService accountService;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
     private final InviteCodeService inviteCodeService;
+    private final CreditService  creditService;
 
     /** 匿名用户自动注册 */
     @PostMapping("/auto-register")
@@ -49,11 +48,7 @@ public class AccountController {
     @PostMapping("/login")
     public Result<AuthRespDTO> login(@Valid @RequestBody MemberLoginReqDTO request) {
         log.info("[登录] accountId={}", request.getAccountId());
-
-        // 1. 查账号
         AccountDO account = accountService.getByAccountId(request.getAccountId());
-
-        // 2. 密码校验
         if (!account.hasPassword()) {
             throw new ClientException("该账号未设置密码，token 丢失请重新注册");
         }
@@ -63,8 +58,6 @@ public class AccountController {
         if (!bCryptPasswordEncoder.matches(request.getPassword(), account.getPassword())) {
             throw new ClientException("密码错误");
         }
-
-        // 3. 登录
         int userType = account.registered()
                 ? UserTypeConstant.USER
                 : UserTypeConstant.MEMBER;
@@ -174,5 +167,30 @@ public class AccountController {
         log.info("[注销账号] loginId={}", UserContext.getRequiredLoginId());
         accountService.deleteAccount();
         return Results.success();
+    }
+
+    /**
+     * 查询积分余额
+     */
+    @GetMapping("/credits/balance")
+    public Result<Integer> getCreditBalance() {
+        Long loginId = UserContext.getRequiredLoginId();
+        return Results.success(creditService.getBalance(loginId));
+    }
+
+    /**
+     * 查询积分流水（按时间倒序）
+     */
+    @GetMapping("/credits/transactions")
+    public Result<List<CreditTransactionRespDTO>> getCreditTransactions(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer size) {
+        Long loginId = UserContext.getRequiredLoginId();
+        // 参数边界保护
+        if (page < 1) page = 1;
+        if (size < 1) size = 1;
+        if (size > 50) size = 50;
+        log.info("[积分流水] loginId={}, page={}, size={}", loginId, page, size);
+        return Results.success(creditService.getTransactions(loginId, page, size));
     }
 }

@@ -1,6 +1,9 @@
 package com.flashchat.userservice.service;
 
 import com.flashchat.userservice.dao.enums.CreditTypeEnum;
+import com.flashchat.userservice.dto.resp.CreditTransactionRespDTO;
+
+import java.util.List;
 
 /**
  * 积分服务
@@ -34,4 +37,6 @@ public interface CreditService {
      * 查询积分余额
      */
     int getBalance(Long accountId);
+
+    List<CreditTransactionRespDTO> getTransactions(Long loginId, Integer page, Integer size);
 }

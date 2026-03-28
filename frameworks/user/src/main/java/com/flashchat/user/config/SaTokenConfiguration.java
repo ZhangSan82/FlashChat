@@ -43,6 +43,7 @@ public class SaTokenConfiguration implements WebMvcConfigurer {
                             // 公开房间列表（支持 /public 和 /public/xxx）
                             "/api/FlashChat/v1/room/public",
                             "/api/FlashChat/v1/room/public/**",
+                            "/api/FlashChat/v1/room/pricing",
 
                             // Spring 错误页
                             "/error"

@@ -2,9 +2,11 @@ package com.flashchat.chatservice.controller;
 
 
 
+import com.flashchat.chatservice.dao.enums.RoomDurationEnum;
 import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
+import com.flashchat.chatservice.dto.resp.RoomPricingRespDTO;
 import com.flashchat.chatservice.service.RoomService;
 import com.flashchat.convention.result.Result;
 import com.flashchat.convention.result.Results;
@@ -13,6 +15,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -112,5 +115,32 @@ public class RoomController {
         log.info("[关闭房间] roomId={}", request.getRoomId());
         roomService.closeRoom(request);
         return Results.success();
+    }
+
+    /**
+     * 公开房间列表
+     */
+    @GetMapping("/public")
+    public Result<List<RoomInfoRespDTO>> listPublicRooms(@Valid PublicRoomListReqDTO request) {
+        log.info("[公开房间列表] page={}, size={}, sort={}",
+                request.getPage(), request.getSize(), request.getSort());
+        return Results.success(roomService.listPublicRooms(request));
+    }
+
+    /**
+     * 获取房间分享链接
+     */
+    @GetMapping("/{roomId}/share")
+    public Result<String> getShareUrl(@PathVariable("roomId") String roomId) {
+        log.info("[获取分享链接] roomId={}", roomId);
+        return Results.success(roomService.getShareUrl(roomId));
+    }
+
+    /**
+     * 查询房间时长定价列表
+     */
+    @GetMapping("/pricing")
+    public Result<List<RoomPricingRespDTO>> getRoomPricing() {
+        return Results.success(roomService.getRoomPricing());
     }
 }

@@ -1,11 +1,14 @@
 package com.flashchat.userservice.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.userservice.dao.entity.AccountDO;
 import com.flashchat.userservice.dao.entity.CreditTransactionDO;
 import com.flashchat.userservice.dao.enums.CreditTypeEnum;
 import com.flashchat.userservice.dao.mapper.AccountMapper;
 import com.flashchat.userservice.dao.mapper.CreditTransactionMapper;
+import com.flashchat.userservice.dto.resp.CreditTransactionRespDTO;
 import com.flashchat.userservice.service.AccountService;
 import com.flashchat.userservice.service.CreditService;
 import jakarta.annotation.Resource;
@@ -14,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import java.util.List;
 
 /**
  * 积分服务实现
@@ -121,6 +125,26 @@ public class CreditServiceImpl implements CreditService {
         return account != null && account.getCredits() != null
                 ? account.getCredits() : 0;
     }
+    @Override
+    public List<CreditTransactionRespDTO> getTransactions(Long accountId, Integer page, Integer size) {
+        if (accountId == null) {
+            return List.of();
+        }
+        // 分页查询
+        Page<CreditTransactionDO> pageParam = new Page<>(page, size, false);
+        LambdaQueryWrapper<CreditTransactionDO> wrapper = new LambdaQueryWrapper<CreditTransactionDO>()
+                .eq(CreditTransactionDO::getAccountId, accountId)
+                .orderByDesc(CreditTransactionDO::getCreateTime);
+
+        Page<CreditTransactionDO> result = creditTransactionMapper.selectPage(pageParam, wrapper);
+        List<CreditTransactionDO> records = result.getRecords();
+        if (records == null || records.isEmpty()) {
+            return List.of();
+        }
+        return records.stream()
+                .map(this::convertToRespDTO)
+                .toList();
+    }
 
     // ==================== 私有方法 ====================
 
@@ -138,5 +162,30 @@ public class CreditServiceImpl implements CreditService {
         if (bizId == null || bizId.isBlank()) {
             throw new IllegalArgumentException("bizId 不能为空");
         }
+    }
+
+    /**
+     * DO → DTO 转换
+     * <p>
+     * typeDesc 从枚举取中文描述，找不到就用原始 type 值兜底。
+     */
+    private CreditTransactionRespDTO convertToRespDTO(CreditTransactionDO record) {
+        String typeDesc = record.getType();
+        try {
+            CreditTypeEnum typeEnum = CreditTypeEnum.valueOf(record.getType());
+            typeDesc = typeEnum.getDesc();
+        } catch (IllegalArgumentException ignored) {
+            // 枚举名不匹配（可能是历史遗留数据），用原始值兜底
+        }
+
+        return CreditTransactionRespDTO.builder()
+                .id(record.getId())
+                .amount(record.getAmount())
+                .typeDesc(typeDesc)
+                .type(record.getType())
+                .bizId(record.getBizId())
+                .remark(record.getRemark())
+                .createTime(record.getCreateTime())
+                .build();
     }
 }

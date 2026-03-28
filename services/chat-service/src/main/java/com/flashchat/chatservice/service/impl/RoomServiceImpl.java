@@ -1,5 +1,6 @@
 package com.flashchat.chatservice.service.impl;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.cache.toolkit.CacheUtil;
@@ -13,6 +14,7 @@ import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
+import com.flashchat.chatservice.dto.resp.RoomPricingRespDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
 import com.flashchat.chatservice.service.*;
 import com.flashchat.chatservice.toolkit.HashUtil;
@@ -26,9 +28,12 @@ import com.flashchat.userservice.dao.enums.CreditTypeEnum;
 import com.flashchat.userservice.service.AccountService;
 import com.flashchat.userservice.service.CreditService;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,7 +45,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements RoomService {
 
     private final RoomChannelManager roomChannelManager;
@@ -58,6 +63,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private static final long CACHE_TIMEOUT = 60000L;
     /**单用户最多同时加入的房间数 */
     private static final int MAX_ROOMS_PER_USER = 50;
+
+    @Value("${flashchat.share.base-url:http://localhost:3002}")
+    private String shareBaseUrl;
 
     /**创建房间*/
     @Override
@@ -654,6 +662,64 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     }
 
     /**
+     * 查询公开房间列表
+     * // TODO 缓存：如果公开房间数量增长，考虑 Redis 缓存 + 30s TTL
+     */
+    @Override
+    public List<RoomInfoRespDTO> listPublicRooms(PublicRoomListReqDTO request) {
+        var wrapper = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<RoomDO>()
+                .eq(RoomDO::getIsPublic, 1)
+                .in(RoomDO::getStatus,
+                        RoomStatusEnum.WAITING.getCode(),
+                        RoomStatusEnum.ACTIVE.getCode(),
+                        RoomStatusEnum.EXPIRING.getCode());
+
+        switch (request.getSort() != null ? request.getSort() : "hot") {
+            case "newest" -> wrapper.orderByDesc(RoomDO::getCreateTime);
+            case "expiring" -> wrapper.orderByAsc(RoomDO::getExpireTime);
+            default -> wrapper.orderByDesc(RoomDO::getCurrentMembers)
+                    .orderByDesc(RoomDO::getCreateTime);
+        }
+
+        int page = request.getPage() != null ? request.getPage() : 1;
+        int size = request.getSize() != null ? request.getSize() : 20;
+        Page<RoomDO> pageParam = new Page<>(page, size, false);
+        Page<RoomDO> result = this.page(pageParam, wrapper);
+        List<RoomDO> rooms = result.getRecords();
+        if (rooms == null || rooms.isEmpty()) {
+            return List.of();
+        }
+        return rooms.stream()
+                .map(this::buildRoomInfoResp)
+                .toList();
+    }
+
+    @Override
+    public String getShareUrl(String roomId) {
+        RoomDO room = getRoomByRoomId(roomId);
+        if (room == null) {
+            throw new ClientException("房间不存在");
+        }
+        // 拼接分享链接：前端路由格式
+        // 前端收到此 URL 后解析 roomId，调用 joinRoom 接口
+        return shareBaseUrl + "/room/" + roomId;
+    }
+
+    @Override
+    public List<RoomPricingRespDTO> getRoomPricing() {
+        List<RoomPricingRespDTO> pricing = new ArrayList<>();
+        for (RoomDurationEnum duration : RoomDurationEnum.values()) {
+            pricing.add(RoomPricingRespDTO.builder()
+                    .name(duration.name())
+                    .minutes(duration.getMinutes())
+                    .desc(duration.getDesc())
+                    .cost(duration.getCost())
+                    .build());
+        }
+        return pricing;
+    }
+
+    /**
      * 构建房间信息响应
      */
     private RoomInfoRespDTO buildRoomInfoResp(RoomDO room) {
@@ -669,6 +735,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .statusDesc(status != null ? status.getDesc() : "未知")
                 .maxMembers(room.getMaxMembers())
                 .isPublic(room.getIsPublic())
+                .shareUrl(shareBaseUrl + "/room/" + room.getRoomId())
                 .memberCount(memberCount)
                 .onlineCount(onlineCount)
                 .expireTime(room.getExpireTime())

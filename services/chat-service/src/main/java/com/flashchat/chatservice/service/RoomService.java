@@ -6,6 +6,7 @@ import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
+import com.flashchat.chatservice.dto.resp.RoomPricingRespDTO;
 import com.flashchat.convention.result.Result;
 import jakarta.validation.Valid;
 
@@ -81,4 +82,17 @@ public interface RoomService extends IService<RoomDO> {
      * 供内存清理任务使用
      */
     Set<String> listClosedRoomIds();
+
+    /**
+     * 查询公开房间列表
+     */
+    List<RoomInfoRespDTO> listPublicRooms(PublicRoomListReqDTO request);
+
+    /**
+     * 获取房间分享链接
+     * 前端用此 URL 生成二维码
+     */
+    String getShareUrl(String roomId);
+
+    List<RoomPricingRespDTO> getRoomPricing();
 }

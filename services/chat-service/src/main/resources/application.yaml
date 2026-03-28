@@ -66,6 +66,10 @@ flashchat:
       account:
         max-size: 10000
         ttl-seconds: 45
+  share:
+    # 前端域名，用于拼接房间分享链接
+    # 生产环境改为实际域名：https://flashchat.com
+    base-url: http://localhost:3002
 
 
   file:
