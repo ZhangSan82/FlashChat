@@ -8,6 +8,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.flashchat.chatservice.dto.enums.WsReqDTOTypeEnum;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.resp.IdentityInfoRespDTO;
+import com.flashchat.chatservice.dto.resp.TypingStatusDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
 
 import com.flashchat.chatservice.service.RoomService;
@@ -333,8 +334,40 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
                     roomManager.sendToChannel(ctx.channel(),
                             WsRespDTO.ofGlobal(WsRespDTOTypeEnum.SYSTEM_MSG,
                                     "发消息请使用 HTTP 接口 POST /api/FlashChat/v1/chat/msg"));
+            case TYPING -> handleTyping(ctx.channel(), jsonObj);
         }
     }
-
-
+    /**
+     * 处理打字状态消息
+     */
+    private void handleTyping(Channel channel, JSONObject jsonObj) {
+        Long userId = ChannelAttrUtil.getUserId(channel);
+        if (userId == null) {
+            return;
+        }
+        JSONObject data = jsonObj.getJSONObject("data");
+        if (data == null) {
+            return;
+        }
+        String roomId = data.getString("roomId");
+        Boolean typing = data.getBoolean("typing");
+        if (roomId == null || roomId.isBlank() || typing == null) {
+            return;
+        }
+        // 校验用户在该房间中
+        if (!roomManager.isInRoom(roomId, userId)) {
+            return;
+        }
+        // 构建广播数据，补充服务端才有的身份信息
+        TypingStatusDTO broadcastData = TypingStatusDTO.builder()
+                .roomId(roomId)
+                .userId(userId)
+                .nickname(ChannelAttrUtil.getNickname(channel))
+                .typing(typing)
+                .build();
+        // 广播给房间其他人（排除自己）
+        roomManager.broadcastToRoomExclude(roomId,
+                WsRespDTO.of(roomId, WsRespDTOTypeEnum.TYPING_STATUS, broadcastData),
+                userId);
+    }
 }

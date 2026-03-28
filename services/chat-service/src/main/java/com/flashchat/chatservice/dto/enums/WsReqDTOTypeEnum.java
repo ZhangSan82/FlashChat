@@ -15,7 +15,7 @@ public enum WsReqDTOTypeEnum {
 
     HEARTBEAT(1, "心跳"),
     SEND_MSG(2, "发送消息"),
-
+    TYPING(3, "打字状态"),
     ;
 
     private final Integer type;
