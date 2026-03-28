@@ -1,4 +1,4 @@
-package com.flashchat.chatservice.dto.req;
+package com.flashchat.userservice.dto.resp;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

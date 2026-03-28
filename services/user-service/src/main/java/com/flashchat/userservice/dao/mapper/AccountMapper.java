@@ -1,7 +1,7 @@
-package com.flashchat.chatservice.dao.mapper;
+package com.flashchat.userservice.dao.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.flashchat.chatservice.dao.entity.AccountDO;
+import com.flashchat.userservice.dao.entity.AccountDO;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper

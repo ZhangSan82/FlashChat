@@ -1,4 +1,4 @@
-package com.flashchat.chatservice.config;
+package com.flashchat.userservice.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

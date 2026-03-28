@@ -1,10 +1,8 @@
-package com.flashchat.chatservice.service;
+package com.flashchat.userservice.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.flashchat.chatservice.dao.entity.AccountDO;
-import com.flashchat.chatservice.dto.req.*;
-import com.flashchat.chatservice.dto.resp.AccountInfoRespDTO;
-import com.flashchat.chatservice.dto.resp.AuthRespDTO;
+import com.flashchat.userservice.dao.entity.AccountDO;
+
 
 public interface AccountService extends IService<AccountDO> {
 

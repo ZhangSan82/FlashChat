@@ -1,4 +1,4 @@
-package com.flashchat.chatservice.dto.req;
+package com.flashchat.userservice.dto.req;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

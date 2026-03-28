@@ -1,13 +1,14 @@
-package com.flashchat.chatservice.service.impl;
+package com.flashchat.userservice.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.flashchat.chatservice.dao.entity.AccountDO;
-import com.flashchat.chatservice.dao.entity.InviteCodeDO;
-import com.flashchat.chatservice.dao.mapper.InviteCodeMapper;
-import com.flashchat.chatservice.dto.resp.InviteCodeRespDTO;
-import com.flashchat.chatservice.service.AccountService;
-import com.flashchat.chatservice.service.InviteCodeService;
+
 import com.flashchat.convention.exception.ClientException;
+import com.flashchat.userservice.dao.entity.AccountDO;
+import com.flashchat.userservice.dao.entity.InviteCodeDO;
+import com.flashchat.userservice.dao.mapper.InviteCodeMapper;
+import com.flashchat.userservice.dto.resp.InviteCodeRespDTO;
+import com.flashchat.userservice.service.AccountService;
+import com.flashchat.userservice.service.InviteCodeService;
 import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +33,7 @@ public class InviteCodeServiceImpl extends ServiceImpl<InviteCodeMapper, InviteC
      */
     @Lazy
     @Resource
-    private  AccountService accountService;
+    private AccountService accountService;
 
     /** 邀请码字符集：大写字母 + 数字，去掉易混淆的 0/O/1/I/L */
     private static final String CODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";

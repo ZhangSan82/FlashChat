@@ -1,4 +1,4 @@
-package com.flashchat.chatservice.dao.enums;
+package com.flashchat.userservice.dao.enums;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

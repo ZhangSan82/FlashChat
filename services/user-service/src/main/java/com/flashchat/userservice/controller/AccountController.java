@@ -1,18 +1,20 @@
-package com.flashchat.chatservice.controller;
+package com.flashchat.userservice.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.flashchat.chatservice.dao.entity.AccountDO;
-import com.flashchat.chatservice.dto.req.*;
-import com.flashchat.chatservice.dto.resp.AccountInfoRespDTO;
-import com.flashchat.chatservice.dto.resp.AuthRespDTO;
-import com.flashchat.chatservice.dto.resp.InviteCodeRespDTO;
-import com.flashchat.chatservice.service.AccountService;
-import com.flashchat.chatservice.service.InviteCodeService;
+
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.result.Result;
 import com.flashchat.convention.result.Results;
 import com.flashchat.user.constant.UserTypeConstant;
 import com.flashchat.user.core.UserContext;
+import com.flashchat.userservice.dao.entity.AccountDO;
+import com.flashchat.userservice.dto.req.*;
+import com.flashchat.userservice.dto.resp.AccountInfoRespDTO;
+import com.flashchat.userservice.dto.resp.AuthRespDTO;
+import com.flashchat.userservice.dto.resp.InviteCodeRespDTO;
+import com.flashchat.userservice.dto.resp.MyAccountRespDTO;
+import com.flashchat.userservice.service.AccountService;
+import com.flashchat.userservice.service.InviteCodeService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

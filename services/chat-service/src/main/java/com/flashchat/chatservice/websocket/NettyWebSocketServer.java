@@ -21,7 +21,6 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateHandler;
-import io.netty.util.NettyRuntime;
 import io.netty.util.concurrent.Future;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;

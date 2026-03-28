@@ -1,26 +1,29 @@
-package com.flashchat.chatservice.service.impl;
+package com.flashchat.userservice.service.impl;
 
 import cn.dev33.satoken.session.SaSession;
 import cn.dev33.satoken.stp.StpUtil;
+import cn.hutool.core.util.HashUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.cache.toolkit.CacheUtil;
-import com.flashchat.chatservice.dao.entity.AccountDO;
-import com.flashchat.chatservice.dao.enums.AccountStatusEnum;
-import com.flashchat.chatservice.dao.mapper.AccountMapper;
-import com.flashchat.chatservice.dto.req.*;
-import com.flashchat.chatservice.dto.resp.AccountInfoRespDTO;
-import com.flashchat.chatservice.dto.resp.AuthRespDTO;
-import com.flashchat.chatservice.service.AccountService;
-import com.flashchat.chatservice.service.InviteCodeService;
-import com.flashchat.chatservice.toolkit.HashUtil;
-import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
 import com.flashchat.user.constant.UserTypeConstant;
 import com.flashchat.user.core.LoginUserInfoDTO;
 import com.flashchat.user.core.UserContext;
 import com.flashchat.user.toolkit.LoginIdUtil;
+import com.flashchat.userservice.dao.entity.AccountDO;
+import com.flashchat.userservice.dao.enums.AccountStatusEnum;
+import com.flashchat.userservice.dao.mapper.AccountMapper;
+import com.flashchat.userservice.dto.req.ChangePasswordReqDTO;
+import com.flashchat.userservice.dto.req.SetPasswordReqDTO;
+import com.flashchat.userservice.dto.req.UpdateProfileReqDTO;
+import com.flashchat.userservice.dto.req.UpgradeAccountReqDTO;
+import com.flashchat.userservice.dto.resp.AccountInfoRespDTO;
+import com.flashchat.userservice.dto.resp.AuthRespDTO;
+import com.flashchat.userservice.dto.resp.MyAccountRespDTO;
+import com.flashchat.userservice.service.AccountService;
+import com.flashchat.userservice.service.InviteCodeService;
 import io.netty.channel.Channel;
 import jakarta.annotation.Resource;
 import lombok.AllArgsConstructor;
@@ -30,7 +33,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Set;
@@ -54,7 +56,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
     @Lazy
     @Resource
-    private  InviteCodeService inviteCodeService;
+    private InviteCodeService inviteCodeService;
 
     private static final long CACHE_TIMEOUT = 60000L;
 

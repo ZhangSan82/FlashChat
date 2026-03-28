@@ -34,6 +34,7 @@
             <artifactId>FlashChat-framework-cache</artifactId>
         </dependency>
 
+
         <!-- BCrypt 密码加密 -->
         <dependency>
             <groupId>org.springframework.security</groupId>

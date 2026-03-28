@@ -1,4 +1,4 @@
-package com.flashchat.chatservice.service;
+package com.flashchat.userservice.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.flashchat.chatservice.dao.entity.InviteCodeDO;
