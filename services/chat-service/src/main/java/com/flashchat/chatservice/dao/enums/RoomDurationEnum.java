@@ -7,26 +7,25 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum RoomDurationEnum {
 
-    MIN_10(10, "10 分钟"),
-    MIN_30(30, "30 分钟"),
-    HOUR_1(60, "1 小时"),
-    HOUR_2(120, "2 小时"),
-    HOUR_6(360, "6 小时"),
-    HOUR_12(720, "12 小时"),
-    HOUR_24(1440, "24 小时"),
-    DAY_3(4320, "3 天"),
-    DAY_7(10080, "7 天");
+    MIN_10(10, "10 分钟", 0),
+    MIN_30(30, "30 分钟", 10),
+    HOUR_1(60, "1 小时", 20),
+    HOUR_2(120, "2 小时", 30),
+    HOUR_6(360, "6 小时", 50),
+    HOUR_12(720, "12 小时", 80),
+    HOUR_24(1440, "24 小时", 100),
+    DAY_3(4320, "3 天", 200),
+    DAY_7(10080, "7 天", 400);
 
     /** 时长（分钟） */
     private final int minutes;
 
-    /** 前端展示文案 */
+    /** 文案 */
     private final String desc;
 
-    /**
-     * 安全解析，非法值返回 null
-     * 用于 Controller 层校验
-     */
+    /**消耗积分*/
+    private final int cost;
+
     public static RoomDurationEnum of(String name) {
         if (name == null || name.isBlank()) {
             return null;

@@ -13,8 +13,10 @@ import com.flashchat.user.core.UserContext;
 import com.flashchat.user.event.AccountDeletedEvent;
 import com.flashchat.user.event.MemberInfoChangedEvent;
 import com.flashchat.user.toolkit.LoginIdUtil;
+import com.flashchat.userservice.contanst.CreditConstants;
 import com.flashchat.userservice.dao.entity.AccountDO;
 import com.flashchat.userservice.dao.enums.AccountStatusEnum;
+import com.flashchat.userservice.dao.enums.CreditTypeEnum;
 import com.flashchat.userservice.dao.mapper.AccountMapper;
 import com.flashchat.userservice.dto.req.ChangePasswordReqDTO;
 import com.flashchat.userservice.dto.req.SetPasswordReqDTO;
@@ -22,6 +24,7 @@ import com.flashchat.userservice.dto.req.UpdateProfileReqDTO;
 import com.flashchat.userservice.dto.req.UpgradeAccountReqDTO;
 import com.flashchat.userservice.dto.resp.AccountInfoRespDTO;
 import com.flashchat.userservice.dto.resp.AuthRespDTO;
+import com.flashchat.userservice.service.CreditService;
 import com.flashchat.userservice.toolkit.HashUtil;
 import com.flashchat.userservice.dto.resp.MyAccountRespDTO;
 import com.flashchat.userservice.service.AccountService;
@@ -39,6 +42,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 @Slf4j
@@ -54,6 +58,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
 
     private final MultistageCacheProxy multistageCacheProxy;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
+    private CreditService  creditService;
 
     private final ApplicationEventPublisher applicationEventPublisher;
     @Lazy
@@ -77,17 +82,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
 
     /**
      * 匿名注册 + 自动登录（门面方法）
-     * <p>
-     * 不加 @Transactional，内部编排三步调用，每步职责独立：
-     * <ol>
-     *   <li>doRegister：编程式事务内完成 DB save，事务提交后才继续</li>
-     *   <li>postRegisterCache：Redis 操作（布隆过滤器 + 缓存），失败不影响注册</li>
-     *   <li>doLogin：SaToken 登录，签发 token</li>
-     * </ol>
-     * <p>
-     * 为什么 doRegister 用编程式事务而不是 @Transactional：
-     * Spring 的声明式事务基于 AOP 代理，同类内部方法调用不走代理，
-     * 导致 @Transactional 失效。TransactionTemplate 不依赖代理，直接控制事务边界。
      */
     @Override
     public AuthRespDTO autoRegister() {
@@ -379,6 +373,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         if (emailCount > 0) {
             throw new ClientException("该邮箱已被注册");
         }
+        AtomicReference<Long> inviterIdRef = new AtomicReference<>(null);
 
         // ===== DB 事务 =====
         transactionTemplate.executeWithoutResult(status -> {
@@ -394,18 +389,51 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
             account.setIsRegistered(1);
             if (inviterId != null) {
                 account.setInvitedBy(inviterId);
-                account.setCredits(account.getCredits() + 100);
             }
             this.updateById(account);
+
+            //  注册赠送积分
+
+            creditService.grantCredits(
+                    account.getId(),
+                    CreditConstants.REGISTER_BONUS_AMOUNT,
+                    CreditTypeEnum.REGISTER_BONUS,
+                    String.valueOf(account.getId()),
+                    "注册赠送"
+            );
+
+            //  邀请码奖励
+            if (inviterId != null) {
+                // 被邀请人额外奖励
+                // bizId 用自己的 accountId：一个账号只能领一次被邀请人奖励
+                creditService.grantCredits(
+                        account.getId(),
+                        CreditConstants.INVITE_REWARD_INVITEE_AMOUNT,
+                        CreditTypeEnum.INVITE_REWARD_INVITEE,
+                        String.valueOf(account.getId()),
+                        "邀请码奖励"
+                );
+
+                // 邀请人奖励
+                // bizId 用被邀请人的 accountId：同一个被邀请人只触发一次邀请人奖励
+                creditService.grantCredits(
+                        inviterId,
+                        CreditConstants.INVITE_REWARD_INVITER_AMOUNT,
+                        CreditTypeEnum.INVITE_REWARD_INVITER,
+                        String.valueOf(account.getId()),
+                        "邀请奖励-被邀请人:" + account.getAccountId()
+                );
+            }
 
             // 生成邀请码
             inviteCodeService.generateForUser(account.getId(), 3);
 
-            // 邀请人积分
-            if (inviterId != null) {
-                grantInviterCredits(inviterId, 50);
-            }
+            inviterIdRef.set(inviterId);
         });
+
+        if (inviterIdRef.get() != null) {
+            evictCacheByDbId(inviterIdRef.get());
+        }
 
         // ===== 事务提交后：缓存 + SaToken =====
         evictAccountCache(account);
@@ -430,22 +458,23 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         // 2. 失效缓存
         evictAccountCache(account);
 
-      /*  Channel channel = roomChannelManager.getChannel(loginId);
-        if (channel != null && channel.isActive()) {
-            channel.close();
-        }
-
-        // 3. 清理 WS 内存中该用户的所有房间成员关系
-        Set<String> rooms = roomChannelManager.getUserRooms(loginId);
-        for (String roomId : rooms) {
-            roomChannelManager.leaveRoom(roomId, loginId);
-        }*/
 
         // 3.【改造】发布事件，由 chat-service 监听后关闭 WS 连接 + 清理房间
         applicationEventPublisher.publishEvent(new AccountDeletedEvent(this, loginId));
         // 4. 登出 SaToken
         StpUtil.logout();
         log.info("[注销账号] accountId={}", account.getAccountId());
+    }
+
+    @Override
+    public void evictCacheByDbId(Long dbId) {
+        if (dbId == null) {
+            return;
+        }
+        AccountDO account = this.getById(dbId);
+        if (account != null) {
+            evictAccountCache(account);
+        }
     }
 
     // ==================== 私有方法 ====================

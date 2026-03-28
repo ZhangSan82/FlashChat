@@ -21,49 +21,28 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 /**
  * 房间与用户连接管理器
- * 【本次改造重点】断线 ≠ 离开房间
- *   内存分两层：
- *     第1层 - 成员关系（roomMembers + userRooms）
- *       断线不影响，只有 HTTP 主动 leaveRoom / kickMember 才移除
- *       后续接入 DB 后以 t_room_member 表为准
- *     第2层 - 在线状态（userChannels + channelUserIndex）
- *       断线立即移除，重连立即恢复
- *       用于判断"能否收到 WS 推送"
- *   数据结构：
- *     userChannels:     userId → Channel             （在线状态，断线删）
- *     channelUserIndex: Channel → userId              （反向索引，断线删）
- *     roomMembers:      roomId → {userId → MemberInfo}（成员关系，断线不删）
- *     userRooms:        userId → Set<roomId>          （成员关系，断线不删）
  */
 @Slf4j
 @Component
 public class RoomChannelManager {
 
-
     private final MeterRegistry meterRegistry;
-
     // ==================== 监控指标 ====================
-
     private final Counter broadcastCounter;
     private final Counter slowClientSkipCounter;
     private final Timer broadcastTimer;
-
     // ==================== 用户连接映射 ====================
-
     /**
      * userId → Channel
      * 一个用户只有一条 WebSocket 连接
      */
     private final ConcurrentHashMap<Long, Channel> userChannels = new ConcurrentHashMap<>();
-
     /**
      * Channel → userId
      * 反向索引，连接断开时快速找到是哪个用户
      */
     private final ConcurrentHashMap<Channel, Long> channelUserIndex = new ConcurrentHashMap<>();
-
     // ==================== 房间成员映射 ====================
-
     /**
      * roomId → { userId → RoomMemberInfo }
      * 每个房间有哪些成员，以及每个成员在该房间的状态（昵称、是否房主、是否禁言）
@@ -96,7 +75,6 @@ public class RoomChannelManager {
         meterRegistry.gaugeMapSize("flashchat.rooms.with.online.members", Tags.empty(), roomOnlineChannels);
         meterRegistry.gaugeMapSize("flashchat.rooms.total", Tags.empty(), roomMembers);
         meterRegistry.gaugeMapSize("flashchat.user.rooms.map.size", Tags.empty(), userRooms);
-
 
         // 广播指标
         this.broadcastCounter = meterRegistry.counter("flashchat.broadcast.total");
@@ -166,7 +144,6 @@ public class RoomChannelManager {
         // 2. 从所有房间的在线通道集合移除
         Set<String> rooms = userRooms.get(userId);  // get 不是 remove
         List<String> roomsSnapshot = (rooms != null) ? new ArrayList<>(rooms) : List.of();
-
         removeChannelFromAllRooms(userId, channel);
 
         // 3. 广播 USER_OFFLINE 到所有房间
@@ -182,7 +159,6 @@ public class RoomChannelManager {
                         WsRespDTO.of(roomId, WsRespDTOTypeEnum.USER_OFFLINE, offlineData));
             }
         }
-
         log.info("[用户离线] userId={}, 仍保留 {} 个房间成员关系",
                 userId, roomsSnapshot.size());
     }
@@ -225,7 +201,6 @@ public class RoomChannelManager {
             return;
         }
 
-
         // 1. 获取或创建房间成员表
         ConcurrentHashMap<Long, RoomMemberInfo> members =
                 roomMembers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
@@ -235,7 +210,6 @@ public class RoomChannelManager {
             log.info("[重复加入] room={}, userId={}, 已在房间中，忽略", roomId, userId);
             return;
         }
-
         // 2. 如果没传昵称/头像，从 Channel 属性取默认值
         Channel channel = userChannels.get(userId);
         if (nickname == null || nickname.isBlank()) {
@@ -244,10 +218,7 @@ public class RoomChannelManager {
         if (avatar == null || avatar.isBlank()) {
             avatar = channel != null ? ChannelAttrUtil.getAvatar(channel) : null;
         }
-
         // 3. 创建成员信息
-        //    【对比旧代码】旧代码把这些信息存在 Channel 属性上
-        //                 新代码存在独立的 RoomMemberInfo 对象中
         RoomMemberInfo memberInfo = RoomMemberInfo.builder()
                 .userId(userId)
                 .nickname(nickname != null ? nickname : "匿名用户")
@@ -256,7 +227,6 @@ public class RoomChannelManager {
                 .isMuted(false)
                 .lastActiveTime(System.currentTimeMillis())
                 .build();
-
         // 4. 原子加入房间
         RoomMemberInfo existing = members.putIfAbsent(userId, memberInfo);
         if (existing != null) {
@@ -309,13 +279,8 @@ public class RoomChannelManager {
             return rooms.isEmpty() ? null : rooms;  // 空了就删除
         });
     }
-
     /**
      * 内部离开逻辑（真正移除成员关系）
-     * 三步操作，各自独立：
-     *   1. compute 内：从 roomMembers 原子移除
-     *   2. compute 外：从 roomOnlineChannels 移除（不增加 compute 锁持有时间）
-     *   3. compute 外：广播 USER_LEAVE
      */
     private void leaveRoomInternal(String roomId, Long userId) {
         // 用数组在 lambda 中"传出"数据
@@ -325,12 +290,10 @@ public class RoomChannelManager {
 
         roomMembers.compute(roomId, (key, members) -> {
             if (members == null) return null;
-
             removedInfo[0] = members.remove(userId);
             if (removedInfo[0] == null) {
                 return members.isEmpty() ? null : members;
             }
-
             if (members.isEmpty()) {
                 roomEmpty[0] = true;
                 log.info("[清理房间] room={} 已空，移除", roomId);
@@ -380,10 +343,8 @@ public class RoomChannelManager {
 
         ConcurrentHashMap<Long, RoomMemberInfo> members =
                 roomMembers.computeIfAbsent(roomId, k -> new ConcurrentHashMap<>());
-
         // 已经在房间中就跳过
         if (members.containsKey(userId)) return;
-
         RoomMemberInfo memberInfo = RoomMemberInfo.builder()
                 .userId(userId)
                 .nickname(nickname != null ? nickname : "匿名用户")
@@ -392,7 +353,6 @@ public class RoomChannelManager {
                 .isMuted(isMuted)
                 .lastActiveTime(System.currentTimeMillis())
                 .build();
-
         // 原子操作：已存在则跳过
         RoomMemberInfo existing = members.putIfAbsent(userId, memberInfo);
         if (existing != null) return;
@@ -432,7 +392,6 @@ public class RoomChannelManager {
                 }
             }
         }
-
         Channel channel = userChannels.get(accountId);
         if (channel != null && channel.isActive()) {
             if (newNickname != null) {
@@ -442,7 +401,6 @@ public class RoomChannelManager {
                 ChannelAttrUtil.set(channel, ChannelAttrUtil.AVATAR, newAvatar);
             }
         }
-
         if (updatedCount > 0) {
             log.info("[更新成员信息] accountId={}, nickname={}, avatar={}, 影响 {} 个房间",
                     accountId, newNickname, newAvatar, updatedCount);
@@ -451,11 +409,9 @@ public class RoomChannelManager {
         return updatedCount;
     }
 
-
     // ===========================================================
     //                    消息推送
     // ===========================================================
-
     /**
      * 广播给房间所有在线成员
      * 改造要点：
@@ -487,12 +443,8 @@ public class RoomChannelManager {
         });
     }
 
-
     /**
      * 广播核心逻辑（write + flush 两轮遍历）
-     * @param channels  在线通道集合
-     * @param resp      响应数据
-     * @param excludeCh 排除的 Channel（null 表示不排除）
      */
     private void doBroadcast(Set<Channel> channels, WsRespDTO<?> resp, Channel excludeCh) {
         String json = JsonUtil.toJson(resp);
@@ -515,8 +467,6 @@ public class RoomChannelManager {
             ch.flush();
         }
     }
-
-
 
 
     /**
@@ -544,8 +494,6 @@ public class RoomChannelManager {
 
     /**
      * 根据 Channel 获取 userId
-     * 【新增方法】旧代码不需要，因为旧代码用 Channel 属性存 memberId
-     *            新代码用独立映射
      */
     public Long getUserId(Channel channel) {
         return channelUserIndex.get(channel);
@@ -678,13 +626,10 @@ public class RoomChannelManager {
             removedMembers[0] = members;
             return null; // 返回 null 删除 key
         });
-
         // 2. 移除在线通道集合（保留引用用于后续通知）
         Set<Channel> onlineChannels = roomOnlineChannels.remove(roomId);
-
         if (removedMembers[0] == null) return;
         ConcurrentHashMap<Long, RoomMemberInfo> members = removedMembers[0];
-
         // 3. 清理每个成员的 userRooms
         for (Long uid : members.keySet()) {
             userRooms.compute(uid, (key, rooms) -> {
@@ -706,7 +651,6 @@ public class RoomChannelManager {
         log.info("[关闭房间] room={}, 影响 {} 名成员", roomId, members.size());
     }
 
-
     /**
      * 更新成员的最后活跃时间
      * 由 ChatServiceImpl.sendMsg() 在消息发送成功后调用
@@ -720,10 +664,6 @@ public class RoomChannelManager {
 
     /**
      * 获取所有房间的成员快照（供清理任务使用）
-     * 返回 roomId → Map<userId, lastActiveTime>
-     <P>
-     * ConcurrentHashMap 迭代器是弱一致性的，不会抛 ConcurrentModificationException，
-     * 但可能看到部分更新。对清理任务来说完全可接受。
      */
     public Map<String, Map<Long, Long>> getRoomMembersSnapshot() {
         Map<String, Map<Long, Long>> snapshot = new HashMap<>();

@@ -22,13 +22,17 @@ import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
 import com.flashchat.user.core.UserContext;
 import com.flashchat.userservice.dao.entity.AccountDO;
+import com.flashchat.userservice.dao.enums.CreditTypeEnum;
 import com.flashchat.userservice.service.AccountService;
+import com.flashchat.userservice.service.CreditService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -48,31 +52,34 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final MultistageCacheProxy multistageCacheProxy;
     private final RoomDelayProducer roomDelayProducer;
     private final MessageWindowService messageWindowService;
+    private final CreditService creditService;
+    private final TransactionTemplate transactionTemplate;
+    private final RoomMapper roomMapper;
     private static final long CACHE_TIMEOUT = 60000L;
     /**单用户最多同时加入的房间数 */
     private static final int MAX_ROOMS_PER_USER = 50;
 
-
-    /**
-     * 创建房间
-     */
-    @Transactional
+    /**创建房间*/
     @Override
     public RoomInfoRespDTO createRoom(RoomCreateReqDTO request) {
-
-
         Long creatorId = UserContext.getRequiredLoginId();
         AccountDO creator = accountService.getAccountByDbId(creatorId);
-
-
-        // TODO 未来：检查是否为注册用户（主持人）+ 扣除积分
 
         RoomDurationEnum durationEnum = RoomDurationEnum.of(request.getDuration());
         if (durationEnum == null) {
             durationEnum = RoomDurationEnum.MIN_30;  // 默认 30 分钟
         }
-        LocalDateTime expireTime = LocalDateTime.now().plusMinutes(durationEnum.getMinutes());
+        int cost = durationEnum.getCost();
 
+        if (cost > 0 && !creator.registered()) {
+            throw new ClientException("创建房间需要先升级为注册用户");
+        }
+
+        if (cost > 0 && creator.getCredits() != null && creator.getCredits() < cost) {
+            throw new ClientException("积分不足，需要 " + cost + " 积分，当前 " + creator.getCredits());
+        }
+
+        LocalDateTime expireTime = LocalDateTime.now().plusMinutes(durationEnum.getMinutes());
         String roomId = getRoomID();
 
         //t_room
@@ -81,29 +88,12 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .creatorId(creatorId)//t_account.id
                 .title(request.getTitle())
                 .maxMembers(request.getMaxMembers() != null ? request.getMaxMembers() : 50)
+                .currentMembers(1)
                 .isPublic(request.getIsPublic() != null ? request.getIsPublic() : 0)
                 .status(RoomStatusEnum.WAITING.getCode())
                 .expireTime(expireTime)
                 .expireVersion(1)
                 .build();
-        try {
-            this.save(room);
-            flashChatRoomRegisterCachePenetrationBloomFilter.add(
-                    CacheUtil.buildKey("flashchat", "room", roomId));
-            multistageCacheProxy.put(CacheUtil.buildKey("flashchat","room",roomId),
-                    room,
-                    CACHE_TIMEOUT);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        log.info("[创建房间] roomId={}, title={}, creator={}", roomId, room.getTitle(), room.getCreatorId());
-
-        try {
-            roomDelayProducer.submitRoomExpireEvents(roomId, expireTime, room.getExpireVersion());
-        } catch (Exception e) {
-            // 投递失败不阻塞创建流程，由兜底定时任务保障
-            log.error("[延时任务投递失败] room={}, 不影响创建，将由兜底任务兜底", roomId, e);
-        }
 
         RoomMemberDO hostMember = RoomMemberDO.builder()
                 .roomId(roomId)
@@ -114,41 +104,67 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .lastAckMsgId(0L)
                 .joinTime(LocalDateTime.now())
                 .build();
+        final RoomDurationEnum finalDuration = durationEnum;
 
-        roomMemberService.saveWithCache(hostMember);
+        transactionTemplate.executeWithoutResult(status -> {
+
+            if (cost > 0) {
+                creditService.deductCredits(creatorId, cost,
+                        CreditTypeEnum.ROOM_CREATE_COST, roomId,
+                        "创建房间-" + finalDuration.getDesc());
+            }
+            this.save(room);
+            roomMemberService.save(hostMember);
+        });
+
+        if (cost > 0) {
+            accountService.evictCacheByDbId(creatorId);
+        }
+        try {
+            flashChatRoomRegisterCachePenetrationBloomFilter.add(
+                    CacheUtil.buildKey("flashchat", "room", roomId));
+            multistageCacheProxy.put(CacheUtil.buildKey("flashchat","room",roomId),
+                    room,
+                    CACHE_TIMEOUT);
+            multistageCacheProxy.put(
+                    CacheUtil.buildKey("flashchat", "roomMember", roomId, String.valueOf(creatorId)),
+                    hostMember,
+                    CACHE_TIMEOUT
+            );
+        } catch (Exception e) {
+            log.error("[创建房间-缓存写入失败] roomId={}, 不影响创建", roomId, e);
+        }
+        log.info("[创建房间] roomId={}, title={}, creator={},cost={}", roomId, room.getTitle(), room.getCreatorId(), cost);
+
+        try {
+            roomDelayProducer.submitRoomExpireEvents(roomId, expireTime, room.getExpireVersion());
+        } catch (Exception e) {
+            // 投递失败不阻塞创建流程，由兜底定时任务保障
+            log.error("[延时任务投递失败] room={}, 不影响创建，将由兜底任务兜底", roomId, e);
+        }
 
         roomChannelManager.joinRoom(roomId, creator.getId(),
                 creator.getNickname(), creator.getAvatarColor(), true);
-
-
         return buildRoomInfoResp(room);
     }
 
-    /**
-     * 加入房间
-     */
+    /** 加入房间 */
     @Override
-    @Transactional
     public RoomInfoRespDTO joinRoom(RoomJoinReqDTO request) {
         String roomId = request.getRoomId();
-
         Long accountId = UserContext.getRequiredLoginId();
         AccountDO account = accountService.getAccountByDbId(accountId);
 
-
-        // 1. 查房间
+        // 1. 校验
         RoomDO room = getRoomByRoomId(roomId);
         if (room == null) {
             throw new ClientException("房间不存在");
         }
-
-        // 2. 检查房间状态
         RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
         if (status == null || !status.canJoin()) {
-            throw new ClientException("房间当前不允许加入（状态：" + (status != null ? status.getDesc() : "未知") + "）");
+            throw new ClientException("房间当前不允许加入(状态：" + (status != null ? status.getDesc() : "未知") + ")");
         }
-
-        // 检查用户已加入的房间数（防止单用户 Hash 膨胀）
+        // 检查用户已加入的房间数
         long activeRoomCount = roomMemberService.lambdaQuery()
                 .eq(RoomMemberDO::getAccountId, accountId)
                 .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
@@ -157,98 +173,125 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             throw new ClientException("最多同时加入 " + MAX_ROOMS_PER_USER + " 个房间");
         }
 
-        // 3. 检查人数TODO从数据库中查询用户人数
-        int activeCount = roomChannelManager.getMemberCount(roomId);
-        if (activeCount >= room.getMaxMembers()) {
-            throw new ClientException("房间已满（" + activeCount + "/" + room.getMaxMembers() + "）");
-        }
-
-        // 4. 检查是否已有记录（处理重复加入、重新加入）
-        RoomMemberDO existingMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
-
-        if (existingMember != null) {
-            if (existingMember.getStatus() == RoomMemberStatusEnum.ACTIVE.getCode()) {
-                // 已在房间中，幂等返回
-                log.info("[重复加入] room={}, memberId={}, 已在房间中", roomId, accountId);
-                return buildRoomInfoResp(room);
+        final boolean[] joined = {false};
+        final boolean[] roomActivated = {false};
+        transactionTemplate.executeWithoutResult(txStatus -> {
+            // 直接查 DB，不走缓存（事务内需要准确状态，防止缓存陈旧导致误判）
+            RoomMemberDO existingMember = roomMemberService.lambdaQuery()
+                    .eq(RoomMemberDO::getRoomId, roomId)
+                    .eq(RoomMemberDO::getAccountId, accountId)
+                    .one();
+            if (existingMember != null) {
+                if (existingMember.getStatus() == RoomMemberStatusEnum.ACTIVE.getCode()) {
+                    return;
+                }
+                // 重新加入
+                // CAS 防并发重新加入：WHERE status != ACTIVE
+                boolean reactivated = roomMemberService.lambdaUpdate()
+                        .eq(RoomMemberDO::getId, existingMember.getId())
+                        .ne(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
+                        .set(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
+                        .set(RoomMemberDO::getLeaveTime, null)
+                        .set(RoomMemberDO::getJoinTime, LocalDateTime.now())
+                        .update();
+                if (!reactivated) {
+                    return; // 另一个线程已完成重新加入
+                }
+            } else {
+                // 首次加入：INSERT（唯一索引 uk_room_account 兜底并发）
+                RoomMemberDO newMember = RoomMemberDO.builder()
+                        .roomId(roomId)
+                        .accountId(accountId)
+                        .role(RoomMemberRoleEnum.MEMBER.getCode())
+                        .isMuted(0)
+                        .status(RoomMemberStatusEnum.ACTIVE.getCode())
+                        .lastAckMsgId(0L)
+                        .joinTime(LocalDateTime.now())
+                        .build();
+                try {
+                    roomMemberService.save(newMember);
+                } catch (DuplicateKeyException e) {
+                    // 并发首次加入，另一个线程已插入，该线程已做 CAS increment
+                    log.info("[首次加入] room={}, accountId={}", roomId, accountId);
+                    return;
+                }
             }
-            //之前离开过（LEFT）或被踢过（KICKED），恢复为 ACTIVE
-            existingMember.setStatus(RoomMemberStatusEnum.ACTIVE.getCode());
-            existingMember.setLeaveTime(null);
-            existingMember.setJoinTime(LocalDateTime.now());
-            roomMemberService.updateWithCacheEvict(existingMember);
-            log.info("[重新加入] room={}, accountId={}, 原状态={}",
-                    roomId, accountId, existingMember.getStatus());
+            // 成员操作成功后，CAS 递增（防超卖最终防线）
+            // affected=0 → 房间已满或状态变更 → 抛异常 → 事务回滚（上面的 INSERT/UPDATE 也回滚）
+            int affected = roomMapper.incrementMemberCount(roomId);
+            if (affected == 0) {
+                throw new ClientException("房间已满(" + room.getMaxMembers() + " 人)");
+            }
+            joined[0] = true;
+            if (room.getStatus() == RoomStatusEnum.WAITING.getCode()) {
+                boolean activated = this.lambdaUpdate()
+                        .eq(RoomDO::getRoomId, roomId)
+                        .eq(RoomDO::getStatus, RoomStatusEnum.WAITING.getCode())
+                        .set(RoomDO::getStatus, RoomStatusEnum.ACTIVE.getCode())
+                        .update();
+                if (activated) {
+                    roomActivated[0] = true;
+                }
+            }
+        });
 
-        } else {
-            // 首次加入 → 插入新行
-            RoomMemberDO newMember = RoomMemberDO.builder()
-                    .roomId(roomId)
-                    .accountId(accountId)
-                    .role(RoomMemberRoleEnum.MEMBER.getCode())
-                    .isMuted(0)
-                    .status(RoomMemberStatusEnum.ACTIVE.getCode())
-                    .lastAckMsgId(0L)
-                    .joinTime(LocalDateTime.now())
-                    .build();
-            roomMemberService.saveWithCache(newMember);
-            log.info("[首次加入] room={}, accountId={}", roomId, accountId);
+        // ===== 3. 幂等分支 =====
+        if (!joined[0]) {
+            log.info("[加入房间-幂等] room={}, accountId={}, 已在房间中", roomId, accountId);
+            return buildRoomInfoResp(getRoomByRoomId(roomId));
         }
 
-        // 5. 如果房间是 WAITING → 改为 ACTIVE
-        if (room.getStatus() == RoomStatusEnum.WAITING.getCode()) {
-            this.lambdaUpdate().eq(RoomDO::getRoomId, roomId)
-                            .set(RoomDO::getStatus, RoomStatusEnum.ACTIVE.getCode())
-                                    .update();
+        // ===== 4. 事务提交后：缓存 + 内存 =====
+        roomMemberService.evictCache(roomId, accountId);
+        evictRoomCache(roomId);
 
-            room.setStatus(RoomStatusEnum.ACTIVE.getCode());
-            evictRoomCache(roomId);
-            log.info("[房间激活] room={}, WAITING → ACTIVE", roomId);
-        }
-
-        // 6. 同步到内存（RoomChannelManager）
-        //    从 Channel 属性获取昵称/头像（WS 连接时已分配）
-
-        roomChannelManager.joinRoom(roomId, accountId, account.getNickname() ,account.getAvatarColor() , false);
-
-        return buildRoomInfoResp(room);
+        roomChannelManager.joinRoom(roomId, accountId,
+                account.getNickname(), account.getAvatarColor(), false);
+        log.info("[加入房间] room={}, accountId={}", roomId, accountId);
+        return buildRoomInfoResp(getRoomByRoomId(roomId));
     }
 
     @Override
-    @Transactional
     public void leaveRoom(RoomLeaveReqDTO request) {
         String roomId = request.getRoomId();
         Long accountId = UserContext.getRequiredLoginId();
-
-        // ===== 1. 校验房间存在 =====
+        // ===== 校验 =====
         RoomDO room = getRoomByRoomId(roomId);
         if (room == null) {
             throw new ClientException("房间不存在");
         }
-
-        // ===== 2. 查成员记录 =====
         RoomMemberDO member = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
         if (member == null || member.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
             log.info("[离开房间-幂等] room={}, memberId={}, 不在房间中或已离开", roomId, accountId);
             return;
         }
-
-        // ===== 3. 房主不能离开，只能关闭房间 =====
         if (member.getRole() == RoomMemberRoleEnum.HOST.getCode()) {
             throw new ClientException("房主不能离开房间，请使用「关闭房间」功能");
         }
-
-        // ===== 4. 更新 DB =====
-        member.setStatus(RoomMemberStatusEnum.LEFT.getCode());
-        member.setLeaveTime(LocalDateTime.now());
-        roomMemberService.updateWithCacheEvict(member);
-
-        // ===== 5. 同步内存 =====
-        roomChannelManager.leaveRoom(roomId,accountId);
+        // ===== DB 事务 =====
+        final boolean[] left = {false};
+        transactionTemplate.executeWithoutResult(txStatus -> {
+            boolean updated = roomMemberService.lambdaUpdate()
+                    .eq(RoomMemberDO::getId, member.getId())
+                    .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
+                    .set(RoomMemberDO::getStatus, RoomMemberStatusEnum.LEFT.getCode())
+                    .set(RoomMemberDO::getLeaveTime, LocalDateTime.now())
+                    .update();
+            if (updated) {
+                roomMapper.decrementMemberCount(roomId);
+                left[0] = true;
+            }
+        });
+        if (!left[0]) {
+            log.info("[离开房间-并发跳过] room={}, accountId={}", roomId, accountId);
+            return;
+        }
+        // ===== 事务提交后：缓存 + 内存 =====
+        roomMemberService.evictCache(roomId, accountId);
+        evictRoomCache(roomId);
+        roomChannelManager.leaveRoom(roomId, accountId);
         unreadService.removeRoomUnread(accountId, roomId);
-
         log.info("[离开房间] room={}, accountId={}", roomId, accountId);
-
     }
 
     /**
@@ -261,7 +304,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         if (room == null) {
             throw new ClientException("房间不存在");
         }
-
         // ===== 2. 查 DB 活跃成员 =====
         List<RoomMemberDO> dbMembers = roomMemberService.lambdaQuery().
                 eq(RoomMemberDO::getRoomId, roomId)
@@ -271,18 +313,13 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         if (dbMembers == null || dbMembers.isEmpty()) {
             return List.of();
         }
-
         List<RoomMemberRespDTO> result = new ArrayList<>();
-
         for (RoomMemberDO dbMember : dbMembers) {
             Long id = dbMember.getAccountId();
-
             // 优先从内存取
             RoomMemberInfo memoryInfo = roomChannelManager.getRoomMemberInfo(roomId, id);
-
             String nickname;
             String avatar;
-
             if (memoryInfo != null) {
                 nickname = memoryInfo.getNickname();
                 avatar = memoryInfo.getAvatar();
@@ -295,7 +332,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             boolean isMuted = memoryInfo != null ? memoryInfo.isMuted() : dbMember.getIsMuted() == 1;
             boolean isHost = dbMember.getRole() == RoomMemberRoleEnum.HOST.getCode();
             boolean isOnline = roomChannelManager.isOnline(id);
-
             result.add(RoomMemberRespDTO.builder()
                     .accountId(id)
                     .nickname(nickname)
@@ -306,13 +342,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                     .isOnline(isOnline)
                     .build());
         }
-
         result.sort((a, b) -> {
             if (a.getIsHost() && !b.getIsHost()) return -1;
             if (!a.getIsHost() && b.getIsHost()) return 1;
             return 0;
         });
-
         return result;
     }
 
@@ -323,12 +357,10 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .eq(RoomMemberDO::getAccountId, accountId)
                 .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
                 .list();
-
         if (activeMembers == null || activeMembers.isEmpty()) {
             log.debug("[恢复房间] memberId={}, 无活跃房间", accountId);
             return;
         }
-
         // 2. 获取用户信息（走缓存）
         AccountDO account = accountService.getAccountByDbId(accountId);
         String nickname = account != null ? account.getNickname() : "匿名用户";
@@ -341,13 +373,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             if (room == null || room.getStatus() == RoomStatusEnum.CLOSED.getCode()) {
                 continue;
             }
-
             boolean isHost = rm.getRole() == RoomMemberRoleEnum.HOST.getCode();
             boolean isMuted = rm.getIsMuted() != null && rm.getIsMuted() == RoomMemberMuteStatusEnum.MUTE.getCode();
             roomChannelManager.joinRoomSilent(rm.getRoomId(), accountId, nickname, avatar, isHost, isMuted);
             count++;
         }
-
         log.info("[恢复房间] memberId={}, 恢复了 {} 个房间", accountId, count);
     }
 
@@ -355,50 +385,57 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
      *踢人
      */
     @Override
-    @Transactional
     public void kickMember(RoomKickReqDTO request) {
         HostOperationContext ctx = validateHostOperation(request.getRoomId(), request.getTargetAccountId());
-
-        // 更新 DB
-        ctx.getTargetMember().setStatus(RoomMemberStatusEnum.KICKED.getCode());
-        ctx.getTargetMember().setLeaveTime(LocalDateTime.now());
-        roomMemberService.updateWithCacheEvict(ctx.getTargetMember());
-
-        // 同步内存
-        roomChannelManager.kickMember(request.getRoomId(), ctx.getTargetAccountId());
-        unreadService.removeRoomUnread(ctx.getTargetAccountId(), request.getRoomId());
-
+        String roomId = request.getRoomId();
+        Long targetAccountId = ctx.getTargetAccountId();
+        // ===== DB 事务 =====
+        final boolean[] kicked = {false};
+        transactionTemplate.executeWithoutResult(txStatus -> {
+            boolean updated = roomMemberService.lambdaUpdate()
+                    .eq(RoomMemberDO::getId, ctx.getTargetMember().getId())
+                    .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
+                    .set(RoomMemberDO::getStatus, RoomMemberStatusEnum.KICKED.getCode())
+                    .set(RoomMemberDO::getLeaveTime, LocalDateTime.now())
+                    .update();
+            if (updated) {
+                roomMapper.decrementMemberCount(roomId);
+                kicked[0] = true;
+            }
+        });
+        if (!kicked[0]) {
+            log.info("[踢人-并发跳过] room={}, target={}", roomId, targetAccountId);
+            return;
+        }
+        // ===== 事务提交后：缓存 + 内存 + WS =====
+        roomMemberService.evictCache(roomId, targetAccountId);
+        evictRoomCache(roomId);
+        roomChannelManager.kickMember(roomId, targetAccountId);
+        unreadService.removeRoomUnread(targetAccountId, roomId);
         log.info("[踢人成功] room={}, operator={}, target={}",
-                request.getRoomId(), ctx.getOperatorMember(), ctx.getTargetMember());
+                roomId, ctx.getOperatorAccountId(), targetAccountId);
     }
 
     @Override
     @Transactional
     public void muteMember(RoomMuteReqDTO request) {
         String roomId = request.getRoomId();
-
         // 公共校验
         HostOperationContext ctx = validateHostOperation(
                 roomId,request.getTargetAccountId());
-
-        // 不能禁言房主（理论上公共校验已排除自己，这里防止多房主场景）
         if (ctx.getTargetMember().getRole() == RoomMemberRoleEnum.HOST.getCode()) {
             throw new ClientException("不能禁言房主");
         }
-
-        // 幂等：已经禁言的不重复处理
         if (ctx.getTargetMember().getIsMuted() == RoomMemberMuteStatusEnum.MUTE.getCode()) {
             log.info("[重复禁言] room={}, target={}, 已处于禁言状态", roomId, ctx.getTargetAccountId());
             return;
         }
-
         // 更新 DB
         ctx.getTargetMember().setIsMuted(RoomMemberMuteStatusEnum.MUTE.getCode());
         roomMemberService.updateWithCacheEvict(ctx.getTargetMember());
 
         // 同步内存 + WS 通知
         roomChannelManager.muteMember(roomId, ctx.getTargetAccountId());
-
         log.info("[禁言成功] room={}, operator={}, target={}",
                 roomId, ctx.getOperatorAccountId(), ctx.getTargetAccountId());
     }
@@ -407,23 +444,17 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Transactional
     public void unmuteMember(RoomMuteReqDTO request) {
         String roomId = request.getRoomId();
-
         // 公共校验
         HostOperationContext ctx = validateHostOperation(roomId, request.getTargetAccountId());
-
-        // 幂等：没有被禁言的不重复处理
         if (ctx.getTargetMember().getIsMuted() == RoomMemberMuteStatusEnum.UNMUTE.getCode()) {
             log.info("[重复解禁] room={}, target={}, 未处于禁言状态", roomId, ctx.getTargetAccountId());
             return;
         }
-
         // 更新 DB
         ctx.getTargetMember().setIsMuted(RoomMemberMuteStatusEnum.UNMUTE.getCode());
         roomMemberService.updateWithCacheEvict(ctx.getTargetMember());
-
         // 同步内存 + WS 通知
         roomChannelManager.unmuteMember(roomId, ctx.getTargetAccountId());
-
         log.info("[解禁成功] room={}, operator={}, target={}",
                 roomId, ctx.getOperatorAccountId(), ctx.getTargetMember());
     }
@@ -435,7 +466,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     public void closeRoom(RoomCloseReqDTO request) {
         String roomId = request.getRoomId();
         Long operatorId = UserContext.getRequiredLoginId();
-
         // ===== 权限校验 =====
         RoomMemberDO operatorMember =
                 roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, operatorId);
@@ -445,10 +475,8 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         if (operatorMember.getRole() != RoomMemberRoleEnum.HOST.getCode()) {
             throw new ClientException("只有房主可以执行此操作");
         }
-
         // ===== 执行关闭 =====
         doCloseRoom(roomId);
-
         log.info("[手动关闭房间] room={}, operator={}", roomId, operatorId);
     }
 
@@ -464,13 +492,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             log.warn("[即将到期-跳过] room={}, 房间不存在", roomId);
             return;
         }
-
         RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
         if (status != RoomStatusEnum.ACTIVE) {
             log.info("[即将到期-跳过] room={}, 当前状态={}，不是 ACTIVE", roomId, status);
             return;
         }
-
         // 更新状态 → EXPIRING
         this.lambdaUpdate()
                 .eq(RoomDO::getRoomId, roomId)
@@ -478,7 +504,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .set(RoomDO::getStatus, RoomStatusEnum.EXPIRING.getCode())
                 .update();
         evictRoomCache(roomId);
-
         // WS 通知房间所有在线成员
         roomChannelManager.broadcastToRoom(roomId,
                 WsRespDTO.of(roomId, WsRespDTOTypeEnum.ROOM_EXPIRING, "房间即将到期，5 分钟后将进入宽限期"));
@@ -498,15 +523,12 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             log.warn("[到期-跳过] room={}, 房间不存在", roomId);
             return;
         }
-
         RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
         if (status != RoomStatusEnum.ACTIVE && status != RoomStatusEnum.EXPIRING) {
             log.info("[到期-跳过] room={}, 当前状态={}", roomId, status);
             return;
         }
-
         LocalDateTime graceEndTime = room.getExpireTime().plusMinutes(5);
-
         this.lambdaUpdate()
                 .eq(RoomDO::getRoomId, roomId)
                 .in(RoomDO::getStatus, RoomStatusEnum.ACTIVE.getCode(), RoomStatusEnum.EXPIRING.getCode())
@@ -514,11 +536,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .set(RoomDO::getGraceEndTime, graceEndTime)
                 .update();
         evictRoomCache(roomId);
-
         // WS 通知
         roomChannelManager.broadcastToRoom(roomId,
                 WsRespDTO.of(roomId, WsRespDTOTypeEnum.ROOM_GRACE, "房间已到期，进入 5 分钟宽限期"));
-
         log.info("[到期] room={}, → GRACE, graceEndTime={}", roomId, graceEndTime);
     }
 
@@ -537,69 +557,62 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             log.warn("[关闭房间-跳过] room={}, 房间不存在", roomId);
             return;
         }
-
         if (room.getStatus() == RoomStatusEnum.CLOSED.getCode()) {
             log.info("[关闭房间-跳过] room={}, 已经是 CLOSED 状态", roomId);
             return;
         }
         // 先拿成员ID
         Set<Long> memberIds = roomChannelManager.getRoomMemberIds(roomId);
-
         LocalDateTime now = LocalDateTime.now();
-
-        // 更新 t_room
-        boolean updated =  this.lambdaUpdate()
-                .eq(RoomDO::getRoomId, roomId)
-                .ne(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
-                .set(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
-                .set(RoomDO::getClosedTime, now)
-                .update();
-
-        if (!updated) {
+        // ===== DB 事务：t_room + t_room_member 原子更新 =====
+        final boolean[] closed = {false};
+        transactionTemplate.executeWithoutResult(txStatus -> {
+            // 1. 更新 t_room（CAS：只有非 CLOSED 才更新）
+            boolean updated = this.lambdaUpdate()
+                    .eq(RoomDO::getRoomId, roomId)
+                    .ne(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
+                    .set(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
+                    .set(RoomDO::getClosedTime, now)
+                    .set(RoomDO::getCurrentMembers, 0)
+                    .update();
+            if (!updated) {
+                return; // 已被其他操作关闭
+            }
+            // 2. 批量更新成员 → LEFT
+            roomMemberService.lambdaUpdate()
+                    .eq(RoomMemberDO::getRoomId, roomId)
+                    .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
+                    .set(RoomMemberDO::getStatus, RoomMemberStatusEnum.LEFT.getCode())
+                    .set(RoomMemberDO::getLeaveTime, now)
+                    .update();
+            closed[0] = true;
+        });
+        if (!closed[0]) {
             log.info("[关闭房间-跳过] room={}, CAS更新失败，已被其他操作关闭", roomId);
             return;
         }
-
         evictRoomCache(roomId);
-
         // 删除消息滑动窗口
         messageWindowService.deleteWindow(roomId);
-
-        // 批量更新成员 → LEFT
-        roomMemberService.lambdaUpdate()
-                .eq(RoomMemberDO::getRoomId, roomId)
-                .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
-                .set(RoomMemberDO::getStatus, RoomMemberStatusEnum.LEFT.getCode())
-                .set(RoomMemberDO::getLeaveTime, now)
-                .update();
         roomMemberService.evictAllMemberCacheInRoom(roomId);
-
-
         unreadService.clearRoomForAllMembers(roomId, memberIds);
-
         // 清理内存 + WS 通知
         roomChannelManager.closeRoom(roomId);
-
         log.info("[关闭房间] room={}, → CLOSED", roomId);
     }
 
     @Override
     public List<RoomInfoRespDTO> getMyRooms() {
-
         Long acctId = UserContext.getRequiredLoginId();
-
         // 查所有 ACTIVE 的房间成员记录
         List<RoomMemberDO> activeMembers = roomMemberService.lambdaQuery()
                 .eq(RoomMemberDO::getAccountId, acctId)
                 .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
                 .list();
-
         if (activeMembers == null || activeMembers.isEmpty()) {
             return List.of();
         }
-
         Map<String, Integer> unreadMap = unreadService.getAllUnreadCounts(acctId);
-
         List<RoomInfoRespDTO> result = new ArrayList<>();
         for (RoomMemberDO rm : activeMembers) {
             RoomDO room = getRoomByRoomId(rm.getRoomId());
@@ -610,7 +623,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             dto.setUnreadCount(unreadMap.getOrDefault(room.getRoomId(), 0));
             result.add(dto);
         }
-
         return result;
     }
 
@@ -641,19 +653,15 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .collect(Collectors.toSet());
     }
 
-
     /**
      * 构建房间信息响应
      */
     private RoomInfoRespDTO buildRoomInfoResp(RoomDO room) {
         RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
-
         // 查活跃成员数
-        int memberCount = roomChannelManager.getMemberCount(room.getRoomId());
-
+        int memberCount = room.getCurrentMembers() != null ? room.getCurrentMembers() : 0;
         // 在线人数（内存中有 WS 连接的）
         int onlineCount = roomChannelManager.getOnlineCountInRoom(room.getRoomId());
-
         return RoomInfoRespDTO.builder()
                 .roomId(room.getRoomId())
                 .title(room.getTitle())
@@ -670,22 +678,15 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 }
 
 
-
-
     /**
      * 房主操作公共校验（踢人/禁言/解禁共用）
      */
     private HostOperationContext validateHostOperation(String roomId,Long targetAccountId) {
-
-        // 1. 验证操作者
+       //==== 校验 =====
         Long operatorId = UserContext.getRequiredLoginId();
-
-        // 2. 不能操作自己
         if (operatorId.equals(targetAccountId)) {
             throw new ClientException("不能对自己执行此操作");
         }
-
-        // 3. 验证房间
         RoomDO room = getRoomByRoomId(roomId);
         if (room == null) {
             throw new ClientException("房间不存在");
@@ -694,8 +695,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         if (roomStatus == null || roomStatus == RoomStatusEnum.CLOSED) {
             throw new ClientException("房间已关闭，无法操作");
         }
-
-        // 4. 验证操作者是房主
         RoomMemberDO operatorMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, operatorId);
         if (operatorMember == null || operatorMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
             throw new ClientException("你不在该房间中");
@@ -704,12 +703,10 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             throw new ClientException("只有房主可以执行此操作");
         }
 
-        // 5. 验证目标在房间中
         RoomMemberDO targetMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, targetAccountId);
         if (targetMember == null || targetMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
             throw new ClientException("该用户不在房间中");
         }
-
         return HostOperationContext.builder()
                 .room(room)
                 .operatorAccountId(operatorId)
@@ -719,7 +716,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .build();
     }
     /**
-     *  新增：Room 缓存失效
+     *  Room 缓存失效
      */
     private void evictRoomCache(String roomId) {
         try {
@@ -728,8 +725,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             log.error("[Room缓存失效异常] roomId={}", roomId, e);
         }
     }
-
-
 
     /**
      *生成唯一房间ID
@@ -751,9 +746,6 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             }
             customGenerateCount++;
         }
-
         return roomId;
     }
-
-
 }

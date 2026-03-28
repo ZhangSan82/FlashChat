@@ -47,6 +47,11 @@ public class RoomDO {
     private Integer maxMembers;
 
     /**
+     * 当前成员数
+     */
+    private Integer currentMembers;
+
+    /**
      * 是否公开：0-私密（仅扫码/链接） 1-公开（展示在房间列表）
      */
     private Integer isPublic;

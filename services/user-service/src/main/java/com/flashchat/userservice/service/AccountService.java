@@ -81,5 +81,9 @@ public interface AccountService extends IService<AccountDO> {
      */
     void deleteAccount();
 
+    /**
+     * 失效账号缓存（供 CreditService 等跨 Service 调用）
+     */
+    void evictCacheByDbId(Long dbId);
 
 }
