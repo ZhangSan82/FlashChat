@@ -109,6 +109,25 @@ public class RoomDelayProducer {
                 .build();
     }
 
+    /**
+     * 单独投递 GRACE_END 延时事件
+     */
+    public void submitGraceEndEvent(String roomId, LocalDateTime graceEndTime, Integer expireVersion) {
+        long delayMs = java.time.Duration.between(LocalDateTime.now(), graceEndTime).toMillis();
+        if (delayMs < 0) {
+            delayMs = 0;
+        }
+        RoomDelayEvent event = RoomDelayEvent.builder()
+                .roomId(roomId)
+                .eventType(RoomDelayEventTypeEnum.GRACE_END)
+                .expireVersion(expireVersion)
+                .expectedTriggerTime(System.currentTimeMillis() + delayMs)
+                .build();
+        roomDelayedQueue.offer(event, delayMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+        log.info("[延时任务-单独投递 GRACE_END] room={}, graceEndTime={}, version={}, delay={}ms",
+                roomId, graceEndTime, expireVersion, delayMs);
+    }
+
     private long toEpochMilli(LocalDateTime time) {
         return time.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }

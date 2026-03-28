@@ -58,6 +58,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private static final long CACHE_TIMEOUT = 60000L;
     /**单用户最多同时加入的房间数 */
     private static final int MAX_ROOMS_PER_USER = 50;
+    /** 房主注销时的宽限期时长（分钟） */
+    private static final int FORCE_GRACE_MINUTES = 5;
+
 
     @Value("${flashchat.share.base-url:http://localhost:3002}")
     private String shareBaseUrl;
@@ -872,6 +875,50 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         evictRoomCache(roomId);
         log.info("[房间扩容成功] room={}, operator={}, maxMembers: {} → {}",
                 roomId, operatorId, currentMax, newMaxMembers);
+    }
+
+
+    @Override
+    public void doForceGrace(String roomId) {
+        RoomDO room = getRoomByRoomId(roomId);
+        if (room == null) {
+            log.warn("[强制宽限期-跳过] room={}, 房间不存在", roomId);
+            return;
+        }
+        RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
+        // 已关闭或已在宽限期 → 跳过
+        if (status == RoomStatusEnum.CLOSED || status == RoomStatusEnum.GRACE) {
+            log.info("[强制宽限期-跳过] room={}, 当前状态={}", roomId, status);
+            return;
+        }
+        // 宽限期从现在开始算
+        LocalDateTime graceEndTime = LocalDateTime.now().plusMinutes(FORCE_GRACE_MINUTES);
+        // CAS 更新：只有非 CLOSED 才更新，防并发
+        boolean updated = this.lambdaUpdate()
+                .eq(RoomDO::getRoomId, roomId)
+                .ne(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
+                .ne(RoomDO::getStatus, RoomStatusEnum.GRACE.getCode())
+                .set(RoomDO::getStatus, RoomStatusEnum.GRACE.getCode())
+                .set(RoomDO::getGraceEndTime, graceEndTime)
+                .update();
+        if (!updated) {
+            log.info("[强制宽限期-CAS 跳过] room={}, 可能已被其他操作处理", roomId);
+            return;
+        }
+        evictRoomCache(roomId);
+        // 主动投递 GRACE_END 延时事件（5 分钟后自动关闭）
+        try {
+            roomDelayProducer.submitGraceEndEvent(
+                    roomId, graceEndTime, room.getExpireVersion());
+        } catch (Exception e) {
+            log.error("[强制宽限期-延时任务投递失败] room={}, 将由兜底任务保障", roomId, e);
+        }
+        // WS 广播：文案区分于自然到期
+        roomChannelManager.broadcastToRoom(roomId,
+                WsRespDTO.of(roomId, WsRespDTOTypeEnum.ROOM_GRACE,
+                        "房主已注销，房间进入 " + FORCE_GRACE_MINUTES + " 分钟宽限期"));
+        log.info("[强制宽限期] room={}, 状态 {} → GRACE, graceEndTime={}",
+                roomId, status, graceEndTime);
     }
 
     /**

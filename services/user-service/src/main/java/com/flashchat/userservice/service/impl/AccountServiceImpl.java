@@ -12,6 +12,7 @@ import com.flashchat.user.core.LoginUserInfoDTO;
 import com.flashchat.user.core.UserContext;
 import com.flashchat.user.event.AccountDeletedEvent;
 import com.flashchat.user.event.MemberInfoChangedEvent;
+import com.flashchat.user.event.MemberLogoutEvent;
 import com.flashchat.user.toolkit.LoginIdUtil;
 import com.flashchat.userservice.contanst.CreditConstants;
 import com.flashchat.userservice.dao.entity.AccountDO;
@@ -126,19 +127,16 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
 
     /**
      * 登出当前用户
-     * <p>
-     * 当前阶段：仅失效 SaToken（Redis 中删除 token 和 Session）。
-     * <p>
-     * TODO Phase D/6：登出前通知 RoomChannelManager 关闭 WS 连接。
-     *   当前阶段 WS 还没改造为 token 认证，所以暂不处理。
-     *   拆模块后改为发布 MemberLogoutEvent，由 chat-service 的 @EventListener 处理。
-     *   此方法依赖 SaHolder，只能在 HTTP 请求线程中调用。
      * 批量踢人场景应使用 StpUtil.kickout(loginId)，不走此方法。
      */
     @Override
     public void doLogout() {
         if (StpUtil.isLogin()) {
             String loginId = StpUtil.getLoginIdAsString();
+            Long accountId = LoginIdUtil.extractId(loginId);
+            String token = StpUtil.getTokenValue();
+            applicationEventPublisher.publishEvent(
+                    new MemberLogoutEvent(this, accountId, token));
             StpUtil.logout();
             log.info("[登出成功] loginId={}", loginId);
         }

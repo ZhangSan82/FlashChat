@@ -106,4 +106,9 @@ public interface RoomService extends IService<RoomDO> {
      */
     void resizeRoom(@Valid RoomResizeReqDTO request);
 
+    /**
+     * 强制进入宽限期（房主注销时调用）
+     */
+    void doForceGrace(String roomId);
+
 }
