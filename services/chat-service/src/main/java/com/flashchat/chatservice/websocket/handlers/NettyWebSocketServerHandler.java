@@ -195,7 +195,10 @@ public class NettyWebSocketServerHandler extends SimpleChannelInboundHandler<Tex
                 // 原因：Netty EventLoop 和业务线程池都是线程复用的，
                 // ThreadLocal 的 set-use-clear 窗口中如果穿插其他任务会导致身份错乱
                 String nickname = account.getNickname();
-                String avatar = account.getAvatarColor();
+                String avatar = account.getAvatarUrl();
+                if (avatar == null || avatar.isBlank()) {
+                    avatar = account.getAvatarColor();
+                }
 
                 ChannelAttrUtil.bindIdentity(channel, accountDbId, userType, nickname, avatar);
 

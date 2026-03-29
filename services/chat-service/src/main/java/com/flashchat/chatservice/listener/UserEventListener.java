@@ -43,10 +43,10 @@ public class UserEventListener {
     private final RoomMemberService roomMemberService;
 
     /**
-     * 处理成员信息变更事件（改昵称 / 改头像色）
+     * 处理成员信息变更事件（改昵称 / 改头像）
      * <p>
      * 原逻辑在 AccountServiceImpl.updateProfile() 中直接调用：
-     * {@code roomChannelManager.updateMemberInfo(loginId, newNickname, newAvatarColor)}
+     * {@code roomChannelManager.updateMemberInfo(loginId, newNickname, newAvatar)}
      * <p>
      * 现在通过事件解耦，逻辑完全一致。
      */
@@ -54,14 +54,15 @@ public class UserEventListener {
     public void onMemberInfoChanged(MemberInfoChangedEvent event) {
         Long accountId = event.getAccountId();
         String newNickname = event.getNewNickname();
-        String newAvatarColor = event.getNewAvatarColor();
+        String newAvatar = event.getNewAvatar();
 
-        int updatedCount = roomChannelManager.updateMemberInfo(accountId, newNickname, newAvatarColor);
+        int updatedCount = roomChannelManager.updateMemberInfo(accountId, newNickname, newAvatar);
+        roomChannelManager.broadcastMemberInfoChanged(accountId, newNickname, newAvatar);
 
-        log.info("[事件-成员信息变更] accountId={}, nickname={}, avatarColor={}, 影响 {} 个房间",
+        log.info("[事件-成员信息变更] accountId={}, nickname={}, avatar={}, 影响 {} 个房间",
                 accountId,
                 newNickname != null ? newNickname : "(未改)",
-                newAvatarColor != null ? newAvatarColor : "(未改)",
+                newAvatar != null ? "(已更新)" : "(未改)",
                 updatedCount);
     }
 

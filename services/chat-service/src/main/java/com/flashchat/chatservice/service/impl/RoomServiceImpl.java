@@ -150,7 +150,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         }
 
         roomChannelManager.joinRoom(roomId, creator.getId(),
-                creator.getNickname(), creator.getAvatarColor(), true);
+                creator.getNickname(), resolveAccountAvatar(creator), true);
         return buildRoomInfoResp(room);
     }
 
@@ -252,7 +252,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         evictRoomCache(roomId);
 
         roomChannelManager.joinRoom(roomId, accountId,
-                account.getNickname(), account.getAvatarColor(), false);
+                account.getNickname(), resolveAccountAvatar(account), false);
         log.info("[加入房间] room={}, accountId={}", roomId, accountId);
         return buildRoomInfoResp(getRoomByRoomId(roomId));
     }
@@ -332,7 +332,12 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             } else {
                 AccountDO account = accountService.getAccountByDbId(id);
                 nickname = account != null ? account.getNickname() : "匿名用户";
-                avatar = account != null ? account.getAvatarColor() : "#999999";
+                if (account != null) {
+                    String url = account.getAvatarUrl();
+                    avatar = (url != null && !url.isEmpty()) ? url : account.getAvatarColor();
+                } else {
+                    avatar = "#999999";
+                }
             }
 
             boolean isMuted = memoryInfo != null ? memoryInfo.isMuted() : dbMember.getIsMuted() == 1;
@@ -370,7 +375,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         // 2. 获取用户信息（走缓存）
         AccountDO account = accountService.getAccountByDbId(accountId);
         String nickname = account != null ? account.getNickname() : "匿名用户";
-        String avatar = account != null ? account.getAvatarColor() : "#999999";
+        String avatar = resolveAccountAvatar(account);
 
         int count = 0;
         for (RoomMemberDO rm : activeMembers) {
@@ -385,6 +390,18 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             count++;
         }
         log.info("[恢复房间] memberId={}, 恢复了 {} 个房间", accountId, count);
+    }
+
+    private String resolveAccountAvatar(AccountDO account) {
+        if (account == null) {
+            return "#999999";
+        }
+        String avatarUrl = account.getAvatarUrl();
+        if (avatarUrl != null && !avatarUrl.isBlank()) {
+            return avatarUrl;
+        }
+        String avatarColor = account.getAvatarColor();
+        return (avatarColor != null && !avatarColor.isBlank()) ? avatarColor : "#999999";
     }
 
     /**
@@ -945,6 +962,15 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .build();
 
 }
+
+    @Override
+    public RoomInfoRespDTO previewRoom(String roomId) {
+        RoomDO room = getRoomByRoomId(roomId);
+        if (room == null) {
+            throw new ClientException("房间不存在");
+        }
+        return buildRoomInfoResp(room);
+    }
 
     /**
      * 房主操作公共校验（踢人/禁言/解禁共用）

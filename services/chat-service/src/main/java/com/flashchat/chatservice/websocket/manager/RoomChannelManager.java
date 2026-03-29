@@ -4,6 +4,7 @@ package com.flashchat.chatservice.websocket.manager;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.req.UserJoinMsgReqDTO;
 import com.flashchat.chatservice.dto.req.UserLeaveMsgReqDTO;
+import com.flashchat.chatservice.dto.resp.MemberInfoChangedRespDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
 import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
@@ -407,6 +408,27 @@ public class RoomChannelManager {
         }
 
         return updatedCount;
+    }
+
+    public void broadcastMemberInfoChanged(Long accountId, String nickname, String avatar) {
+        if (accountId == null) {
+            return;
+        }
+        Set<String> rooms = userRooms.get(accountId);
+        if (rooms == null || rooms.isEmpty()) {
+            return;
+        }
+
+        MemberInfoChangedRespDTO payload = MemberInfoChangedRespDTO.builder()
+                .accountId(accountId)
+                .nickname(nickname)
+                .avatar(avatar)
+                .build();
+
+        for (String roomId : new ArrayList<>(rooms)) {
+            broadcastToRoom(roomId,
+                    WsRespDTO.of(roomId, WsRespDTOTypeEnum.MEMBER_INFO_CHANGED, payload));
+        }
     }
 
     // ===========================================================

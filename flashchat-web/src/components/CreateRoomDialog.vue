@@ -9,7 +9,7 @@
           </div>
           <div class="dlg-grp"><label>房间时长</label>
             <div class="dlg-durs">
-              <button v-for="o in opts" :key="o.v" :class="['dlg-dur',{active:f.dur===o.v}]" @click="f.dur=o.v">{{o.l}}</button>
+              <button v-for="o in opts" :key="o.v" :class="['dlg-dur', {active:f.dur===o.v}]" @click="f.dur=o.v">{{o.l}}</button>
             </div>
           </div>
           <div class="dlg-grp"><label>最大人数</label>
@@ -30,20 +30,27 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-const emit = defineEmits(['create','close'])
+
+const emit = defineEmits(['create', 'close'])
 defineProps({ visible: Boolean })
 
 const opts = [
-  {l:'10分钟',v:'MIN_10'},{l:'30分钟',v:'MIN_30'},{l:'1小时',v:'HOUR_1'},{l:'2小时',v:'HOUR_2'},
-  {l:'6小时',v:'HOUR_6'},{l:'12小时',v:'HOUR_12'},{l:'24小时',v:'HOUR_24'},{l:'3天',v:'DAY_3'},{l:'7天',v:'DAY_7'}
+  {l:'10 分钟',v:'MIN_10'},{l:'30 分钟',v:'MIN_30'},{l:'1 小时',v:'HOUR_1'},{l:'2 小时',v:'HOUR_2'},
+  {l:'6 小时',v:'HOUR_6'},{l:'12 小时',v:'HOUR_12'},{l:'24 小时',v:'HOUR_24'},{l:'3 天',v:'DAY_3'},{l:'7 天',v:'DAY_7'}
 ]
 const f = reactive({ title: '', dur: 'MIN_30', max: 50 })
 const pub = ref(false)
 
 function ok() {
   if (!f.title.trim()) return
-  emit('create', { title: f.title.trim(), duration: f.dur, maxMembers: f.max, isPublic: pub.value?1:0 })
-  f.title=''; f.dur='MIN_30'; f.max=50; pub.value=false
+  // ★ 只传后端 RoomCreateReqDTO 需要的字段，不传 accountId
+  emit('create', {
+    title: f.title.trim(),
+    duration: f.dur,
+    maxMembers: f.max,
+    isPublic: pub.value ? 1 : 0
+  })
+  f.title = ''; f.dur = 'MIN_30'; f.max = 50; pub.value = false
 }
 </script>
 
@@ -70,9 +77,95 @@ function ok() {
 .dlg-ok { background:#C8956C;box-shadow:3px 3px 6px rgba(200,149,108,.3),-2px -2px 4px rgba(255,255,255,.6);color:#fff; }
 .dlg-ok:hover { filter:brightness(1.05); }
 .dlg-ok:disabled { opacity:.5;cursor:not-allowed; }
-
 .dlg-enter-active,.dlg-leave-active { transition:opacity .25s; }
 .dlg-enter-active .dlg-card,.dlg-leave-active .dlg-card { transition:transform .25s; }
 .dlg-enter-from,.dlg-leave-to { opacity:0; }
 .dlg-enter-from .dlg-card,.dlg-leave-to .dlg-card { transform:scale(.95) translateY(10px); }
+</style>
+
+<style scoped>
+.dlg-ov {
+  background: var(--fc-backdrop);
+  backdrop-filter: blur(18px);
+}
+
+.dlg-card {
+  background: linear-gradient(180deg, rgba(255, 250, 243, 0.96), rgba(247, 239, 228, 0.98));
+  border: 1px solid rgba(77, 52, 31, 0.10);
+  border-radius: 28px;
+  box-shadow: 0 30px 60px rgba(61, 40, 22, 0.18);
+  padding: 30px 30px 28px;
+}
+
+.dlg-h {
+  font-family: var(--fc-font);
+  font-size: 24px;
+  color: var(--fc-text);
+}
+
+.dlg-grp > label {
+  font-family: var(--fc-font);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fc-text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dlg-input {
+  background: rgba(243, 231, 215, 0.92);
+  border: 1px solid rgba(77, 52, 31, 0.08);
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.dlg-input:focus {
+  border-color: rgba(140, 90, 43, 0.24);
+  box-shadow: 0 0 0 4px rgba(173, 122, 68, 0.08);
+}
+
+.dlg-durs { gap: 10px; }
+
+.dlg-dur {
+  border: 1px solid rgba(77, 52, 31, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 250, 243, 0.72);
+  box-shadow: none;
+  color: var(--fc-text-sec);
+}
+
+.dlg-dur:hover {
+  background: #fffaf3;
+  box-shadow: var(--fc-shadow-soft);
+}
+
+.dlg-dur.active {
+  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
+  border-color: transparent;
+  box-shadow: 0 14px 24px rgba(140, 90, 43, 0.18);
+  color: #fffaf3;
+}
+
+.dlg-chk span { color: var(--fc-text); }
+
+.dlg-btn {
+  border: 1px solid rgba(77, 52, 31, 0.10);
+  border-radius: 16px;
+}
+
+.dlg-cancel {
+  background: rgba(255, 250, 243, 0.78);
+  box-shadow: none;
+  color: var(--fc-text-sec);
+}
+
+.dlg-cancel:hover {
+  background: #fffaf3;
+  box-shadow: var(--fc-shadow-soft);
+}
+
+.dlg-ok {
+  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
+  box-shadow: 0 16px 28px rgba(140, 90, 43, 0.22);
+}
 </style>

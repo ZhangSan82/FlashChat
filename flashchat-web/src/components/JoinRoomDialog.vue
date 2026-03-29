@@ -44,3 +44,61 @@ function ok() { if(!rid.value.trim())return; emit('join',rid.value.trim()); rid.
 .dlg-enter-from,.dlg-leave-to { opacity:0; }
 .dlg-enter-from .dlg-card,.dlg-leave-to .dlg-card { transform:scale(.95) translateY(10px); }
 </style>
+
+<style scoped>
+.dlg-ov {
+  background: var(--fc-backdrop);
+  backdrop-filter: blur(18px);
+}
+
+.dlg-card {
+  background: linear-gradient(180deg, rgba(255, 250, 243, 0.96), rgba(247, 239, 228, 0.98));
+  border: 1px solid rgba(77, 52, 31, 0.10);
+  border-radius: 28px;
+  box-shadow: 0 30px 60px rgba(61, 40, 22, 0.18);
+  padding: 30px 30px 28px;
+}
+
+.dlg-h {
+  font-family: var(--fc-font);
+  font-size: 24px;
+  color: var(--fc-text);
+}
+
+.dlg-grp > label {
+  font-family: var(--fc-font);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fc-text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dlg-input {
+  background: rgba(243, 231, 215, 0.92);
+  border: 1px solid rgba(77, 52, 31, 0.08);
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.dlg-input:focus {
+  border-color: rgba(140, 90, 43, 0.24);
+  box-shadow: 0 0 0 4px rgba(173, 122, 68, 0.08);
+}
+
+.dlg-btn {
+  border: 1px solid rgba(77, 52, 31, 0.10);
+  border-radius: 16px;
+}
+
+.dlg-cancel {
+  background: rgba(255, 250, 243, 0.78);
+  box-shadow: none;
+  color: var(--fc-text-sec);
+}
+
+.dlg-ok {
+  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
+  box-shadow: 0 16px 28px rgba(140, 90, 43, 0.22);
+}
+</style>

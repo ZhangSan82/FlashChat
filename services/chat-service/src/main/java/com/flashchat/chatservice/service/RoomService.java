@@ -111,4 +111,5 @@ public interface RoomService extends IService<RoomDO> {
      */
     void doForceGrace(String roomId);
 
+    RoomInfoRespDTO previewRoom(String roomId);
 }

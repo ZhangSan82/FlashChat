@@ -42,6 +42,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
@@ -196,7 +197,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         }
         boolean updated = false;
         String newNickname = null;
-        String newAvatarColor = null;
+        String oldDisplayAvatar = resolveDisplayAvatar(account);
         // ===== 1. 校验并设置昵称 =====
         if (request.getNickname() != null && !request.getNickname().isBlank()) {
             String trimmed = request.getNickname().trim();
@@ -217,7 +218,6 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
             }
             if (!color.equals(account.getAvatarColor())) {
                 account.setAvatarColor(color);
-                newAvatarColor = color;
                 updated = true;
             }
         }
@@ -242,18 +242,30 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         if (newNickname != null) {
             syncSessionNickname(account);
         }
-        // ===== 8. 更新 WS 内存（昵称/头像色变更时需要） =====
-        if (newNickname != null || newAvatarColor != null) {
-            //roomChannelManager.updateMemberInfo(loginId, newNickname, newAvatarColor);
+        // ===== 8. 更新 WS 内存（昵称/头像变更时需要） =====
+        String newDisplayAvatar = resolveDisplayAvatar(account);
+        String newAvatar = Objects.equals(oldDisplayAvatar, newDisplayAvatar) ? null : newDisplayAvatar;
+        if (newNickname != null || newAvatar != null) {
             applicationEventPublisher.publishEvent(
-                    new MemberInfoChangedEvent(this, loginId, newNickname, newAvatarColor)
+                    new MemberInfoChangedEvent(this, loginId, newNickname, newAvatar)
             );
         }
         log.info("[修改资料] accountId={}, nickname={}, avatarColor={}, avatarUrl={}",
                 account.getAccountId(),
                 newNickname != null ? newNickname : "(未改)",
-                newAvatarColor != null ? newAvatarColor : "(未改)",
+                request.getAvatarColor() != null ? "(已更新)" : "(未改)",
                 request.getAvatarUrl() != null ? "(已更新)" : "(未改)");
+    }
+
+    private String resolveDisplayAvatar(AccountDO account) {
+        if (account == null) {
+            return null;
+        }
+        String avatarUrl = account.getAvatarUrl();
+        if (avatarUrl != null && !avatarUrl.isBlank()) {
+            return avatarUrl;
+        }
+        return account.getAvatarColor();
     }
 
     @Override

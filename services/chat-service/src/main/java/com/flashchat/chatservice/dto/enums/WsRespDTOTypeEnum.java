@@ -24,7 +24,8 @@ public enum WsRespDTOTypeEnum {
     MSG_DELETED(15, "消息被删除"),
     ROOM_EXTENDED(16, "房间已延期"),
     MSG_REACTION_UPDATE(17, "表情回应更新"),
-    TYPING_STATUS(18, "打字状态");
+    TYPING_STATUS(18, "打字状态"),
+    MEMBER_INFO_CHANGED(19, "成员资料变更");
 
     private final Integer type;
     private final String desc;

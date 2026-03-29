@@ -44,6 +44,7 @@ public class SaTokenConfiguration implements WebMvcConfigurer {
                             "/api/FlashChat/v1/room/public",
                             "/api/FlashChat/v1/room/public/**",
                             "/api/FlashChat/v1/room/pricing",
+                            "/api/FlashChat/v1/room/preview/**",
 
                             // Spring 错误页
                             "/error"

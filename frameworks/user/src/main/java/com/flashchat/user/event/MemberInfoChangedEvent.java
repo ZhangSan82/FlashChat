@@ -4,7 +4,7 @@ import lombok.Getter;
 import org.springframework.context.ApplicationEvent;
 
 /**
- * 成员信息变更事件（改昵称 / 改头像色）
+ * 成员信息变更事件（改昵称 / 改头像）
  * <p>
  * <b>当前阶段</b>：仅定义，不发布、不监听。
  * 改昵称时直接方法调用 RoomChannelManager，调用链清晰可调试。
@@ -26,14 +26,14 @@ public class MemberInfoChangedEvent extends ApplicationEvent {
     /** 新昵称（null = 昵称未变） */
     private final String newNickname;
 
-    /** 新头像色（null = 头像色未变） */
-    private final String newAvatarColor;
+    /** 新头像（null = 头像未变；值可以是图片 URL 或颜色值） */
+    private final String newAvatar;
 
     public MemberInfoChangedEvent(Object source, Long accountId,
-                                  String newNickname, String newAvatarColor) {
+                                  String newNickname, String newAvatar) {
         super(source);
         this.accountId = accountId;
         this.newNickname = newNickname;
-        this.newAvatarColor = newAvatarColor;
+        this.newAvatar = newAvatar;
     }
 }

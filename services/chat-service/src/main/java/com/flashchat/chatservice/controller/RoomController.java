@@ -158,4 +158,13 @@ public class RoomController {
         roomService.resizeRoom(request);
         return Results.success();
     }
+
+    /**
+     * 房间预览（无需加入即可查看基本信息）
+     */
+    @GetMapping("/preview/{roomId}")
+    public Result<RoomInfoRespDTO> previewRoom(@PathVariable("roomId") String roomId) {
+        log.info("[房间预览] roomId={}", roomId);
+        return Results.success(roomService.previewRoom(roomId));
+    }
 }
