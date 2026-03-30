@@ -69,19 +69,22 @@
               <template v-else>
                 <div class="pp-profile-top">
                   <!-- ★ FIX: 查看模式也支持显示上传的头像 -->
-                  <div class="pp-avatar-lg" v-if="!profile.avatarUrl" :style="{ background: profile.avatarColor }">
-                    {{ (profile.nickname || '?')[0].toUpperCase() }}
+                  <div class="pp-avatar-shell">
+                    <div class="pp-avatar-lg" v-if="!profile.avatarUrl" :style="{ background: profile.avatarColor }">
+                      {{ (profile.nickname || '?')[0].toUpperCase() }}
+                    </div>
+                    <img v-else class="pp-avatar-lg pp-avatar-img" :src="profile.avatarUrl" alt="avatar" />
                   </div>
-                  <img v-else class="pp-avatar-lg pp-avatar-img" :src="profile.avatarUrl" alt="avatar" />
 
-                  <div class="pp-name">{{ profile.nickname }}</div>
-                  <div class="pp-acid">{{ profile.accountId }}</div>
-                  <button class="pp-edit-btn" @click="startEdit">
+                  <div class="pp-profile-meta">
+                    <div class="pp-name">{{ profile.nickname }}</div>
+                    <div class="pp-acid">FlashChat ID：{{ profile.accountId }}</div>
+                  </div>
+                  <button class="pp-edit-btn" type="button" aria-label="edit profile" @click="startEdit">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                     </svg>
-                    编辑资料
                   </button>
                 </div>
 
@@ -469,32 +472,71 @@ function formatDate(dt) {
 }
 
 .pp-profile-top {
-  padding: 24px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  text-align: left;
   border: 1px solid rgba(77, 52, 31, 0.08);
-  border-radius: 26px;
+  border-radius: 24px;
   background: rgba(255, 250, 243, 0.74);
   box-shadow: var(--fc-shadow-soft);
   margin-bottom: 18px;
 }
 
-.pp-name {
+.pp-avatar-shell {
+  width: 68px;
+  height: 68px;
+  padding: 4px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(221, 193, 163, 0.52));
+}
+
+.pp-profile-top .pp-avatar-lg {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 50%;
   font-size: 24px;
+  box-shadow: 0 12px 24px rgba(61, 40, 22, 0.14);
+}
+
+.pp-profile-top .pp-avatar-img {
+  border-radius: 50%;
+}
+
+.pp-profile-meta {
+  min-width: 0;
+}
+
+.pp-name {
+  margin: 0;
+  font-size: 22px;
   line-height: 1.08;
   color: var(--fc-text);
+  word-break: break-word;
 }
 
 .pp-acid {
-  margin-bottom: 18px;
+  margin-top: 8px;
+  margin-bottom: 0;
   font-size: 13px;
   color: var(--fc-text-sec);
+  letter-spacing: 0.03em;
 }
 
 .pp-edit-btn {
-  padding: 10px 18px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
   border: 1px solid rgba(77, 52, 31, 0.10);
+  border-radius: 50%;
   background: rgba(243, 231, 215, 0.9);
   box-shadow: none;
   color: var(--fc-accent-strong);
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .pp-edit-btn:hover {

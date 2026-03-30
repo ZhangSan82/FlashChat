@@ -29,7 +29,6 @@ import java.util.regex.MatchResult;
 @Component
 @Order(20)
 @RequiredArgsConstructor
-@EnableConfigurationProperties(AuditProperties.class)
 public class SensitiveWordAuditHandler extends AbstractAuditHandler {
 
     private final AuditProperties auditProperties;

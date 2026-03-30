@@ -1,12 +1,12 @@
-<template>
+﻿<template>
   <div class="fc-root">
     <div v-if="!authReady" class="fc-loading">
       <div class="fc-pulse"></div>
-      <p v-if="!initFailed" class="fc-load-text">正在连接 FlashChat...</p>
+      <p v-if="!initFailed" class="fc-load-text">姝ｅ湪杩炴帴 FlashChat...</p>
       <div v-else class="fc-load-fail">
-        <p class="fc-load-text fc-danger">连接失败</p>
-        <p class="fc-load-hint">请确认后端服务已启动（8081 端口）</p>
-        <button class="fc-retry" @click="retryInit">重新连接</button>
+        <p class="fc-load-text fc-danger">杩炴帴澶辫触</p>
+        <p class="fc-load-hint">请确认后端服务已经启动，并检查 `8081` 端口。</p>
+        <button class="fc-retry" @click="retryInit">閲嶆柊杩炴帴</button>
       </div>
     </div>
 
@@ -29,7 +29,7 @@
           show-files="true"
           show-audio="true"
           show-emojis="true"
-          show-reaction-emojis="false"
+          show-reaction-emojis="true"
           show-new-messages-divider="true"
           :show-footer="!!chat.currentRoomId.value"
           :text-messages="txtMsg"
@@ -38,10 +38,44 @@
           :accepted-files="acceptFiles"
           :styles="themeStr"
           room-info-enabled="true"
-      />
+      >
+        <template v-if="mobileViewport">
+          <MobileRoomSwipeItem
+              v-for="room in chat.rooms.value"
+              :key="room.roomId"
+              :slot="`room-list-item_${room.roomId}`"
+              :room="room"
+              :selected="chat.currentRoomId.value === room.roomId"
+              :open="mobileSwipeRoomId === room.roomId"
+              :can-close="chat.isCurrentUserHost(room.roomId)"
+              @swipe-state="onMobileRoomSwipeState"
+              @action="onMobileRoomAction($event, room.roomId)"
+          />
+        </template>
+      </vue-advanced-chat>
+
+      <transition name="room-banner">
+        <div v-if="showRoomBanner" class="fc-room-banner" :class="`is-${activeRoomState.kind}`">
+          <div class="fc-room-banner-kicker">{{ roomBannerKicker }}</div>
+          <div class="fc-room-banner-title">{{ activeRoomState.title }}</div>
+          <div class="fc-room-banner-text">{{ activeRoomState.detail }}</div>
+        </div>
+      </transition>
+
+      <transition name="room-lockbar">
+        <div v-if="showRoomLockbar" class="fc-room-lockbar" :class="`is-${activeRoomState.kind}`">
+          <div class="fc-room-lockbar-copy">
+            <div class="fc-room-lockbar-title">{{ activeRoomState.title }}</div>
+            <div class="fc-room-lockbar-text">{{ activeRoomState.blockReason }}</div>
+          </div>
+          <button class="fc-room-lockbar-btn" type="button" @click="openRoomInfoPanel(chat.currentRoomId.value)">
+            查看房间
+          </button>
+        </div>
+      </transition>
     </div>
 
-    <!-- 侧滑菜单 -->
+    <!-- 渚ф粦鑿滃崟 -->
     <SideDrawer
         :visible="drawerOpen"
         :nickname="auth.identity.value?.nickname || ''"
@@ -52,20 +86,23 @@
         @action="onDrawerAction"
     />
 
-    <!-- 房间信息面板 -->
+    <!-- 鎴块棿淇℃伅闈㈡澘 -->
     <RoomInfoDeck
         :visible="panelOpen"
         :room="curRoomRaw"
-        :members="curMembers"
-        :is-host="chat.isCurrentUserHost(chat.currentRoomId.value)"
-        @close="panelOpen = false"
+        :members="panelMembers"
+        :is-host="chat.isCurrentUserHost(panelRoomId || chat.currentRoomId.value)"
+        :current-account-id="auth.memberId.value"
+        :room-state="panelRoomState"
+        @close="closeRoomInfoPanel"
         @leave="doLeaveFromPanel"
         @close-room="doCloseFromPanel"
         @extend-room="extendDlg = true"
         @resize-room="resizeDlg = true"
+        @member-action="openMemberActionConfirm"
     />
 
-    <!-- ★ 个人资料面板 -->
+    <!-- 鈽?涓汉璧勬枡闈㈡澘 -->
     <ProfilePanel
         :visible="profileOpen"
         @close="profileOpen = false"
@@ -77,14 +114,14 @@
         @profile-updated="onProfileUpdated"
     />
 
-    <!-- ★ 账号升级弹窗 -->
+    <!-- 鈽?璐﹀彿鍗囩骇寮圭獥 -->
     <UpgradeDialog
         :visible="upgradeDlg"
         @upgraded="onUpgraded"
         @close="upgradeDlg = false"
     />
 
-    <!-- ★ 密码弹窗 -->
+    <!-- 鈽?瀵嗙爜寮圭獥 -->
     <PasswordDialog
         :visible="passwordDlg"
         :mode="passwordMode"
@@ -92,8 +129,9 @@
         @close="passwordDlg = false"
     />
 
-    <!-- 创建/加入房间弹窗 -->
+    <!-- 鍒涘缓/鍔犲叆鎴块棿寮圭獥 -->
     <RoomCreateSheet :visible="createDlg" @create="doCreateRoom" @close="createDlg = false" />
+    <RoomCreatedDialog :visible="createdRoomDialog" :room="createdRoomPending" @enter="enterCreatedRoom" />
     <JoinRoomDialog :visible="joinDlg" @join="doJoinRoom" @close="joinDlg = false" />
     <RoomExtendSheet :visible="extendDlg" :room="curRoomRaw" @extend="doExtendRoom" @close="extendDlg = false" />
     <RoomResizeSheet :visible="resizeDlg" :room="curRoomRaw" @resize="doResizeRoom" @close="resizeDlg = false" />
@@ -104,16 +142,16 @@
           <div class="fc-confirm-card">
             <div class="fc-confirm-kicker">Message Action</div>
             <div class="fc-confirm-title">删除这条消息？</div>
-            <p class="fc-confirm-text">房主删除后，这条消息会从当前房间里移除，其他成员也会同步看不到。</p>
+            <p class="fc-confirm-text">房主删除后，这条消息会从当前房间移除，其他成员也会同步看不到。</p>
             <div v-if="deleteConfirm.message" class="fc-confirm-preview">
-              {{ deleteConfirm.message.content || '[文件消息]' }}
+              {{ deleteConfirm.message.content || '[鏂囦欢娑堟伅]' }}
             </div>
             <div class="fc-confirm-actions">
               <button class="fc-confirm-btn fc-confirm-btn-ghost" type="button" :disabled="deleteConfirm.pending" @click="closeDeleteConfirm">
-                取消
+                鍙栨秷
               </button>
               <button class="fc-confirm-btn fc-confirm-btn-danger" type="button" :disabled="deleteConfirm.pending" @click="confirmDeleteMessage">
-                {{ deleteConfirm.pending ? '删除中...' : '确认删除' }}
+                {{ deleteConfirm.pending ? '鍒犻櫎涓?..' : '纭鍒犻櫎' }}
               </button>
             </div>
           </div>
@@ -129,14 +167,57 @@
             <div class="fc-confirm-title">{{ deleteConfirmTitle }}</div>
             <p class="fc-confirm-text">{{ deleteConfirmText }}</p>
             <div v-if="deleteConfirm.message" class="fc-confirm-preview">
-              {{ deleteConfirm.message.content || '[文件消息]' }}
+              {{ deleteConfirm.message.content || '[鏂囦欢娑堟伅]' }}
             </div>
             <div class="fc-confirm-actions">
               <button class="fc-confirm-btn fc-confirm-btn-ghost" type="button" :disabled="deleteConfirm.pending" @click="closeDeleteConfirm">
-                取消
+                鍙栨秷
               </button>
               <button class="fc-confirm-btn fc-confirm-btn-danger" type="button" :disabled="deleteConfirm.pending" @click="confirmDeleteMessage">
-                {{ deleteConfirm.pending ? '处理中...' : deleteConfirmButtonText }}
+                {{ deleteConfirm.pending ? '澶勭悊涓?..' : deleteConfirmButtonText }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
+
+    <Teleport to="body">
+      <transition name="confirm">
+        <div v-if="roomActionConfirm.visible" class="fc-confirm-mask" @click.self="closeRoomActionConfirm">
+          <div class="fc-confirm-card">
+            <div class="fc-confirm-kicker">Room Action</div>
+            <div class="fc-confirm-title">{{ roomActionConfirmTitle }}</div>
+            <p class="fc-confirm-text">{{ roomActionConfirmText }}</p>
+            <div class="fc-confirm-actions">
+              <button class="fc-confirm-btn fc-confirm-btn-ghost" type="button" :disabled="roomActionConfirm.pending" @click="closeRoomActionConfirm">
+                取消
+              </button>
+              <button class="fc-confirm-btn fc-confirm-btn-danger" type="button" :disabled="roomActionConfirm.pending" @click="confirmRoomAction">
+                {{ roomActionConfirm.pending ? '处理中...' : roomActionConfirmButtonText }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
+
+    <Teleport to="body">
+      <transition name="confirm">
+        <div v-if="memberActionConfirm.visible" class="fc-confirm-mask" @click.self="closeMemberActionConfirm">
+          <div class="fc-confirm-card">
+            <div class="fc-confirm-kicker">Member Action</div>
+            <div class="fc-confirm-title">{{ memberActionConfirmTitle }}</div>
+            <p class="fc-confirm-text">{{ memberActionConfirmText }}</p>
+            <div v-if="memberActionConfirm.member" class="fc-confirm-preview">
+              {{ memberActionConfirm.member.username || '匿名成员' }}
+            </div>
+            <div class="fc-confirm-actions">
+              <button class="fc-confirm-btn fc-confirm-btn-ghost" type="button" :disabled="memberActionConfirm.pending" @click="closeMemberActionConfirm">
+                取消
+              </button>
+              <button class="fc-confirm-btn fc-confirm-btn-danger" type="button" :disabled="memberActionConfirm.pending" @click="confirmMemberAction">
+                {{ memberActionConfirm.pending ? '处理中...' : memberActionConfirmButtonText }}
               </button>
             </div>
           </div>
@@ -146,24 +227,26 @@
 
     <!-- Toast -->
     <transition name="toast">
-      <div v-if="toast.show" :class="['fc-toast', `fc-toast-${toast.type}`]">{{ toast.msg }}</div>
+      <div v-if="toast.show" :class="['fc-toast', `fc-toast-${toast.type}`, { 'fc-toast-with-panel': panelOpen }]">{{ toast.msg }}</div>
     </transition>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { register } from 'vue-advanced-chat'
 register()
 
 import SideDrawer from './SideDrawer.vue'
+import MobileRoomSwipeItem from './MobileRoomSwipeItem.vue'
 import RoomInfoDeck from './RoomInfoDeck.vue'
 import RoomCreateSheet from './RoomCreateSheet.vue'
+import RoomCreatedDialog from './RoomCreatedDialog.vue'
 import RoomExtendSheet from './RoomExtendSheet.vue'
 import RoomResizeSheet from './RoomResizeSheet.vue'
 import JoinRoomDialog from './JoinRoomDialog.vue'
-// ★ 新增组件导入
+// 鈽?鏂板缁勪欢瀵煎叆
 import ProfilePanel from './ProfilePanel.vue'
 import UpgradeDialog from './UpgradeDialog.vue'
 import PasswordDialog from './PasswordDialog.vue'
@@ -174,6 +257,7 @@ import { useChat } from '@/composables/useChat'
 import { deleteAccount as apiDeleteAccount } from '@/api/account'
 import { extendRoom as apiExtendRoom, resizeRoom as apiResizeRoom } from '@/api/room'
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
 const ws = useWebSocket()
@@ -187,16 +271,22 @@ const myId = computed(() => String(auth.memberId.value || ''))
 
 const drawerOpen = ref(false)
 const panelOpen = ref(false)
+const panelRoomId = ref('')
+const panelMembers = ref([])
 const createDlg = ref(false)
+const createdRoomDialog = ref(false)
+const createdRoomPending = ref(null)
 const joinDlg = ref(false)
 const extendDlg = ref(false)
 const resizeDlg = ref(false)
 const viewH = ref('100vh')
+const mobileViewport = ref(false)
+const mobileSwipeRoomId = ref('')
 const chatEl = ref(null)
 const initFailed = ref(false)
 const curMembers = ref([])
 
-// ★ 新增状态
+// 鈽?鏂板鐘舵€?
 const profileOpen = ref(false)
 const upgradeDlg = ref(false)
 const passwordDlg = ref(false)
@@ -208,6 +298,19 @@ const deleteConfirm = ref({
   message: null,
   mode: 'self'
 })
+const roomActionConfirm = ref({
+  visible: false,
+  pending: false,
+  roomId: '',
+  action: ''
+})
+const memberActionConfirm = ref({
+  visible: false,
+  pending: false,
+  roomId: '',
+  action: '',
+  member: null
+})
 const legacyDeleteConfirmVisible = computed(() => false)
 
 let bound = false
@@ -218,18 +321,43 @@ let typingIdleTimer = null
 let typingRoomId = null
 
 const curRoomRaw = computed(() =>
-    chat.roomsRaw.value.find(r => r.roomId === chat.currentRoomId.value) || null
+    chat.roomsRaw.value.find(r => r.roomId === (panelRoomId.value || chat.currentRoomId.value)) || null
 )
+const activeRoomState = computed(() => chat.getRoomState(chat.currentRoomId.value))
+const panelRoomState = computed(() => chat.getRoomState(panelRoomId.value || chat.currentRoomId.value))
+const currentRoomCanSend = computed(() => {
+  return Boolean(chat.currentRoomId.value) && Boolean(activeRoomState.value?.canSend)
+})
+const showRoomBanner = computed(() => {
+  if (!chat.currentRoomId.value) return false
+  return ['expiring', 'grace', 'closed'].includes(activeRoomState.value?.kind)
+})
+const showRoomLockbar = computed(() => {
+  if (!chat.currentRoomId.value) return false
+  return ['grace', 'closed'].includes(activeRoomState.value?.kind)
+})
+const roomBannerKicker = computed(() => {
+  const kind = activeRoomState.value?.kind
+  if (kind === 'expiring') return '即将到期'
+  if (kind === 'grace') return '宽限期'
+  if (kind === 'closed') return '房间关闭'
+  return '房间状态'
+})
 
 const roomsStr = computed(() => JSON.stringify(chat.rooms.value))
 const msgsStr = computed(() => JSON.stringify(chat.messages.value))
 
 const txtMsg = JSON.stringify({
-  ROOMS_EMPTY: '还没有加入任何房间，点击右上角 + 号开始',
-  ROOM_EMPTY: '还没有消息', NEW_MESSAGES: '新消息',
-  MESSAGE_DELETED: '此消息已被删除', MESSAGES_EMPTY: '还没有消息',
-  CONVERSATION_STARTED: '会话开始', TYPE_MESSAGE: '输入消息...',
-  SEARCH: '搜索房间...', IS_ONLINE: '在线', LAST_SEEN: '最近活跃',
+  ROOMS_EMPTY: '还没有加入任何房间，点击右上角 + 开始创建',
+  ROOM_EMPTY: '还没有消息',
+  NEW_MESSAGES: '新消息',
+  MESSAGE_DELETED: '此消息已被删除',
+  MESSAGES_EMPTY: '还没有消息',
+  CONVERSATION_STARTED: '会话开始',
+  TYPE_MESSAGE: '输入消息...',
+  SEARCH: '搜索房间...',
+  IS_ONLINE: '在线',
+  LAST_SEEN: '最近活跃',
   IS_TYPING: '正在输入...'
 })
 
@@ -261,17 +389,48 @@ const deleteConfirmText = computed(() =>
 const deleteConfirmButtonText = computed(() =>
   deleteConfirm.value.mode === 'all' ? '确认为所有人删除' : '确认仅自己删除'
 )
+const roomActionConfirmTitle = computed(() =>
+  roomActionConfirm.value.action === 'closeRoom' ? '关闭这个房间？' : '离开这个房间？'
+)
+const roomActionConfirmText = computed(() =>
+  roomActionConfirm.value.action === 'closeRoom'
+    ? '关闭后，房间会对所有成员停止可用，当前聊天也会结束。'
+    : '离开后，你会返回房间列表，不再停留在这个聊天里。'
+)
+const roomActionConfirmButtonText = computed(() =>
+  roomActionConfirm.value.action === 'closeRoom' ? '确认关闭' : '确认离开'
+)
+const memberActionConfirmTitle = computed(() => {
+  const name = memberActionConfirm.value.member?.username || '这位成员'
+  if (memberActionConfirm.value.action === 'kick') return `将 ${name} 移出房间？`
+  if (memberActionConfirm.value.action === 'unmute') return `解除 ${name} 的禁言？`
+  return `对 ${name} 执行禁言？`
+})
+const memberActionConfirmText = computed(() => {
+  if (memberActionConfirm.value.action === 'kick') {
+    return '踢出后，该成员会立刻退出当前房间，需要重新加入后才能再次进入。'
+  }
+  if (memberActionConfirm.value.action === 'unmute') {
+    return '解除后，对方会立刻恢复发言能力。'
+  }
+  return '禁言后，对方仍可查看消息，但无法继续发送新消息。'
+})
+const memberActionConfirmButtonText = computed(() => {
+  if (memberActionConfirm.value.action === 'kick') return '确认踢出'
+  if (memberActionConfirm.value.action === 'unmute') return '确认解除'
+  return '确认禁言'
+})
 const acceptFiles = 'image/*,audio/*,video/*,application/pdf,text/plain'
 
 const themeStr = JSON.stringify({
-  general: { color: '#201813', colorSpinner: '#AD7A44', borderStyle: 'none', backgroundInput: '#F7EFE4', colorPlaceholder: '#A89482', colorCaret: '#8C5A2B', backgroundScrollIcon: 'rgba(255,250,243,0.94)' },
-  container: { border: '1px solid rgba(77,52,31,0.08)', borderRadius: '28px', boxShadow: '0 18px 44px rgba(61,40,22,0.12)' },
-  header: { background: 'rgba(255,250,243,0.92)', colorRoomName: '#201813', colorRoomInfo: '#6B5B4B' },
-  footer: { background: 'rgba(255,250,243,0.94)', backgroundReply: '#F3E7D7' },
-  sidenav: { background: 'rgba(244,234,220,0.74)', backgroundHover: 'rgba(255,250,243,0.82)', backgroundActive: '#FFFAF3', colorActive: '#201813', borderColorSearch: 'rgba(77,52,31,0.12)' },
-  content: { background: 'linear-gradient(180deg,#FBF7F1 0%,#F7EFE4 100%)' },
-  message: { background: 'rgba(255,255,255,0.94)', backgroundMe: '#F2E1CB', color: '#201813', colorStarted: '#A89482', backgroundDeleted: '#F0E3D5', colorDeleted: '#8F7E6E', colorUsername: '#8C5A2B', colorTimestamp: '#A89482', backgroundDate: 'rgba(255,250,243,0.92)', colorDate: '#6B5B4B', backgroundSystem: 'transparent', colorSystem: '#7D6C5C', colorNewMessages: '#8C5A2B', backgroundReply: 'rgba(173,122,68,0.10)', colorReplyUsername: '#8C5A2B', backgroundImage: '#EFE1D0' },
-  room: { colorUsername: '#201813', colorMessage: '#7A6959', colorTimestamp: '#8F7E6E', colorStateOnline: '#6F9B6B', colorStateOffline: '#B1A08F', backgroundCounterBadge: '#8C5A2B', colorCounterBadge: '#FFFAF3' },
+  general: { color: '#241B13', colorSpinner: '#AD7A44', borderStyle: 'none', backgroundInput: '#F7EFE4', colorPlaceholder: '#A89482', colorCaret: '#8C5A2B', backgroundScrollIcon: 'rgba(255,250,243,0.94)' },
+  container: { border: '1px solid rgba(77,52,31,0.08)', borderRadius: '32px', boxShadow: '0 24px 54px rgba(61,40,22,0.14)' },
+  header: { background: 'rgba(250,245,236,0.9)', colorRoomName: '#241B13', colorRoomInfo: '#786653' },
+  footer: { background: 'rgba(255,250,243,0.95)', backgroundReply: '#F3E7D7' },
+  sidenav: { background: 'rgba(245,236,223,0.78)', backgroundHover: 'rgba(255,250,243,0.86)', backgroundActive: '#FFFCF7', colorActive: '#201813', borderColorSearch: 'rgba(77,52,31,0.10)' },
+  content: { background: 'linear-gradient(180deg,#FCF8F2 0%,#F6EEE3 100%)' },
+  message: { background: 'rgba(255,253,249,0.96)', backgroundMe: '#F2E1CB', color: '#241B13', colorStarted: '#A89482', backgroundDeleted: '#F0E3D5', colorDeleted: '#8F7E6E', colorUsername: '#8C5A2B', colorTimestamp: '#A89482', backgroundDate: 'rgba(255,250,243,0.92)', colorDate: '#6B5B4B', backgroundSystem: 'transparent', colorSystem: '#7D6C5C', colorNewMessages: '#8C5A2B', backgroundReply: 'rgba(173,122,68,0.10)', colorReplyUsername: '#8C5A2B', backgroundImage: '#EFE1D0' },
+  room: { colorUsername: '#241B13', colorMessage: '#7A6959', colorTimestamp: '#8F7E6E', colorStateOnline: '#6F9B6B', colorStateOffline: '#B1A08F', backgroundCounterBadge: '#8C5A2B', colorCounterBadge: '#FFFAF3' },
   emoji: { background: '#FFFAF3' },
   icons: { search: '#7A6959', add: '#8C5A2B', toggle: '#7A6959', menu: '#7A6959', close: '#7A6959', file: '#8C5A2B', paperclip: '#7A6959', send: '#8C5A2B', sendDisabled: '#B9AA99', emoji: '#7A6959', document: '#8C5A2B', checkmark: '#8C5A2B', checkmarkSeen: '#8C5A2B', eye: '#7A6959', dropdownMessage: '#7A6959', dropdownRoom: '#7A6959', dropdownScroll: '#8C5A2B', microphone: '#7A6959', audioPlay: '#8C5A2B', audioPause: '#8C5A2B', audioCancel: '#BB6A5E', audioConfirm: '#6F9B6B' }
 })
@@ -293,16 +452,33 @@ function injectShadowCSS() {
   const style = document.createElement('style')
   style.id = 'fc-injected'
   style.textContent = `
-    .vac-card-window{background:rgba(255,250,243,0.62)!important;backdrop-filter:blur(18px)!important}
+    .vac-card-window{background:rgba(252,247,240,0.64)!important;backdrop-filter:blur(22px)!important}
+    .vac-chat-container{background:linear-gradient(180deg,rgba(252,248,242,0.64),rgba(243,233,220,0.4))!important}
+    .vac-rooms-container{background:linear-gradient(180deg,rgba(245,236,223,0.88),rgba(240,228,212,0.76))!important;border-right:1px solid rgba(77,52,31,0.08)!important;position:relative!important}
+    .vac-rooms-container::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,0.18),transparent 42%),radial-gradient(circle at top left,rgba(221,193,163,0.18),transparent 30%);pointer-events:none}
     .vac-room-header,.vac-box-search,.vac-room-footer{backdrop-filter:blur(18px)!important}
-    .vac-room-item{border-radius:18px!important;margin:6px 10px!important;border:1px solid transparent!important;background:transparent!important;box-shadow:none!important;transition:transform .22s ease,background .22s ease,border-color .22s ease,box-shadow .22s ease!important}
+    .vac-room-header{height:72px!important;background:linear-gradient(180deg,rgba(250,245,236,0.92),rgba(250,245,236,0.72))!important}
+    .vac-room-header .vac-room-wrapper{padding:0 18px!important}
+    .vac-room-header .vac-avatar{height:42px!important;width:42px!important;min-height:42px!important;min-width:42px!important;margin-right:14px!important;border-radius:50%!important;box-shadow:0 10px 22px rgba(125,86,45,0.16)!important}
+    .vac-room-header .vac-room-name{font-family:var(--fc-font-display)!important;font-size:24px!important;line-height:1!important;font-weight:600!important;letter-spacing:.01em!important}
+    .vac-room-header .vac-room-info{font-size:11px!important;line-height:16px!important;letter-spacing:.14em!important;text-transform:uppercase!important;color:#8a7763!important}
+    .vac-rooms-container .vac-room-list{padding:10px 12px 8px!important}
+    .vac-room-item{border-radius:24px!important;margin:6px 8px!important;border:1px solid transparent!important;background:transparent!important;box-shadow:none!important;transition:transform .22s ease,background .22s ease,border-color .22s ease,box-shadow .22s ease!important}
     .vac-room-item:hover{background:rgba(255,250,243,0.78)!important;border-color:rgba(77,52,31,0.08)!important;transform:translateX(2px)!important}
-    .vac-room-item.vac-room-selected,.vac-rooms-container .vac-room-selected,[class*="room-selected"]{background:#fffaf3!important;border-color:rgba(77,52,31,0.16)!important;box-shadow:0 16px 30px rgba(61,40,22,0.10)!important}
-    .vac-rooms-container .vac-room-header input{background:rgba(255,250,243,0.78)!important;border:1px solid rgba(77,52,31,0.12)!important;border-radius:18px!important;box-shadow:none!important}
-    .vac-room-header .vac-add-icon{border-radius:50%!important;background:rgba(255,250,243,0.82)!important;border:1px solid rgba(77,52,31,0.10)!important;padding:6px!important}
-    .vac-room-footer .vac-box-footer{background:rgba(255,250,243,0.94)!important;border:1px solid rgba(77,52,31,0.10)!important;border-radius:22px!important;box-shadow:0 14px 30px rgba(61,40,22,0.08)!important}
+    .vac-room-item.vac-room-selected,.vac-rooms-container .vac-room-selected,[class*="room-selected"]{background:linear-gradient(180deg,#fffdf9 0%,#f8efe2 100%)!important;border-color:rgba(140,90,43,0.18)!important;box-shadow:0 20px 34px rgba(61,40,22,0.12)!important}
+    .vac-room-container .vac-room-name{font-family:var(--fc-font-display)!important;font-size:20px!important;line-height:1.04!important;font-weight:600!important}
+    .vac-room-container .vac-text-date{margin-left:8px!important;font-size:10px!important;letter-spacing:.12em!important;text-transform:uppercase!important}
+    .vac-room-container .vac-text-last{display:flex!important;align-items:center!important;font-size:12px!important;line-height:18px!important;color:#7a6959!important}
+    .vac-room-container .vac-room-badge{min-width:20px!important;height:20px!important;padding:0 6px!important;border-radius:999px!important;box-shadow:0 8px 16px rgba(140,90,43,0.18)!important}
+    .vac-rooms-container .vac-room-header input{background:rgba(255,250,243,0.84)!important;border:1px solid rgba(77,52,31,0.10)!important;border-radius:20px!important;box-shadow:none!important}
+    .vac-room-header .vac-add-icon{border-radius:50%!important;background:rgba(255,250,243,0.88)!important;border:1px solid rgba(77,52,31,0.10)!important;padding:7px!important}
+    .vac-room-footer .vac-box-footer{background:rgba(255,250,243,0.96)!important;border:1px solid rgba(77,52,31,0.08)!important;border-radius:24px!important;box-shadow:0 16px 30px rgba(61,40,22,0.08)!important}
+    .vac-col-messages .vac-container-scroll{background:linear-gradient(180deg,rgba(252,248,242,0.82) 0%,rgba(246,238,226,0.92) 100%)!important}
+    .vac-message-wrapper .vac-card-system{max-width:320px!important;padding:8px 18px!important;border-radius:999px!important;border:1px solid rgba(77,52,31,0.10)!important;background:rgba(255,250,243,0.76)!important;color:#7b6754!important;box-shadow:none!important}
     .vac-message-wrapper .vac-message-box{max-width:78%!important;line-height:1.2!important;margin-bottom:9px!important}
-    .vac-message-wrapper .vac-avatar{margin:0 0 20px!important}
+    .vac-message-wrapper .vac-avatar{height:34px!important;width:34px!important;min-height:34px!important;min-width:34px!important;margin:0 0 20px!important;border-radius:50%!important;box-shadow:0 8px 18px rgba(61,40,22,0.14)!important}
+    .vac-message-wrapper .vac-avatar-current-offset{margin-right:34px!important}
+    .vac-message-wrapper .vac-avatar-offset{margin-left:34px!important}
     .vac-message-wrapper .vac-message-container{padding:4px 10px!important;min-width:auto!important;overflow:visible!important}
     .vac-message-wrapper .vac-message-container-offset{margin-top:5px!important}
     .vac-message-wrapper .vac-message-card{position:relative!important;min-width:138px!important;border-radius:24px!important;border:1px solid rgba(77,52,31,0.08)!important;box-shadow:0 12px 24px rgba(61,40,22,0.07)!important;padding:8px 48px 10px 16px!important}
@@ -317,7 +493,10 @@ function injectShadowCSS() {
     .vac-message-wrapper .vac-reply-message{margin:0 -4px 6px!important;padding:5px 10px!important;border-radius:14px!important}
     .vac-message-wrapper .vac-reply-message .vac-reply-username{font-size:11px!important;line-height:1.08!important;margin-bottom:2px!important}
     .vac-message-wrapper .vac-reply-message .vac-reply-content{font-size:11px!important;line-height:1.25!important}
-    @media only screen and (max-width: 768px){.vac-message-wrapper .vac-message-box{max-width:88%!important;margin-bottom:7px!important}.vac-message-wrapper .vac-avatar{margin:0 0 11px!important}.vac-message-wrapper .vac-message-container{padding:4px 5px!important}.vac-message-wrapper .vac-message-card{min-width:122px!important;padding:7px 42px 9px 13px!important;border-radius:22px!important}.vac-message-wrapper .vac-message-box:not(.vac-offset-current) .vac-message-card::before{left:-6px!important;bottom:9px!important;width:14px!important;height:16px!important}.vac-message-wrapper .vac-message-box.vac-offset-current .vac-message-card::before{right:-6px!important;bottom:9px!important;width:14px!important;height:16px!important}.vac-message-wrapper .vac-text-timestamp{right:13px!important;bottom:8px!important}}
+    .vac-button-reaction{border:1px solid rgba(77,52,31,0.10)!important;background:rgba(255,250,243,0.88)!important;border-radius:999px!important;padding:1px 8px!important;box-shadow:none!important}
+    .vac-button-reaction span{color:var(--fc-text-sec)!important}
+    .vac-button-reaction.vac-reaction-me{border-color:rgba(140,90,43,0.18)!important;background:rgba(243,231,215,0.96)!important}
+    @media only screen and (max-width: 768px){.vac-rooms-container .vac-room-list{padding:4px 8px calc(16px + env(safe-area-inset-bottom))!important}.vac-room-item,.vac-room-item.vac-room-selected,.vac-rooms-container .vac-room-selected,[class*="room-selected"]{margin:4px 8px!important;padding:0!important;min-height:auto!important;background:transparent!important;border:none!important;box-shadow:none!important;border-radius:30px!important;overflow:hidden!important}.vac-room-item:hover{background:transparent!important;border-color:transparent!important;transform:none!important}.vac-room-container{display:block!important}.vac-box-search{height:auto!important;padding:12px 12px 12px!important}.vac-box-search .vac-input{height:44px!important;font-size:16px!important;padding-left:42px!important;border-radius:22px!important}.vac-room-header{height:56px!important}.vac-room-header .vac-room-wrapper{padding:0 12px!important}.vac-room-header .vac-room-name{font-size:20px!important}.vac-room-header .vac-room-info{font-size:10px!important}.vac-room-header .vac-avatar{height:38px!important;width:38px!important;min-height:38px!important;min-width:38px!important}.vac-room-header .vac-add-icon{padding:8px!important}.vac-room-footer .vac-box-footer{padding-bottom:calc(8px + env(safe-area-inset-bottom))!important}.vac-message-wrapper .vac-card-system{max-width:280px!important;padding:8px 14px!important}.vac-message-wrapper .vac-message-box{max-width:88%!important;margin-bottom:7px!important}.vac-message-wrapper .vac-avatar{height:30px!important;width:30px!important;min-height:30px!important;min-width:30px!important;margin:0 0 11px!important;border-radius:50%!important}.vac-message-wrapper .vac-avatar.vac-avatar-current{margin:0 0 11px 8px!important}.vac-message-wrapper .vac-avatar-current-offset{margin-right:30px!important}.vac-message-wrapper .vac-avatar-offset{margin-left:30px!important}.vac-message-wrapper .vac-message-container{padding:4px 5px!important}.vac-message-wrapper .vac-message-card{min-width:122px!important;padding:7px 42px 9px 13px!important;border-radius:22px!important}.vac-message-wrapper .vac-message-box:not(.vac-offset-current) .vac-message-card::before{left:-6px!important;bottom:9px!important;width:14px!important;height:16px!important}.vac-message-wrapper .vac-message-box.vac-offset-current .vac-message-card::before{right:-6px!important;bottom:9px!important;width:14px!important;height:16px!important}.vac-message-wrapper .vac-text-timestamp{right:13px!important;bottom:8px!important}}
     .vac-card-date{border-radius:999px!important;border:1px solid rgba(77,52,31,0.10)!important;box-shadow:none!important}
     ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:rgba(140,90,43,0.26);border-radius:999px}::-webkit-scrollbar-track{background:transparent}
   `
@@ -340,7 +519,190 @@ async function forceLoadRoom(rid, options = {}) {
 
   if ((isReset && requestId !== roomLoadSeq) || chat.currentRoomId.value !== rid) return
   curMembers.value = members || []
+  if (panelRoomId.value === rid) {
+    panelMembers.value = members || []
+  }
   chat.refreshRoomCountdowns()
+}
+
+async function openRoomInfoPanel(roomId = chat.currentRoomId.value) {
+  const rid = roomId || chat.currentRoomId.value
+  if (!rid) return
+  panelRoomId.value = rid
+  panelMembers.value = await chat.loadRoomUsers(rid)
+  panelOpen.value = true
+}
+
+function closeRoomInfoPanel() {
+  panelOpen.value = false
+  panelRoomId.value = ''
+  panelMembers.value = []
+}
+
+async function refreshVisibleMembers(roomId) {
+  if (!roomId) return []
+  const nextMembers = await chat.loadRoomUsers(roomId)
+  if (roomId === chat.currentRoomId.value) {
+    curMembers.value = nextMembers || []
+  }
+  if (panelRoomId.value === roomId) {
+    panelMembers.value = nextMembers || []
+  }
+  return nextMembers || []
+}
+
+function openRoomActionConfirm(action, roomId) {
+  roomActionConfirm.value = {
+    visible: true,
+    pending: false,
+    roomId,
+    action
+  }
+}
+
+function closeRoomActionConfirm(force = false) {
+  if (roomActionConfirm.value.pending && !force) return
+  roomActionConfirm.value = {
+    visible: false,
+    pending: false,
+    roomId: '',
+    action: ''
+  }
+}
+
+function openMemberActionConfirm(payload) {
+  const roomId = panelRoomId.value || chat.currentRoomId.value
+  if (!roomId || !payload?.action || !payload?.member) return
+  memberActionConfirm.value = {
+    visible: true,
+    pending: false,
+    roomId,
+    action: payload.action,
+    member: payload.member
+  }
+}
+
+function closeMemberActionConfirm(force = false) {
+  if (memberActionConfirm.value.pending && !force) return
+  memberActionConfirm.value = {
+    visible: false,
+    pending: false,
+    roomId: '',
+    action: '',
+    member: null
+  }
+}
+
+async function confirmMemberAction() {
+  const { roomId, action, member } = memberActionConfirm.value
+  const targetAccountId = member?._raw?.accountId
+  if (!roomId || !action || targetAccountId == null) {
+    closeMemberActionConfirm(true)
+    return
+  }
+
+  memberActionConfirm.value = {
+    ...memberActionConfirm.value,
+    pending: true
+  }
+
+  try {
+    if (action === 'kick') {
+      await chat.kickMember(roomId, targetAccountId)
+      showToast(`${member.username || '成员'} 已被移出房间`, 'success')
+    } else if (action === 'unmute') {
+      await chat.unmuteMember(roomId, targetAccountId)
+      showToast(`${member.username || '成员'} 已恢复发言`, 'success')
+    } else {
+      await chat.muteMember(roomId, targetAccountId)
+      showToast(`${member.username || '成员'} 已被禁言`, 'warning')
+    }
+
+    await refreshVisibleMembers(roomId)
+    closeMemberActionConfirm(true)
+  } catch (error) {
+    memberActionConfirm.value = {
+      ...memberActionConfirm.value,
+      pending: false
+    }
+    showToast(error?.message || '成员操作失败', 'error')
+  }
+}
+
+async function confirmRoomAction() {
+  const { roomId, action } = roomActionConfirm.value
+  if (!roomId || !action) return
+
+  if (action === 'leaveRoom' && chat.isCurrentUserHost(roomId)) {
+    closeRoomActionConfirm(true)
+    showToast('房主不能离开房间，请使用关闭房间功能', 'warning')
+    return
+  }
+
+  roomActionConfirm.value = {
+    ...roomActionConfirm.value,
+    pending: true
+  }
+
+  try {
+    if (action === 'leaveRoom') {
+      await chat.leaveRoom(roomId)
+      if (panelRoomId.value === roomId) closeRoomInfoPanel()
+      showToast('已离开')
+    } else if (action === 'closeRoom') {
+      await chat.closeRoom(roomId)
+      if (panelRoomId.value === roomId) closeRoomInfoPanel()
+      showToast('已关闭')
+    }
+
+    closeRoomActionConfirm(true)
+  } catch (error) {
+    roomActionConfirm.value = {
+      ...roomActionConfirm.value,
+      pending: false
+    }
+    const fallback = action === 'leaveRoom' ? '离开失败' : '关闭失败'
+    showToast(error?.message || fallback, 'error')
+  }
+}
+
+async function handleRoomAction(name, roomId = chat.currentRoomId.value) {
+  const rid = roomId || chat.currentRoomId.value
+  if (!name || !rid) return
+
+  mobileSwipeRoomId.value = ''
+
+  try {
+    if (name === 'roomInfo') {
+      await openRoomInfoPanel(rid)
+      return
+    }
+
+    if (name === 'leaveRoom') {
+      if (chat.isCurrentUserHost(rid)) {
+        showToast('房主不能离开房间，请使用关闭房间功能', 'warning')
+        return
+      }
+      openRoomActionConfirm('leaveRoom', rid)
+      return
+    }
+
+    if (name === 'closeRoom') {
+      openRoomActionConfirm('closeRoom', rid)
+      return
+    }
+  } catch (error) {
+    const fallback = name === 'leaveRoom' ? '离开失败' : name === 'closeRoom' ? '关闭失败' : '操作失败'
+    showToast(error?.message || fallback, 'error')
+  }
+}
+
+function onMobileRoomSwipeState(roomId) {
+  mobileSwipeRoomId.value = roomId || ''
+}
+
+function onMobileRoomAction(name, roomId) {
+  handleRoomAction(name, roomId)
 }
 
 function stopTyping(roomId = typingRoomId) {
@@ -419,7 +781,7 @@ async function legacyConfirmDeleteMessage() {
   }
 }
 
-// ---- 事件绑定 ----
+// ---- 浜嬩欢缁戝畾 ----
 function openDeleteConfirm(message, roomId, mode = 'self') {
   deleteConfirm.value = {
     visible: true,
@@ -456,10 +818,10 @@ async function confirmDeleteMessage() {
   try {
     if (mode === 'all') {
       await chat.deleteMessageForAll(message, roomId)
-      showToast('已为所有人删除消息', 'success')
+      showToast('宸蹭负鎵€鏈変汉鍒犻櫎娑堟伅', 'success')
     } else {
       chat.hideMessageForSelf(message, roomId)
-      showToast('已为自己删除消息', 'success')
+      showToast('宸蹭负鑷繁鍒犻櫎娑堟伅', 'success')
     }
     closeDeleteConfirm(true)
   } catch (error) {
@@ -467,7 +829,7 @@ async function confirmDeleteMessage() {
       ...deleteConfirm.value,
       pending: false
     }
-    showToast(error?.message || '删除失败', 'error')
+    showToast(error?.message || '鍒犻櫎澶辫触', 'error')
   }
 }
 
@@ -494,14 +856,30 @@ function bindEvents() {
   el.addEventListener('send-message', async (e) => {
     const d = getDetail(e)
     if (!d) return
-    const sent = await chat.sendMessage(d)
-    if (sent) stopTyping(d.roomId || chat.currentRoomId.value)
+    try {
+      const sent = await chat.sendMessage(d)
+      if (sent) stopTyping(d.roomId || chat.currentRoomId.value)
+    } catch (error) {
+      showToast(error?.message || '发送失败', 'warning')
+    }
+  })
+  el.addEventListener('send-message-reaction', async (e) => {
+    const d = getDetail(e)
+    const rid = d?.roomId || chat.currentRoomId.value
+    const messageId = d?.messageId
+    const reaction = d?.reaction
+
+    if (!rid || !messageId || !reaction) return
+
+    try {
+      await chat.toggleReaction(messageId, reaction, rid)
+    } catch (error) {
+      showToast(error?.message || '琛ㄦ儏娣诲姞澶辫触', 'error')
+    }
   })
   el.addEventListener('room-action-handler', (e) => {
     const d = getDetail(e); const name = d?.action?.name; const rid = d?.roomId || chat.currentRoomId.value
-    if (name === 'roomInfo') panelOpen.value = true
-    else if (name === 'leaveRoom') { if (confirm('确定离开？')) { chat.leaveRoom(rid); showToast('已离开') } }
-    else if (name === 'closeRoom') { if (confirm('确定关闭？')) { chat.closeRoom(rid); showToast('已关闭') } }
+    handleRoomAction(name, rid)
   })
   el.addEventListener('message-action-handler', async (e) => {
     const d = getDetail(e)
@@ -538,7 +916,7 @@ function bindEvents() {
   el.addEventListener('typing-message', (e) => {
     handleTyping(getDetail(e))
   })
-  el.addEventListener('room-info', () => { panelOpen.value = true })
+  el.addEventListener('room-info', () => { openRoomInfoPanel(chat.currentRoomId.value) })
   el.addEventListener('add-room', () => { drawerOpen.value = true })
   el.addEventListener('toggle-rooms-list', () => {})
 
@@ -557,14 +935,16 @@ function checkExpiry() {
     if (!chat.messages.value.some(m => m._id?.startsWith('sys-expiry'))) {
       chat.messages.value = [...chat.messages.value, {
         _id: `sys-expiry-${Date.now()}`, system: true, senderId: 'system',
-        content: `\u26A0\uFE0F 房间将在 ${mins} 分钟后到期`, date: '', timestamp: ''
+        content: `⚠️ 房间将在 ${mins} 分钟后到期`,
+        date: '',
+        timestamp: ''
       }]
     }
   }
 }
 
 // ================================================================
-// ★ 操作处理
+// 鈽?鎿嶄綔澶勭悊
 // ================================================================
 
 function onDrawerAction(act) {
@@ -578,6 +958,40 @@ function onDrawerAction(act) {
   else if (act === 'logout') doLogout()
 }
 
+function showRoomList() {
+  stopTyping()
+  panelOpen.value = false
+  drawerOpen.value = false
+  joinDlg.value = false
+  extendDlg.value = false
+  resizeDlg.value = false
+  chat.currentRoomId.value = null
+  chat.messages.value = []
+  try {
+    sessionStorage.removeItem('fc_last_room')
+  } catch {}
+}
+
+function consumeRouteState() {
+  const view = Array.isArray(route.query.view) ? route.query.view[0] : route.query.view
+  const action = Array.isArray(route.query.action) ? route.query.action[0] : route.query.action
+  let handled = false
+
+  if (view === 'rooms') {
+    showRoomList()
+    handled = true
+  }
+
+  if (action === 'create') {
+    createDlg.value = true
+    handled = true
+  }
+
+  if (handled) {
+    router.replace({ name: 'Chat' }).catch(() => {})
+  }
+}
+
 function applyRoomRawUpdate(roomId, patch = {}) {
   const room = chat.roomsRaw.value.find(item => item.roomId === roomId)
   if (!room) return null
@@ -589,13 +1003,25 @@ function applyRoomRawUpdate(roomId, patch = {}) {
 async function doCreateRoom(data) {
   try {
     const room = await chat.createRoom(data)
-    if (room?.roomId) {
-      await forceLoadRoom(room.roomId, { reset: true })
-    }
     createDlg.value = false
-    showToast('创建成功', 'success')
+    createdRoomPending.value = room || null
+    createdRoomDialog.value = Boolean(room?.roomId)
+    showRoomList()
+    showToast('房间已创建，先分享二维码吧', 'success')
   }
   catch (e) { showToast(e.message || '创建失败', 'error') }
+}
+
+async function enterCreatedRoom() {
+  const roomId = createdRoomPending.value?.roomId
+  createdRoomDialog.value = false
+  if (!roomId) return
+  try {
+    await forceLoadRoom(roomId, { reset: true })
+    createdRoomPending.value = null
+    showToast('已进入房间', 'success')
+  }
+  catch (e) { showToast(e.message || '进入房间失败', 'error') }
 }
 
 async function doJoinRoom(rid) {
@@ -608,17 +1034,19 @@ async function doJoinRoom(rid) {
   catch (e) { showToast(e.message || '加入失败', 'error') }
 }
 
-function doLeaveFromPanel() {
-  const rid = chat.currentRoomId.value
-  if (rid) { chat.leaveRoom(rid); panelOpen.value = false; showToast('已离开') }
+async function doLeaveFromPanel() {
+  const rid = panelRoomId.value || chat.currentRoomId.value
+  if (!rid) return
+  return handleRoomAction('leaveRoom', rid)
 }
 
-function doCloseFromPanel() {
-  const rid = chat.currentRoomId.value
-  if (rid) { chat.closeRoom(rid); panelOpen.value = false; showToast('已关闭') }
+async function doCloseFromPanel() {
+  const rid = panelRoomId.value || chat.currentRoomId.value
+  if (!rid) return
+  return handleRoomAction('closeRoom', rid)
 }
 
-// ★ 密码弹窗
+// 鈽?瀵嗙爜寮圭獥
 async function doExtendRoom({ roomId, duration, option }) {
   try {
     const resp = await apiExtendRoom({ roomId, duration })
@@ -627,12 +1055,6 @@ async function doExtendRoom({ roomId, duration, option }) {
       status: resp?.status,
       statusDesc: resp?.statusDesc
     })
-    chat.onRoomExtended({
-      newExpireTime: resp?.newExpireTime || resp?.expireTime,
-      durationDesc: option?.desc || '',
-      status: resp?.status,
-      statusDesc: resp?.statusDesc
-    }, roomId)
     extendDlg.value = false
     panelOpen.value = false
     showToast('房间已延期', 'success')
@@ -664,19 +1086,19 @@ function onPasswordSuccess() {
   showToast(passwordMode.value === 'set' ? '密码设置成功' : '密码修改成功', 'success')
 }
 
-// ★ 账号升级
+// 鈽?璐﹀彿鍗囩骇
 function onUpgraded(resp) {
   upgradeDlg.value = false
   auth.onAuthRefreshed(resp)
-  showToast('升级成功！已获得注册奖励积分', 'success')
+  showToast('升级成功，已获得注册奖励积分', 'success')
 
-  // 升级后 SaToken loginId 变了（member_X → user_X），需要重连 WS
+  // 鍗囩骇鍚?SaToken loginId 鍙樹簡锛坢ember_X 鈫?user_X锛夛紝闇€瑕侀噸杩?WS
   ws.disconnect()
   const token = auth.getToken()
   if (token) ws.connect(token)
 }
 
-// ★ 登出
+// 鈽?鐧诲嚭
 async function doLogout() {
   if (!confirm('确定退出登录？')) return
   await auth.logout()
@@ -685,10 +1107,10 @@ async function doLogout() {
   window.location.reload()
 }
 
-// ★ 注销账号
+// 鈽?娉ㄩ攢璐﹀彿
 async function doDeleteAccount() {
   if (!confirm('注销后账号将无法恢复，确定要注销吗？')) return
-  if (!confirm('再次确认：你的所有数据（房间、消息、积分）将永久丢失')) return
+  if (!confirm('再次确认：你的所有数据（房间、消息、积分）都将永久丢失。')) return
   try {
     await apiDeleteAccount()
     auth.reset()
@@ -700,18 +1122,24 @@ async function doDeleteAccount() {
   }
 }
 
-// ★ 个人资料更新后刷新当前房间成员
+// 鈽?涓汉璧勬枡鏇存柊鍚庡埛鏂板綋鍓嶆埧闂存垚鍛?
 async function onProfileUpdated() {
   const refreshedMembers = await chat.refreshAllRoomUsers()
   if (chat.currentRoomId.value) {
     curMembers.value = refreshedMembers || []
+    if (panelRoomId.value === chat.currentRoomId.value) {
+      panelMembers.value = refreshedMembers || []
+    }
   }
-  // 强制组件重新渲染：通过修改 rooms 引用触发
+  // 寮哄埗缁勪欢閲嶆柊娓叉煋锛氶€氳繃淇敼 rooms 寮曠敤瑙﹀彂
   chat.rooms.value = [...chat.rooms.value]
 }
 
 // ---- init ----
-function updateH() { viewH.value = `${Math.max(window.innerHeight - 32, 520)}px` }
+function updateH() {
+  viewH.value = `${Math.max(window.innerHeight - 32, 520)}px`
+  mobileViewport.value = window.innerWidth <= 768
+}
 
 async function doInit() {
   initFailed.value = false
@@ -720,16 +1148,43 @@ async function doInit() {
     const token = auth.getToken()
     if (!token) { initFailed.value = true; return }
 
-    ws.on(WS_TYPE.LOGIN_SUCCESS, d => { auth.setMemberId(d.userId); chat.loadRooms() })
+    ws.on(WS_TYPE.LOGIN_SUCCESS, d => {
+      auth.setMemberId(d.userId)
+      chat.loadRooms().finally(() => {
+        consumeRouteState()
+      })
+    })
     ws.on(WS_TYPE.CHAT_BROADCAST, chat.onChatBroadcast)
     ws.on(WS_TYPE.USER_JOIN, chat.onUserJoin)
     ws.on(WS_TYPE.USER_LEAVE, chat.onUserLeave)
-    ws.on(WS_TYPE.YOU_MUTED, () => { chat.onYouMuted(); showToast('你被禁言了', 'warning') })
-    ws.on(WS_TYPE.YOU_UNMUTED, () => { chat.onYouUnmuted(); showToast('禁言已解除') })
-    ws.on(WS_TYPE.YOU_KICKED, (d, r) => { chat.onYouKicked(d, r); showToast('你被踢出', 'error') })
-    ws.on(WS_TYPE.ROOM_EXPIRING, (d, r) => { chat.onRoomExpiring(d, r); showToast('房间即将到期', 'warning') })
-    ws.on(WS_TYPE.ROOM_GRACE, chat.onRoomGrace)
-    ws.on(WS_TYPE.ROOM_CLOSED, (d, r) => { chat.onRoomClosed(d, r); showToast('房间已关闭') })
+    ws.on(WS_TYPE.YOU_MUTED, async (d, r) => {
+      chat.onYouMuted(d, r)
+      if (r) await refreshVisibleMembers(r)
+      showToast('你被禁言了', 'warning')
+    })
+    ws.on(WS_TYPE.YOU_UNMUTED, async (d, r) => {
+      chat.onYouUnmuted(d, r)
+      if (r) await refreshVisibleMembers(r)
+      showToast('禁言已解除')
+    })
+    ws.on(WS_TYPE.YOU_KICKED, async (d, r) => {
+      chat.onYouKicked(d, r)
+      if (r && panelRoomId.value === r) closeRoomInfoPanel()
+      showToast('你被移出房间', 'error')
+    })
+    ws.on(WS_TYPE.ROOM_EXPIRING, (d, r) => {
+      chat.onRoomExpiring(d, r)
+      showToast('房间即将到期，5 分钟后进入宽限期', 'warning')
+    })
+    ws.on(WS_TYPE.ROOM_GRACE, (d, r) => {
+      chat.onRoomGrace(d, r)
+      showToast('房间已到期，现在进入 5 分钟宽限期', 'warning', 4200)
+    })
+    ws.on(WS_TYPE.ROOM_CLOSED, (d, r) => {
+      chat.onRoomClosed(d, r)
+      if (r && panelRoomId.value === r) closeRoomInfoPanel()
+      showToast('房间已关闭')
+    })
     ws.on(WS_TYPE.SYSTEM_MSG, d => { if (typeof d === 'string') showToast(d) })
     ws.on(WS_TYPE.MSG_REJECTED, d => showToast(typeof d === 'string' ? d : '消息被拒绝', 'error'))
     ws.on(WS_TYPE.USER_ONLINE, chat.onUserOnline)
@@ -739,6 +1194,9 @@ async function doInit() {
       const refreshedMembers = chat.onMemberInfoChanged(d, r)
       if (r && r === chat.currentRoomId.value) {
         curMembers.value = refreshedMembers || []
+        if (panelRoomId.value === r) {
+          panelMembers.value = refreshedMembers || []
+        }
       }
     })
     ws.on(WS_TYPE.MSG_RECALLED, chat.onMsgRecalled)
@@ -779,6 +1237,22 @@ onUnmounted(() => {
   stopTyping()
   ws.disconnect()
 })
+
+watch(() => chat.currentRoomId.value, () => {
+  mobileSwipeRoomId.value = ''
+})
+
+watch(mobileViewport, (isMobile) => {
+  if (!isMobile) mobileSwipeRoomId.value = ''
+})
+
+watch(panelOpen, (open) => {
+  if (!open) {
+    panelRoomId.value = ''
+    panelMembers.value = []
+    closeMemberActionConfirm(true)
+  }
+})
 </script>
 
 <style>
@@ -791,9 +1265,10 @@ onUnmounted(() => {
   height: 100vh;
   padding: 16px;
   background:
-    radial-gradient(circle at 0% 0%, rgba(221, 193, 163, 0.46), transparent 28%),
-    radial-gradient(circle at 100% 10%, rgba(173, 122, 68, 0.14), transparent 20%),
-    linear-gradient(180deg, #f4ebdd 0%, #e9dccb 100%);
+    radial-gradient(circle at 0% 0%, rgba(221, 193, 163, 0.34), transparent 28%),
+    radial-gradient(circle at 100% 12%, rgba(173, 122, 68, 0.10), transparent 20%),
+    radial-gradient(circle at 50% 100%, rgba(255, 250, 243, 0.26), transparent 34%),
+    linear-gradient(180deg, #f5ede2 0%, #e8dcc9 100%);
   position: relative;
   overflow: hidden;
 }
@@ -803,17 +1278,17 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   background-image: linear-gradient(rgba(77, 52, 31, 0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(77, 52, 31, 0.018) 1px, transparent 1px);
-  background-size: 36px 36px;
+  background-size: 42px 42px;
   pointer-events: none;
-  opacity: 0.5;
+  opacity: 0.28;
 }
 
 .fc-shell {
   position: relative;
   border-radius: var(--fc-radius-xl);
-  border: 1px solid rgba(77, 52, 31, 0.12);
-  background: rgba(255, 250, 243, 0.52);
-  box-shadow: var(--fc-shadow-out);
+  border: 1px solid rgba(77, 52, 31, 0.10);
+  background: rgba(255, 250, 243, 0.50);
+  box-shadow: 0 30px 60px rgba(61, 40, 22, 0.16), 0 8px 24px rgba(61, 40, 22, 0.08);
   overflow: hidden;
   isolation: isolate;
 }
@@ -821,31 +1296,33 @@ onUnmounted(() => {
 .fc-shell-glow {
   position: absolute;
   border-radius: 50%;
-  filter: blur(12px);
+  filter: blur(20px);
   pointer-events: none;
   z-index: 0;
 }
 
 .fc-shell-glow-a {
-  width: 280px;
-  height: 280px;
-  top: -100px;
-  right: -80px;
-  background: rgba(173, 122, 68, 0.14);
+  width: 320px;
+  height: 320px;
+  top: -120px;
+  right: -90px;
+  background: rgba(173, 122, 68, 0.12);
 }
 
 .fc-shell-glow-b {
-  width: 220px;
-  height: 220px;
-  bottom: -120px;
+  width: 260px;
+  height: 260px;
+  bottom: -150px;
   left: -90px;
-  background: rgba(221, 193, 163, 0.34);
+  background: rgba(221, 193, 163, 0.28);
 }
 
 .fc-shell-noise {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.30), transparent 48%, rgba(173, 122, 68, 0.04));
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.24), transparent 42%, rgba(173, 122, 68, 0.05)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 24%);
   pointer-events: none;
   z-index: 0;
 }
@@ -928,6 +1405,10 @@ onUnmounted(() => {
   pointer-events: none;
   backdrop-filter: blur(14px);
   box-shadow: 0 14px 30px rgba(61, 40, 22, 0.14);
+}
+
+.fc-toast-with-panel {
+  top: calc(74px + env(safe-area-inset-top));
 }
 
 .fc-toast-info { background: rgba(255, 250, 243, 0.92); color: var(--fc-text); }
@@ -1056,8 +1537,155 @@ onUnmounted(() => {
   opacity: 0;
 }
 
+.fc-room-banner {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: min(340px, calc(100% - 36px));
+  padding: 14px 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(77, 52, 31, 0.10);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 34px rgba(61, 40, 22, 0.12);
+  z-index: 4;
+}
+
+.fc-room-banner.is-expiring {
+  background: rgba(255, 243, 225, 0.94);
+  color: #8b641c;
+}
+
+.fc-room-banner.is-grace,
+.fc-room-banner.is-closed {
+  background: rgba(253, 236, 234, 0.95);
+  color: #8b3a35;
+}
+
+.fc-room-banner.is-muted {
+  background: rgba(239, 231, 223, 0.95);
+  color: #6d5b4b;
+}
+
+.fc-room-banner-kicker {
+  font-family: var(--fc-font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.fc-room-banner-title {
+  margin-top: 8px;
+  font-family: var(--fc-font-display);
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.fc-room-banner-text {
+  margin-top: 8px;
+  font-family: var(--fc-font);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.fc-room-lockbar {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(77, 52, 31, 0.10);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 36px rgba(61, 40, 22, 0.14);
+  z-index: 4;
+}
+
+.fc-room-lockbar.is-grace,
+.fc-room-lockbar.is-closed {
+  background: rgba(253, 236, 234, 0.96);
+}
+
+.fc-room-lockbar.is-muted {
+  background: rgba(239, 231, 223, 0.96);
+}
+
+.fc-room-lockbar-copy {
+  min-width: 0;
+}
+
+.fc-room-lockbar-title {
+  font-family: var(--fc-font-display);
+  font-size: 24px;
+  line-height: 1;
+  color: var(--fc-text);
+}
+
+.fc-room-lockbar-text {
+  margin-top: 8px;
+  font-family: var(--fc-font);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fc-text-sec);
+}
+
+.fc-room-lockbar-btn {
+  flex-shrink: 0;
+  min-width: 104px;
+  padding: 11px 18px;
+  border: 1px solid rgba(77, 52, 31, 0.10);
+  border-radius: 999px;
+  background: rgba(255, 250, 243, 0.92);
+  color: var(--fc-text);
+  font-family: var(--fc-font);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.fc-room-lockbar-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+}
+
+.room-banner-enter-active,
+.room-banner-leave-active,
+.room-lockbar-enter-active,
+.room-lockbar-leave-active {
+  transition: all .24s ease;
+}
+
+.room-banner-enter-from,
+.room-banner-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.room-lockbar-enter-from,
+.room-lockbar-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
 @media (max-width: 768px) {
   .fc-root { padding: 10px; }
+  .fc-toast {
+    top: calc(18px + env(safe-area-inset-top));
+    max-width: calc(100vw - 32px);
+    padding: 12px 18px;
+    white-space: normal;
+    text-align: center;
+  }
+  .fc-toast-with-panel {
+    top: calc(72px + env(safe-area-inset-top));
+  }
   .fc-confirm-card {
     padding: 20px;
     border-radius: 22px;
@@ -1069,6 +1697,25 @@ onUnmounted(() => {
     flex-direction: column-reverse;
   }
   .fc-confirm-btn {
+    width: 100%;
+  }
+  .fc-room-banner {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+  .fc-room-lockbar {
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .fc-room-lockbar-title {
+    font-size: 21px;
+  }
+  .fc-room-lockbar-btn {
     width: 100%;
   }
 }

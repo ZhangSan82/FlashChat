@@ -17,7 +17,6 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@EnableConfigurationProperties(RateLimitProperties.class)
 public class RedisMessageRateLimiter implements MessageRateLimiter {
 
     private final StringRedisTemplate stringRedisTemplate;

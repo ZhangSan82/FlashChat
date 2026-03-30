@@ -190,14 +190,22 @@ function formatDateTime(value) {
   background: var(--fc-backdrop);
   backdrop-filter: blur(18px);
   z-index: 9700;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .extend-card {
   width: min(620px, 100%);
+  max-height: min(860px, calc(100dvh - 40px));
   border: 1px solid rgba(77, 52, 31, 0.10);
   border-radius: 28px;
   background: linear-gradient(180deg, rgba(255, 250, 243, 0.98), rgba(247, 239, 228, 0.98));
   box-shadow: 0 30px 60px rgba(61, 40, 22, 0.22);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: auto;
 }
 
 .extend-head,
@@ -241,6 +249,11 @@ function formatDateTime(value) {
 
 .extend-body {
   padding: 0 26px 24px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .extend-room,
@@ -387,6 +400,28 @@ function formatDateTime(value) {
 }
 
 @media (max-width: 720px) {
+  .extend-overlay {
+    padding: 12px;
+  }
+
+  .extend-card {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    border-radius: 24px;
+  }
+
+  .extend-head {
+    padding: 20px 20px 16px;
+  }
+
+  .extend-body {
+    padding: 0 20px 20px;
+  }
+
+  .extend-actions {
+    padding: 0 20px calc(20px + env(safe-area-inset-bottom));
+  }
+
   .extend-grid {
     grid-template-columns: 1fr;
   }

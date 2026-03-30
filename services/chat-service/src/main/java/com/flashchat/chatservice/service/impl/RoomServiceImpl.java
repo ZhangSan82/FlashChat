@@ -150,7 +150,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         }
 
         roomChannelManager.joinRoom(roomId, creator.getId(),
-                creator.getNickname(), resolveAccountAvatar(creator), true);
+                creator.getNickname(), resolveAccountAvatar(creator), true, false);
         return buildRoomInfoResp(room);
     }
 
@@ -251,8 +251,12 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         roomMemberService.evictCache(roomId, accountId);
         evictRoomCache(roomId);
 
+        RoomMemberDO activeMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
+        boolean isMuted = activeMember != null
+                && activeMember.getIsMuted() != null
+                && activeMember.getIsMuted() == RoomMemberMuteStatusEnum.MUTE.getCode();
         roomChannelManager.joinRoom(roomId, accountId,
-                account.getNickname(), resolveAccountAvatar(account), false);
+                account.getNickname(), resolveAccountAvatar(account), false, isMuted);
         log.info("[加入房间] room={}, accountId={}", roomId, accountId);
         return buildRoomInfoResp(getRoomByRoomId(roomId));
     }

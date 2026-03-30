@@ -125,14 +125,22 @@ function submit() {
   background: var(--fc-backdrop);
   backdrop-filter: blur(18px);
   z-index: 9700;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .resize-card {
   width: min(560px, 100%);
+  max-height: min(820px, calc(100dvh - 40px));
   border: 1px solid rgba(77, 52, 31, 0.10);
   border-radius: 28px;
   background: linear-gradient(180deg, rgba(255, 250, 243, 0.98), rgba(247, 239, 228, 0.98));
   box-shadow: 0 30px 60px rgba(61, 40, 22, 0.22);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: auto;
 }
 
 .resize-head,
@@ -177,6 +185,11 @@ function submit() {
 
 .resize-body {
   padding: 0 26px 24px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .resize-stats {
@@ -288,6 +301,28 @@ function submit() {
 }
 
 @media (max-width: 720px) {
+  .resize-overlay {
+    padding: 12px;
+  }
+
+  .resize-card {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    border-radius: 24px;
+  }
+
+  .resize-head {
+    padding: 20px 20px 16px;
+  }
+
+  .resize-body {
+    padding: 0 20px 20px;
+  }
+
+  .resize-actions {
+    padding: 0 20px calc(20px + env(safe-area-inset-bottom));
+  }
+
   .resize-stats {
     grid-template-columns: 1fr;
   }

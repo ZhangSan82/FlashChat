@@ -1,26 +1,44 @@
 <template>
   <Teleport to="body">
     <transition name="info">
-      <div v-if="visible" class="info-overlay" @click.self="$emit('close')">
-        <div class="info-panel">
-          <div class="info-head">
+      <div v-if="visible" class="info-overlay" @click.self="emit('close')">
+        <aside class="info-panel">
+          <header class="info-head">
             <div>
-              <div class="info-kicker">Room Detail</div>
-              <div class="info-title">房间信息</div>
+              <div class="info-kicker">Room Salon</div>
+              <div class="info-title">房间名片</div>
             </div>
-            <button class="info-close" type="button" @click="$emit('close')">×</button>
-          </div>
+            <button class="info-close" type="button" @click="emit('close')">×</button>
+          </header>
 
           <div class="info-body">
             <section class="info-hero">
-              <div class="info-avatar">{{ roomInitial }}</div>
-              <div class="info-name">{{ room?.title || '未命名房间' }}</div>
-              <div class="info-meta">
-                <span>{{ room?.roomId || '—' }}</span>
-                <span>·</span>
-                <span>{{ publicText }}</span>
-                <span>·</span>
-                <span>{{ room?.memberCount || members.length }} / {{ room?.maxMembers || 50 }} 人</span>
+              <div class="info-hero-cover" :style="heroCoverStyle">
+                <div class="info-hero-mist"></div>
+                <div class="info-hero-content">
+                  <span class="info-status-pill" :class="statusClass">{{ statusText }}</span>
+                  <div class="info-avatar-ring">
+                    <img class="info-avatar" :src="roomVisualUrl" :alt="roomName" />
+                  </div>
+                  <div class="info-name">{{ roomName }}</div>
+                  <div class="info-meta">
+                    <span>{{ room?.roomId || '--' }}</span>
+                    <span>{{ publicText }}</span>
+                    <span>{{ memberCount }} / {{ room?.maxMembers || 50 }} 人</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="info-summary">
+                <div class="info-summary-item">
+                  <span>剩余时间</span>
+                  <strong :style="{ color: countdownColor }">{{ countdownText }}</strong>
+                </div>
+                <div class="info-summary-divider"></div>
+                <div class="info-summary-item">
+                  <span>在线成员</span>
+                  <strong>{{ room?.onlineCount ?? onlineCount }}</strong>
+                </div>
               </div>
             </section>
 
@@ -29,23 +47,36 @@
                 <span>房间状态</span>
                 <span class="info-badge" :class="statusClass">{{ statusText }}</span>
               </div>
-              <div class="info-countdown">{{ countdownText }}</div>
+              <div class="info-countdown-row">
+                <div class="info-countdown">{{ countdownText }}</div>
+                <div class="info-create-time">创建于 {{ createTimeText }}</div>
+              </div>
               <div class="info-bar">
                 <div class="info-bar-fill" :style="{ width: progressWidth, background: countdownColor }"></div>
               </div>
               <div class="info-meta-grid">
                 <div class="info-meta-item">
-                  <span>在线人数</span>
-                  <strong>{{ room?.onlineCount ?? onlineCount }}</strong>
+                  <span>房间类型</span>
+                  <strong>{{ publicText }}</strong>
                 </div>
                 <div class="info-meta-item">
-                  <span>创建时间</span>
-                  <strong>{{ createTimeText }}</strong>
+                  <span>人数上限</span>
+                  <strong>{{ room?.maxMembers || 50 }} 人</strong>
                 </div>
               </div>
             </section>
 
-            <section class="info-card" v-if="resolvedShareUrl">
+            <section v-if="showLifecycleCard" class="info-card info-card-alert" :class="`is-${roomState.kind}`">
+              <div class="info-card-head">
+                <span>生命周期提醒</span>
+                <span class="info-badge" :class="lifecycleBadgeClass">{{ lifecycleBadgeText }}</span>
+              </div>
+              <div class="info-alert-title">{{ roomState.title }}</div>
+              <p class="info-alert-text">{{ roomState.detail }}</p>
+              <div v-if="lifecycleCountdownText" class="info-alert-countdown">{{ lifecycleCountdownText }}</div>
+            </section>
+
+            <section v-if="resolvedShareUrl" class="info-card">
               <div class="info-card-head">
                 <span>分享房间</span>
                 <button class="info-copy" type="button" @click="copyShareUrl">
@@ -55,12 +86,12 @@
               <div class="info-share-grid">
                 <div class="info-qr-shell">
                   <img v-if="qrDataUrl" :src="qrDataUrl" alt="room qrcode" class="info-qr" />
-                  <div v-else class="info-qr-loading">生成二维码中...</div>
+                  <div v-else class="info-qr-loading">正在生成二维码...</div>
                 </div>
                 <div class="info-share-copy">
                   <div class="info-share-label">分享链接</div>
                   <input class="info-share-input" :value="resolvedShareUrl" readonly @click="$event.target.select()" />
-                  <div class="info-share-hint">复制给朋友，或让对方扫描二维码进入房间。</div>
+                  <div class="info-share-hint">发给朋友后，他们可以通过链接或二维码快速进入这个房间。</div>
                 </div>
               </div>
             </section>
@@ -71,43 +102,74 @@
                 <span class="info-members-count">{{ members.length }}</span>
               </div>
               <div class="info-members">
-                <div v-for="member in members" :key="member._id" class="info-member">
+                <div v-for="member in sortedMembers" :key="memberKey(member)" class="info-member">
                   <div class="info-member-avatar-wrap">
-                    <img v-if="hasAvatarImage(member)" :src="member.avatar" class="info-member-avatar info-member-avatar-img" alt="" />
+                    <img
+                      v-if="hasAvatarImage(member)"
+                      :src="member.avatar"
+                      class="info-member-avatar info-member-avatar-img"
+                      alt=""
+                    />
                     <div v-else class="info-member-avatar" :style="{ background: memberColor(member) }">
                       {{ memberInitial(member) }}
                     </div>
                     <span class="info-member-dot" :class="{ online: member.status?.state === 'online' }"></span>
                   </div>
+
                   <div class="info-member-copy">
-                    <div class="info-member-name">{{ member.username }}</div>
-                    <div class="info-member-state">{{ member.status?.state === 'online' ? '在线' : '离线' }}</div>
+                    <div class="info-member-name-row">
+                      <div class="info-member-name">{{ member.username || '匿名成员' }}</div>
+                      <span v-if="isSelf(member)" class="info-member-tag">你</span>
+                      <span v-if="isMuted(member)" class="info-member-tag muted">禁言中</span>
+                    </div>
+                    <div class="info-member-state-row">
+                      <div class="info-member-state">{{ member.status?.state === 'online' ? '在线' : '离线' }}</div>
+                      <span v-if="member._raw?.isHost || member._raw?.role === 1" class="info-member-role">房主</span>
+                    </div>
                   </div>
-                  <span v-if="member._raw?.isHost || member._raw?.role === 1" class="info-member-role">房主</span>
+
+                  <div v-if="canOperateMember(member)" class="info-member-actions">
+                    <button
+                      class="info-mini-btn"
+                      type="button"
+                      @click="emitMemberAction(isMuted(member) ? 'unmute' : 'mute', member)"
+                    >
+                      {{ isMuted(member) ? '解除禁言' : '禁言' }}
+                    </button>
+                    <button class="info-mini-btn danger" type="button" @click="emitMemberAction('kick', member)">
+                      踢出
+                    </button>
+                  </div>
                 </div>
+              </div>
+              <div v-if="isHost" class="info-member-footnote">
+                房主可以直接对普通成员执行禁言、解除禁言和踢出操作。
               </div>
             </section>
 
             <section class="info-actions">
-              <button v-if="isHost" class="info-action" type="button" @click="$emit('extend-room')">
+              <div v-if="isHost" class="info-host-note">
+                房主不能直接离开房间，请使用“关闭房间”结束本次会话。
+              </div>
+              <button v-if="isHost" class="info-action" type="button" @click="emit('extend-room')">
                 <strong>延期房间</strong>
-                <small>追加时长并同步给所有成员。</small>
+                <small>追加时长，让当前聊天室继续开放。</small>
               </button>
-              <button v-if="isHost" class="info-action" type="button" @click="$emit('resize-room')">
+              <button v-if="isHost" class="info-action" type="button" @click="emit('resize-room')">
                 <strong>扩容房间</strong>
-                <small>提高人数上限，容纳更多成员加入。</small>
+                <small>提高人数上限，让更多成员可以加入。</small>
               </button>
-              <button class="info-action" type="button" @click="$emit('leave')">
-                <strong>{{ isHost ? '离开房间' : '退出房间' }}</strong>
-                <small>离开后仍可通过房间 ID 或分享链接再次加入。</small>
+              <button v-if="!isHost" class="info-action" type="button" @click="emit('leave')">
+                <strong>离开房间</strong>
+                <small>离开后仍可通过房间号或分享链接再次进入。</small>
               </button>
-              <button v-if="isHost" class="info-action danger" type="button" @click="$emit('close-room')">
+              <button v-if="isHost" class="info-action danger" type="button" @click="emit('close-room')">
                 <strong>关闭房间</strong>
-                <small>结束本次会话，成员会同步收到关闭状态。</small>
+                <small>立即结束这次会话，所有成员都会同步收到关闭状态。</small>
               </button>
             </section>
           </div>
-        </div>
+        </aside>
       </div>
     </transition>
   </Teleport>
@@ -118,30 +180,34 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { getShareUrl } from '@/api/room'
 import { formatCountdown, calcProgress, getCountdownColor } from '@/utils/formatter'
 import { generateQRCodeDataUrl } from '@/utils/qrcode'
+import { getRoomDisplayName, getRoomVisualUrl } from '@/utils/roomVisual'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   room: { type: Object, default: null },
   members: { type: Array, default: () => [] },
-  isHost: { type: Boolean, default: false }
+  isHost: { type: Boolean, default: false },
+  currentAccountId: { type: [String, Number], default: '' },
+  roomState: { type: Object, default: () => ({}) }
 })
 
-defineEmits(['close', 'leave', 'close-room', 'extend-room', 'resize-room'])
+const emit = defineEmits(['close', 'leave', 'close-room', 'extend-room', 'resize-room', 'member-action'])
 
 const now = ref(Date.now())
 const resolvedShareUrl = ref('')
 const qrDataUrl = ref('')
 const copied = ref(false)
+
 let timer = null
 
 onMounted(() => {
-  timer = setInterval(() => {
+  timer = window.setInterval(() => {
     now.value = Date.now()
   }, 10000)
 })
 
 onUnmounted(() => {
-  clearInterval(timer)
+  if (timer) window.clearInterval(timer)
 })
 
 watch(
@@ -153,7 +219,7 @@ watch(
   { immediate: true }
 )
 
-watch(resolvedShareUrl, async url => {
+watch(resolvedShareUrl, async (url) => {
   if (!url) {
     qrDataUrl.value = ''
     return
@@ -161,24 +227,57 @@ watch(resolvedShareUrl, async url => {
   qrDataUrl.value = (await generateQRCodeDataUrl(url, 200)) || ''
 })
 
-const roomInitial = computed(() => (props.room?.title || '?')[0].toUpperCase())
+const roomName = computed(() => getRoomDisplayName(props.room))
+const roomVisualUrl = computed(() => getRoomVisualUrl(props.room))
+const heroCoverStyle = computed(() => ({
+  backgroundImage: `linear-gradient(180deg, rgba(33, 23, 13, 0.14), rgba(33, 23, 13, 0.62)), url("${roomVisualUrl.value}")`
+}))
+const memberCount = computed(() => props.room?.memberCount || props.members.length || 0)
 const publicText = computed(() => (props.room?.isPublic === 1 ? '公开房间' : '私密房间'))
-const statusText = computed(() => props.room?.statusDesc || '未知状态')
+const statusText = computed(() => props.room?.statusDesc || '开放中')
 const createTimeText = computed(() => formatDateTime(props.room?.createTime))
 const onlineCount = computed(() => props.members.filter(member => member.status?.state === 'online').length)
+const sortedMembers = computed(() => {
+  return [...props.members].sort((left, right) => {
+    const leftHost = Boolean(left?._raw?.isHost || left?._raw?.role === 1)
+    const rightHost = Boolean(right?._raw?.isHost || right?._raw?.role === 1)
+    if (leftHost !== rightHost) return leftHost ? -1 : 1
+
+    const leftSelf = isSelf(left)
+    const rightSelf = isSelf(right)
+    if (leftSelf !== rightSelf) return leftSelf ? -1 : 1
+
+    const leftOnline = left?.status?.state === 'online'
+    const rightOnline = right?.status?.state === 'online'
+    if (leftOnline !== rightOnline) return leftOnline ? -1 : 1
+
+    return String(left?.username || '').localeCompare(String(right?.username || ''), 'zh-CN')
+  })
+})
 
 const countdownText = computed(() => {
+  if (props.roomState?.kind === 'closed') return '已关闭'
+  if (props.roomState?.kind === 'grace') {
+    return props.roomState?.countdownMs > 0
+      ? `宽限 ${formatCountdown(props.roomState.countdownMs)}`
+      : '宽限期中'
+  }
   if (!props.room?.expireTime) return '永久不过期'
   const remain = new Date(props.room.expireTime).getTime() - now.value
   return formatCountdown(remain)
 })
 
 const countdownColor = computed(() => {
+  if (props.roomState?.kind === 'closed') return '#8b3a35'
+  if (props.roomState?.kind === 'grace') return '#b5543f'
+  if (props.roomState?.kind === 'muted') return '#7d6c5c'
   if (!props.room?.expireTime) return 'var(--fc-success)'
   return getCountdownColor(new Date(props.room.expireTime).getTime() - now.value)
 })
 
 const progressWidth = computed(() => {
+  if (props.roomState?.kind === 'closed') return '0%'
+  if (props.roomState?.kind === 'grace') return '0%'
   if (!props.room?.expireTime || !props.room?.createTime) return '100%'
   return `${Math.round(calcProgress(props.room.expireTime, props.room.createTime) * 100)}%`
 })
@@ -190,6 +289,33 @@ const statusClass = computed(() => {
   if (status === 3) return 'danger'
   if (status === 4) return 'muted'
   return 'waiting'
+})
+
+const showLifecycleCard = computed(() => ['expiring', 'grace', 'muted', 'closed'].includes(props.roomState?.kind))
+const lifecycleBadgeText = computed(() => {
+  const kind = props.roomState?.kind
+  if (kind === 'expiring') return '即将到期'
+  if (kind === 'grace') return '宽限期'
+  if (kind === 'muted') return '禁言中'
+  if (kind === 'closed') return '已关闭'
+  return '提醒'
+})
+const lifecycleBadgeClass = computed(() => {
+  const kind = props.roomState?.kind
+  if (kind === 'expiring') return 'warning'
+  if (kind === 'grace' || kind === 'closed' || kind === 'muted') return 'danger'
+  return 'waiting'
+})
+const lifecycleCountdownText = computed(() => {
+  const remain = props.roomState?.countdownMs
+  if (remain == null || remain <= 0) return ''
+  if (props.roomState?.kind === 'grace') {
+    return `正式关闭倒计时：${formatCountdown(remain)}`
+  }
+  if (props.roomState?.kind === 'expiring') {
+    return `到期倒计时：${formatCountdown(remain)}`
+  }
+  return ''
 })
 
 async function ensureShareUrl() {
@@ -241,10 +367,34 @@ function memberColor(member) {
     : (member?.avatar?.startsWith?.('#') ? member.avatar : '#C8956C')
 }
 
+function memberKey(member) {
+  return member?._id || member?._raw?.accountId || member?.username || Math.random().toString(36).slice(2, 8)
+}
+
+function isSelf(member) {
+  return String(member?._id || member?._raw?.accountId || '') === String(props.currentAccountId || '')
+}
+
+function isMuted(member) {
+  return Boolean(member?._raw?.isMuted)
+}
+
+function canOperateMember(member) {
+  if (!props.isHost) return false
+  if (!member) return false
+  if (isSelf(member)) return false
+  return !(member._raw?.isHost || member._raw?.role === 1)
+}
+
+function emitMemberAction(action, member) {
+  if (!canOperateMember(member)) return
+  emit('member-action', { action, member })
+}
+
 function formatDateTime(value) {
-  if (!value) return '—'
+  if (!value) return '--'
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '—'
+  if (Number.isNaN(date.getTime())) return '--'
   return date.toLocaleString('zh-CN', {
     month: '2-digit',
     day: '2-digit',
@@ -267,28 +417,35 @@ function formatDateTime(value) {
 }
 
 .info-panel {
-  width: 430px;
+  width: 460px;
   max-width: 96vw;
   height: 100%;
-  border-left: 1px solid rgba(77, 52, 31, 0.12);
-  background:
-    radial-gradient(circle at top right, rgba(221, 193, 163, 0.18), transparent 28%),
-    linear-gradient(180deg, rgba(255, 250, 243, 0.98), rgba(247, 239, 228, 0.98));
-  box-shadow: -20px 0 50px rgba(61, 40, 22, 0.18);
   display: flex;
   flex-direction: column;
+  border-left: 1px solid rgba(77, 52, 31, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(221, 193, 163, 0.24), transparent 28%),
+    linear-gradient(180deg, rgba(252, 248, 242, 0.98), rgba(245, 237, 226, 0.98));
+  box-shadow: -24px 0 56px rgba(61, 40, 22, 0.18);
 }
 
 .info-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   padding: 22px 22px 18px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  background: linear-gradient(180deg, rgba(249, 243, 235, 0.96), rgba(249, 243, 235, 0.82), transparent);
+  backdrop-filter: blur(12px);
 }
 
 .info-kicker,
 .info-card-head span:first-child,
-.info-share-label {
+.info-share-label,
+.info-summary-item span,
+.info-meta-item span {
   font-family: var(--fc-font);
   font-size: 11px;
   font-weight: 600;
@@ -299,145 +456,250 @@ function formatDateTime(value) {
 
 .info-title {
   margin-top: 8px;
-  font-family: var(--fc-font);
-  font-size: 24px;
-  font-weight: 700;
+  font-family: var(--fc-font-display);
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 600;
   color: var(--fc-text);
 }
 
 .info-close {
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--fc-border);
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(77, 52, 31, 0.12);
   border-radius: 50%;
   background: rgba(255, 250, 243, 0.82);
   color: var(--fc-text);
   font-size: 24px;
+  line-height: 1;
   cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.info-close:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
 }
 
 .info-body {
   flex: 1;
   overflow: auto;
-  padding: 0 22px 22px;
+  padding: 0 22px 24px;
 }
 
 .info-hero,
 .info-card,
 .info-action {
   border: 1px solid rgba(77, 52, 31, 0.08);
-  border-radius: 26px;
+  border-radius: 28px;
   background: rgba(255, 250, 243, 0.78);
   box-shadow: var(--fc-shadow-soft);
 }
 
 .info-hero {
-  padding: 24px;
-  text-align: center;
+  overflow: hidden;
 }
 
-.info-avatar {
-  width: 78px;
-  height: 78px;
-  margin: 0 auto;
+.info-hero-cover {
+  position: relative;
+  min-height: 276px;
+  padding: 24px 24px 22px;
+  background-size: cover;
+  background-position: center;
+}
+
+.info-hero-mist {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 38%),
+    radial-gradient(circle at 20% 18%, rgba(255, 249, 241, 0.28), transparent 30%);
+  pointer-events: none;
+}
+
+.info-hero-content {
+  position: relative;
+  z-index: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: linear-gradient(145deg, #be8c58, #8c5a2b);
-  color: #fffaf3;
-  font-family: var(--fc-font);
-  font-size: 30px;
-  font-weight: 700;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
 }
 
-.info-name {
-  margin-top: 16px;
-  font-family: var(--fc-font);
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--fc-text);
-}
-
-.info-meta {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  font-family: var(--fc-font);
-  font-size: 12px;
-  color: var(--fc-text-sec);
-}
-
-.info-card {
-  margin-top: 16px;
-  padding: 18px;
-}
-
-.info-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
+.info-status-pill,
 .info-badge,
 .info-members-count,
-.info-member-role {
+.info-member-role,
+.info-member-tag {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 5px 12px;
+  padding: 6px 12px;
   border-radius: 999px;
   font-family: var(--fc-font);
   font-size: 11px;
   font-weight: 700;
 }
 
-.info-badge.waiting,
-.info-members-count {
-  background: rgba(243, 231, 215, 0.92);
-  color: var(--fc-accent-strong);
+.info-status-pill {
+  background: rgba(255, 250, 243, 0.88);
+  color: var(--fc-text);
 }
 
+.info-status-pill.active,
 .info-badge.active {
   background: rgba(235, 245, 230, 0.96);
   color: #42673f;
 }
 
+.info-status-pill.warning,
 .info-badge.warning {
   background: rgba(255, 242, 224, 0.96);
   color: #8b641c;
 }
 
+.info-status-pill.danger,
 .info-badge.danger {
   background: rgba(253, 236, 234, 0.96);
   color: #8b3a35;
 }
 
+.info-status-pill.muted,
 .info-badge.muted {
   background: rgba(233, 225, 217, 0.96);
   color: #7d6c5c;
 }
 
-.info-countdown {
-  margin-top: 14px;
+.info-status-pill.waiting,
+.info-badge.waiting,
+.info-members-count,
+.info-member-role,
+.info-member-tag {
+  background: rgba(243, 231, 215, 0.92);
+  color: var(--fc-accent-strong);
+}
+
+.info-member-tag.muted {
+  background: rgba(253, 236, 234, 0.96);
+  color: #a74f35;
+}
+
+.info-avatar-ring {
+  width: 96px;
+  height: 96px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 250, 243, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(255, 250, 243, 0.34);
+}
+
+.info-avatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: block;
+  background: rgba(255, 250, 243, 0.72);
+}
+
+.info-name {
+  max-width: 100%;
+  font-family: var(--fc-font-display);
+  font-size: 44px;
+  line-height: 0.94;
+  font-weight: 600;
+  color: #fffaf3;
+  text-shadow: 0 10px 28px rgba(33, 23, 13, 0.22);
+}
+
+.info-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.info-meta span {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 250, 243, 0.16);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 250, 243, 0.18);
+  color: rgba(255, 250, 243, 0.88);
   font-family: var(--fc-font);
+  font-size: 12px;
+}
+
+.info-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 18px 24px 20px;
+}
+
+.info-summary-item strong {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--fc-font-display);
   font-size: 28px;
-  font-weight: 700;
+  line-height: 1;
+  font-weight: 600;
   color: var(--fc-text);
 }
 
+.info-summary-divider {
+  width: 1px;
+  height: 44px;
+  background: rgba(77, 52, 31, 0.10);
+}
+
+.info-card {
+  margin-top: 16px;
+  padding: 20px;
+}
+
+.info-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.info-countdown-row {
+  margin-top: 14px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.info-countdown {
+  font-family: var(--fc-font-display);
+  font-size: 34px;
+  line-height: 0.96;
+  font-weight: 600;
+  color: var(--fc-text);
+}
+
+.info-create-time {
+  font-family: var(--fc-font);
+  font-size: 13px;
+  color: var(--fc-text-sec);
+}
+
 .info-bar {
-  height: 6px;
-  margin-top: 12px;
+  height: 7px;
+  margin-top: 14px;
   border-radius: 999px;
   background: rgba(77, 52, 31, 0.08);
+  overflow: hidden;
 }
 
 .info-bar-fill {
-  height: 6px;
-  border-radius: 999px;
+  height: 100%;
+  border-radius: inherit;
 }
 
 .info-meta-grid {
@@ -453,20 +715,72 @@ function formatDateTime(value) {
   background: rgba(243, 231, 215, 0.88);
 }
 
-.info-meta-item span {
-  display: block;
-  font-family: var(--fc-font);
-  font-size: 11px;
-  color: var(--fc-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
 .info-meta-item strong {
   display: block;
   margin-top: 8px;
   font-family: var(--fc-font);
   font-size: 18px;
+  color: var(--fc-text);
+}
+
+.info-card-alert {
+  position: relative;
+  overflow: hidden;
+}
+
+.info-card-alert::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 48%);
+  pointer-events: none;
+}
+
+.info-card-alert.is-expiring {
+  background: linear-gradient(180deg, rgba(255, 246, 232, 0.95), rgba(255, 238, 213, 0.92));
+}
+
+.info-card-alert.is-grace,
+.info-card-alert.is-closed {
+  background: linear-gradient(180deg, rgba(255, 241, 238, 0.95), rgba(253, 230, 224, 0.92));
+}
+
+.info-card-alert.is-muted {
+  background: linear-gradient(180deg, rgba(244, 239, 233, 0.95), rgba(235, 226, 216, 0.92));
+}
+
+.info-alert-title {
+  position: relative;
+  margin-top: 14px;
+  font-family: var(--fc-font-display);
+  font-size: 28px;
+  line-height: 1;
+  color: var(--fc-text);
+}
+
+.info-alert-text,
+.info-alert-countdown,
+.info-share-hint,
+.info-qr-loading,
+.info-member-state,
+.info-action small,
+.info-host-note,
+.info-member-footnote {
+  font-family: var(--fc-font);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--fc-text-sec);
+}
+
+.info-alert-text {
+  position: relative;
+  margin-top: 10px;
+}
+
+.info-alert-countdown {
+  position: relative;
+  margin-top: 12px;
+  font-weight: 700;
   color: var(--fc-text);
 }
 
@@ -483,36 +797,9 @@ function formatDateTime(value) {
 .info-share-grid {
   margin-top: 14px;
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-}
-
-.info-qr-shell {
-  min-height: 150px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 22px;
-  background: rgba(243, 231, 215, 0.88);
-}
-
-.info-qr {
-  width: 140px;
-  height: 140px;
-  border-radius: 16px;
-  background: #fffaf3;
-  padding: 8px;
-}
-
-.info-qr-loading,
-.info-share-hint,
-.info-member-state,
-.info-action small {
-  font-family: var(--fc-font);
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--fc-text-sec);
+  grid-template-columns: minmax(0, 1fr) 164px;
+  gap: 16px;
+  align-items: stretch;
 }
 
 .info-share-input {
@@ -531,6 +818,23 @@ function formatDateTime(value) {
   margin-top: 10px;
 }
 
+.info-qr-shell {
+  min-height: 164px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(248, 239, 227, 0.92), rgba(240, 228, 212, 0.92));
+}
+
+.info-qr {
+  width: 144px;
+  height: 144px;
+  border-radius: 20px;
+  background: #fffaf3;
+  padding: 10px;
+}
+
 .info-members {
   margin-top: 14px;
 }
@@ -539,7 +843,7 @@ function formatDateTime(value) {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 0;
+  padding: 14px 0;
   border-bottom: 1px solid rgba(77, 52, 31, 0.06);
 }
 
@@ -553,8 +857,8 @@ function formatDateTime(value) {
 }
 
 .info-member-avatar {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -589,6 +893,14 @@ function formatDateTime(value) {
   flex: 1;
 }
 
+.info-member-name-row,
+.info-member-state-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .info-member-name {
   font-family: var(--fc-font);
   font-size: 15px;
@@ -596,9 +908,42 @@ function formatDateTime(value) {
   color: var(--fc-text);
 }
 
-.info-member-role {
-  background: rgba(243, 231, 215, 0.92);
-  color: var(--fc-accent-strong);
+.info-member-state-row {
+  margin-top: 6px;
+}
+
+.info-member-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.info-mini-btn {
+  padding: 8px 12px;
+  border: 1px solid rgba(77, 52, 31, 0.10);
+  border-radius: 999px;
+  background: rgba(255, 250, 243, 0.92);
+  color: var(--fc-text);
+  font-family: var(--fc-font);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.info-mini-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(61, 40, 22, 0.10);
+}
+
+.info-mini-btn.danger {
+  background: linear-gradient(135deg, #d58d73 0%, #ba5b40 100%);
+  border-color: rgba(167, 79, 53, 0.20);
+  color: #fffaf3;
+}
+
+.info-member-footnote {
+  margin-top: 12px;
 }
 
 .info-actions {
@@ -608,10 +953,25 @@ function formatDateTime(value) {
   gap: 10px;
 }
 
+.info-host-note {
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: rgba(253, 236, 234, 0.82);
+  border: 1px solid rgba(196, 96, 82, 0.14);
+  color: #9f4c41;
+}
+
 .info-action {
-  padding: 16px;
+  padding: 16px 18px;
   text-align: left;
   cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.info-action:hover {
+  transform: translateY(-1px);
+  border-color: rgba(140, 90, 43, 0.16);
+  box-shadow: 0 18px 36px rgba(61, 40, 22, 0.12);
 }
 
 .info-action strong {
@@ -631,9 +991,57 @@ function formatDateTime(value) {
   color: var(--fc-danger);
 }
 
+.info-enter-active,
+.info-leave-active {
+  transition: opacity 0.24s ease;
+}
+
+.info-enter-active .info-panel,
+.info-leave-active .info-panel {
+  transition: transform 0.24s ease, opacity 0.24s ease;
+}
+
+.info-enter-from,
+.info-leave-to {
+  opacity: 0;
+}
+
+.info-enter-from .info-panel,
+.info-leave-to .info-panel {
+  transform: translateX(16px);
+  opacity: 0;
+}
+
 @media (max-width: 640px) {
   .info-panel {
     width: 100%;
+    max-width: 100%;
+  }
+
+  .info-head {
+    padding-top: calc(18px + env(safe-area-inset-top));
+  }
+
+  .info-body {
+    padding: 0 16px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .info-hero-cover {
+    min-height: 244px;
+    padding: 20px;
+  }
+
+  .info-name {
+    font-size: 38px;
+  }
+
+  .info-summary {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .info-summary-divider {
+    display: none;
   }
 
   .info-share-grid,
@@ -642,7 +1050,21 @@ function formatDateTime(value) {
   }
 
   .info-qr-shell {
-    min-height: 170px;
+    min-height: 188px;
+  }
+
+  .info-countdown-row,
+  .info-member {
+    align-items: flex-start;
+  }
+
+  .info-member {
+    flex-wrap: wrap;
+  }
+
+  .info-member-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 }
 </style>

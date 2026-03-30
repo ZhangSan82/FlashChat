@@ -25,8 +25,10 @@
                 {{ (nickname || '?')[0].toUpperCase() }}
               </div>
             </div>
-            <div class="dr-name">{{ nickname }}</div>
-            <div class="dr-id">{{ accountId }}</div>
+            <div class="dr-profile-copy">
+              <div class="dr-name">{{ nickname }}</div>
+              <div class="dr-id-line">FlashChat ID：{{ accountId }}</div>
+            </div>
           </section>
 
           <div class="dr-section">快捷入口</div>
@@ -178,7 +180,9 @@ defineEmits(['close', 'action'])
   box-shadow: -20px 0 50px rgba(61, 40, 22, 0.18);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dr-panel-glow {
@@ -246,18 +250,21 @@ defineEmits(['close', 'action'])
 }
 
 .dr-profile {
-  padding: 22px;
+  padding: 18px;
   border: 1px solid var(--fc-border);
-  border-radius: 26px;
+  border-radius: 22px;
   background: rgba(255, 250, 243, 0.72);
   box-shadow: var(--fc-shadow-soft);
   margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 14px;
 }
 
 .dr-avatar-shell {
-  width: 76px;
-  height: 76px;
-  margin-bottom: 16px;
+  width: 68px;
+  height: 68px;
   padding: 4px;
   border-radius: 50%;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(221, 193, 163, 0.55));
@@ -272,22 +279,27 @@ defineEmits(['close', 'action'])
   justify-content: center;
   color: #fff;
   font-family: var(--fc-font);
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 600;
   box-shadow: 0 16px 32px rgba(61, 40, 22, 0.14);
 }
 
 .dr-avatar-img { object-fit: cover; border: none; }
 
-.dr-name {
-  font-family: var(--fc-font);
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--fc-text);
-  line-height: 1.05;
+.dr-profile-copy {
+  min-width: 0;
 }
 
-.dr-id {
+.dr-name {
+  font-family: var(--fc-font);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--fc-text);
+  line-height: 1.1;
+  word-break: break-word;
+}
+
+.dr-id-line {
   margin-top: 8px;
   font-family: var(--fc-font);
   font-size: 13px;

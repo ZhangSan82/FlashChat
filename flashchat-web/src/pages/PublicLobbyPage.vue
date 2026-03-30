@@ -4,16 +4,17 @@
     <div class="hall-orb hall-orb-b"></div>
 
     <header class="hall-top">
-      <button class="hall-back" type="button" @click="router.push('/')">返回聊天</button>
       <div class="hall-top-copy">
+        <button class="hall-back" type="button" @click="goRoomList">返回房间列表</button>
         <div class="hall-kicker">Public Lobby</div>
         <h1>公开房间大厅</h1>
-        <p>快速发现正在进行中的公开房间，按热度、最新或即将到期筛选。</p>
+        <p>快速发现正在进行中的公开房间，先预览房间信息，再决定要不要进入聊天。</p>
       </div>
-      <div class="hall-identity">
+
+      <aside class="hall-identity">
         <span>当前身份</span>
         <strong>{{ identityName }}</strong>
-      </div>
+      </aside>
     </header>
 
     <section class="hall-toolbar">
@@ -29,7 +30,7 @@
           {{ option.label }}
         </button>
       </div>
-      <button class="hall-create" type="button" @click="router.push('/')">去创建房间</button>
+      <button class="hall-create" type="button" @click="goCreateRoom">创建公开房间</button>
     </section>
 
     <section v-if="loading && rooms.length === 0" class="hall-state">
@@ -45,15 +46,18 @@
     <section v-else-if="rooms.length === 0" class="hall-empty">
       <h2>公开大厅暂时还很安静</h2>
       <p>你可以先创建一个公开房间，把它放到大厅里等别人加入。</p>
-      <button class="hall-create" type="button" @click="router.push('/')">去发起公开房间</button>
+      <button class="hall-create" type="button" @click="goCreateRoom">去创建公开房间</button>
     </section>
 
     <section v-else class="hall-grid">
       <article v-for="room in rooms" :key="room.roomId" class="hall-card">
         <div class="hall-card-head">
-          <div>
-            <div class="hall-card-title">{{ room.title || room.roomId }}</div>
-            <div class="hall-card-id">{{ room.roomId }}</div>
+          <div class="hall-card-identity">
+            <img class="hall-card-avatar" :src="getRoomVisualUrl(room)" :alt="getRoomDisplayName(room)" />
+            <div class="hall-card-copy">
+              <div class="hall-card-title">{{ getRoomDisplayName(room) }}</div>
+              <div class="hall-card-id">{{ room.roomId }}</div>
+            </div>
           </div>
           <span class="hall-badge" :class="statusClass(room.status)">{{ room.statusDesc || '开放中' }}</span>
         </div>
@@ -72,9 +76,7 @@
           <button class="hall-card-btn ghost" type="button" @click="copyShare(room)">
             {{ copyingRoomId === room.roomId ? '已复制' : '复制链接' }}
           </button>
-          <button class="hall-card-btn" type="button" @click="router.push(`/room/${room.roomId}`)">
-            进入房间
-          </button>
+          <button class="hall-card-btn" type="button" @click="goPreview(room)">预览房间</button>
         </div>
       </article>
     </section>
@@ -93,6 +95,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { listPublicRooms } from '@/api/room'
 import { formatCountdown, getCountdownColor } from '@/utils/formatter'
+import { getRoomDisplayName, getRoomVisualUrl } from '@/utils/roomVisual'
 
 const router = useRouter()
 const auth = useAuth()
@@ -187,14 +190,30 @@ function switchSort(nextSort) {
   loadRooms(true)
 }
 
+function goRoomList() {
+  router.push({ name: 'Chat', query: { view: 'rooms' } })
+}
+
+function goCreateRoom() {
+  router.push({ name: 'Chat', query: { view: 'rooms', action: 'create' } })
+}
+
+function goPreview(room) {
+  router.push({
+    name: 'JoinRoom',
+    params: { roomId: room.roomId },
+    query: { from: 'public' }
+  })
+}
+
 function countdownMs(room) {
   return new Date(room.expireTime).getTime() - now.value
 }
 
 function formatDateTime(value) {
-  if (!value) return '—'
+  if (!value) return '--'
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '—'
+  if (Number.isNaN(date.getTime())) return '--'
   return date.toLocaleString('zh-CN', {
     month: '2-digit',
     day: '2-digit',
@@ -216,7 +235,7 @@ function statusClass(status) {
   min-height: 100vh;
   padding: 28px 28px 36px;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 10% 0%, rgba(221, 193, 163, 0.42), transparent 26%),
     radial-gradient(circle at 100% 10%, rgba(173, 122, 68, 0.16), transparent 20%),
@@ -258,9 +277,20 @@ function statusClass(status) {
 
 .hall-top {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 18px;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
   align-items: start;
+}
+
+.hall-top-copy,
+.hall-identity,
+.hall-state,
+.hall-empty {
+  padding: 28px;
+  border: 1px solid rgba(77, 52, 31, 0.10);
+  border-radius: 28px;
+  background: rgba(255, 250, 243, 0.82);
+  box-shadow: var(--fc-shadow-soft);
 }
 
 .hall-back,
@@ -292,6 +322,7 @@ function statusClass(status) {
 }
 
 .hall-kicker {
+  margin-top: 18px;
   font-family: var(--fc-font);
   font-size: 11px;
   font-weight: 600;
@@ -301,31 +332,23 @@ function statusClass(status) {
 }
 
 .hall-top-copy h1 {
-  margin: 10px 0 10px;
+  margin: 12px 0 12px;
   font-family: var(--fc-font);
-  font-size: clamp(34px, 5vw, 52px);
+  font-size: clamp(36px, 5vw, 56px);
   line-height: 0.98;
+  font-weight: 700;
   color: var(--fc-text);
 }
 
 .hall-top-copy p,
 .hall-state p,
 .hall-empty p {
-  max-width: 640px;
   margin: 0;
+  max-width: 700px;
   font-family: var(--fc-font);
   font-size: 15px;
   line-height: 1.7;
   color: var(--fc-text-sec);
-}
-
-.hall-identity {
-  padding: 16px 18px;
-  min-width: 180px;
-  border: 1px solid rgba(77, 52, 31, 0.10);
-  border-radius: 22px;
-  background: rgba(255, 250, 243, 0.76);
-  box-shadow: var(--fc-shadow-soft);
 }
 
 .hall-identity span {
@@ -339,9 +362,10 @@ function statusClass(status) {
 
 .hall-identity strong {
   display: block;
-  margin-top: 10px;
+  margin-top: 12px;
   font-family: var(--fc-font);
-  font-size: 20px;
+  font-size: 28px;
+  font-weight: 700;
   color: var(--fc-text);
 }
 
@@ -400,11 +424,34 @@ function statusClass(status) {
   gap: 12px;
 }
 
+.hall-card-identity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.hall-card-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 22px;
+  object-fit: cover;
+  box-shadow: 0 14px 28px rgba(61, 40, 22, 0.14);
+  background: rgba(243, 231, 215, 0.92);
+  flex-shrink: 0;
+}
+
+.hall-card-copy {
+  min-width: 0;
+}
+
 .hall-card-title {
   font-family: var(--fc-font);
   font-size: 22px;
   font-weight: 700;
   color: var(--fc-text);
+  word-break: break-word;
 }
 
 .hall-card-id,
@@ -458,11 +505,6 @@ function statusClass(status) {
 
 .hall-state,
 .hall-empty {
-  padding: 32px;
-  border: 1px solid rgba(77, 52, 31, 0.10);
-  border-radius: 28px;
-  background: rgba(255, 250, 243, 0.82);
-  box-shadow: var(--fc-shadow-soft);
   text-align: center;
 }
 
@@ -488,6 +530,10 @@ function statusClass(status) {
 }
 
 @media (max-width: 1100px) {
+  .hall-top {
+    grid-template-columns: 1fr;
+  }
+
   .hall-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -510,6 +556,12 @@ function statusClass(status) {
 
   .hall-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hall-card-avatar {
+    width: 58px;
+    height: 58px;
+    border-radius: 20px;
   }
 }
 </style>

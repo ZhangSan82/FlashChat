@@ -4,7 +4,7 @@
     <div class="invites-orb invites-orb-b"></div>
 
     <header class="invites-top">
-      <button class="invites-back" type="button" @click="router.push('/')">返回聊天</button>
+      <button class="invites-back" type="button" @click="goRoomList">返回房间列表</button>
       <div class="invites-top-copy">
         <div class="invites-kicker">Invite Center</div>
         <h1>邀请码管理</h1>
@@ -148,6 +148,10 @@ function showNotice(text) {
 }
 showNotice.timer = null
 
+function goRoomList() {
+  router.push({ name: 'Chat', query: { view: 'rooms' } })
+}
+
 function formatDateTime(value) {
   if (!value) return '—'
   const date = new Date(value)
@@ -167,7 +171,7 @@ function formatDateTime(value) {
   min-height: 100vh;
   padding: 28px;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 0% 0%, rgba(221, 193, 163, 0.46), transparent 28%),
     radial-gradient(circle at 100% 10%, rgba(173, 122, 68, 0.14), transparent 20%),

@@ -16,7 +16,6 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(10)
 @RequiredArgsConstructor
-@EnableConfigurationProperties(AuditProperties.class)
 public class ContentLengthAuditHandler extends AbstractAuditHandler {
     private final AuditProperties auditProperties;
     @Override

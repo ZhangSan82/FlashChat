@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 /**
  * 消息审核配置
  */
-@Component
+
 @Data
 @ConfigurationProperties(prefix = "flashchat.audit")
 public class AuditProperties {

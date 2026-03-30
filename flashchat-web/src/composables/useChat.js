@@ -170,12 +170,12 @@ export function useChat(getMemberId, getCurrentUser) {
         const lastReal = lastRealMsgMap[room.roomId]
         const preview = lastReal
             ? (lastReal.username ? `${lastReal.username}: ${lastReal.content}` : lastReal.content)
-            : (countdown !== '∞' ? countdown : '')
+            : ''
 
         return {
             roomId: room.roomId,
-            roomName: room.title || room.roomId,
-            avatar: resolveAvatar(null, '#C8956C', room.title || '?'),
+            roomName: room.title || room.roomName || room.roomId,
+            avatar: resolveAvatar(null, '#C8956C', room.title || room.roomName || '?'),
             unreadCount: unreadMap[room.roomId] || 0,
             index: room.createTime ? new Date(room.createTime).getTime() : 0,
             users,
@@ -208,6 +208,31 @@ export function useChat(getMemberId, getCurrentUser) {
 
     function getMessageIndexId(message) {
         return message?.indexId || message?._raw?.indexId || null
+    }
+
+    function normalizeReactionEmoji(emoji) {
+        if (typeof emoji === 'string') return emoji.trim()
+        if (emoji && typeof emoji === 'object') {
+            if (typeof emoji.unicode === 'string') return emoji.unicode.trim()
+            if (typeof emoji.emoji === 'string') return emoji.emoji.trim()
+            if (typeof emoji.value === 'string') return emoji.value.trim()
+        }
+        return ''
+    }
+
+    function normalizeReactionsMap(reactions) {
+        if (!reactions || typeof reactions !== 'object') return null
+
+        const entries = Object.entries(reactions).filter(([emoji, users]) => {
+            const key = normalizeReactionEmoji(emoji)
+            return key && key !== '[object Object]' && Array.isArray(users) && users.length > 0
+        })
+
+        if (!entries.length) return null
+
+        return Object.fromEntries(
+            entries.map(([emoji, users]) => [normalizeReactionEmoji(emoji), users])
+        )
     }
 
     function getMessagePreviewContent(message) {
@@ -814,7 +839,7 @@ export function useChat(getMemberId, getCurrentUser) {
         if (!targetId) return
         messages.value = messages.value.map(m => {
             if (m.indexId === targetId) {
-                return { ...m, reactions: data.reactions || null }
+                return { ...m, reactions: normalizeReactionsMap(data.reactions) }
             }
             return m
         })
@@ -990,6 +1015,11 @@ export function useChat(getMemberId, getCurrentUser) {
         }
 
         if (roomId === currentRoomId.value && data?.durationDesc) {
+            const lastMessage = messages.value[messages.value.length - 1]
+            if (lastMessage?.system && String(lastMessage.content || '').includes(String(data.durationDesc))) {
+                refreshRoomCountdowns()
+                return
+            }
             messages.value = [...messages.value, {
                 _id: `sys-extend-${Date.now()}`,
                 system: true,
@@ -1245,7 +1275,7 @@ export function useChat(getMemberId, getCurrentUser) {
             deleted,
             files: deleted ? null : (msg.files || null),
             replyMessage: deleted ? null : (msg.replyMessage || null),
-            reactions: deleted ? null : (msg.reactions || null),
+            reactions: deleted ? null : normalizeReactionsMap(msg.reactions),
             _raw: {
                 ...msg,
                 username: usernameDisplay,
@@ -1296,18 +1326,332 @@ export function useChat(getMemberId, getCurrentUser) {
         return deleteMessageForAll(message, roomId)
     }
 
+    function findMessageByClientId(messageId) {
+        if (!messageId) return null
+        const targetId = String(messageId)
+        return messages.value.find(message => String(message?._id || '') === targetId) || null
+    }
+
+    async function toggleReaction(messageId, emoji, roomId = currentRoomId.value) {
+        const message = typeof messageId === 'object' ? messageId : findMessageByClientId(messageId)
+        const msgId = getMessageIndexId(message)
+        const nextEmoji = normalizeReactionEmoji(emoji)
+
+        if (!roomId || !msgId) throw new Error('鏃犳硶瀹氫綅娑堟伅')
+        if (!nextEmoji) throw new Error('琛ㄦ儏涓嶈兘涓虹┖')
+        if (message?.deleted || message?._raw?.recalled) throw new Error('璇ユ秷鎭棤娉曟坊鍔犺〃鎯?')
+
+        await chatApi.toggleReaction({ roomId, msgId, emoji: nextEmoji })
+        return true
+    }
+
+    const ROOM_GRACE_PERIOD_MS = 5 * 60 * 1000
+    const baseLoadRoomUsers = loadRoomUsers
+    const baseOnRoomExpiring = onRoomExpiring
+    const baseOnRoomGrace = onRoomGrace
+    const baseOnRoomClosed = onRoomClosed
+    const baseOnRoomExtended = onRoomExtended
+    const baseSendMessage = sendMessage
+
+    function parseRoomTime(value) {
+        if (!value) return null
+        const ts = new Date(value).getTime()
+        return Number.isNaN(ts) ? null : ts
+    }
+
+    function getRoomRaw(roomId = currentRoomId.value) {
+        if (!roomId) return null
+        return roomsRaw.value.find(room => room.roomId === roomId) || null
+    }
+
+    function resolveRoomGraceEnd(room) {
+        if (!room) return null
+
+        const explicit = parseRoomTime(
+            room.graceEndTime || room.graceEndAt || room._graceEndTime || room._graceUntil
+        )
+        if (explicit != null) return explicit
+
+        if (Number(room.status) === 3) {
+            const expireAt = parseRoomTime(room.expireTime)
+            if (expireAt != null) return expireAt + ROOM_GRACE_PERIOD_MS
+        }
+
+        return null
+    }
+
+    function formatInlineCountdown(ms) {
+        if (ms == null || ms <= 0) return '不到 1 分钟'
+        const short = formatCountdownShort(ms)
+        return short || '不到 1 分钟'
+    }
+
+    function syncRoomPresenceState(roomId, users = roomUsersMap[roomId] || []) {
+        const room = getRoomRaw(roomId)
+        if (!room) return users
+
+        room.memberCount = users.length
+        room.onlineCount = users.filter(user => user?.status?.state === 'online').length
+
+        const memberId = getMemberId()
+        if (memberId != null) {
+            const currentUser = users.find(user => user._id === String(memberId))
+            if (currentUser) {
+                room._selfMuted = Boolean(currentUser._raw?.isMuted)
+            }
+        }
+
+        return users
+    }
+
+    function isCurrentUserMuted(roomId = currentRoomId.value) {
+        if (!roomId) return false
+
+        const memberId = getMemberId()
+        if (memberId != null) {
+            const currentUser = (roomUsersMap[roomId] || []).find(user => user._id === String(memberId))
+            if (currentUser) {
+                return Boolean(currentUser._raw?.isMuted)
+            }
+        }
+
+        return Boolean(getRoomRaw(roomId)?._selfMuted)
+    }
+
+    function getRoomState(roomId = currentRoomId.value) {
+        const room = getRoomRaw(roomId)
+        if (!roomId || !room) {
+            return {
+                kind: 'empty',
+                canSend: false,
+                title: '请选择房间',
+                detail: '进入任意房间后即可继续聊天。',
+                blockReason: '请先选择一个房间',
+                countdownMs: null
+            }
+        }
+
+        const now = Date.now()
+        const expireAt = parseRoomTime(room.expireTime)
+        const graceEndAt = resolveRoomGraceEnd(room)
+        const expireRemaining = expireAt != null ? expireAt - now : null
+        const graceRemaining = graceEndAt != null ? graceEndAt - now : null
+        const status = Number(room.status ?? 0)
+        const selfMuted = isCurrentUserMuted(roomId)
+
+        if (status === 4) {
+            return {
+                kind: 'closed',
+                canSend: false,
+                title: '房间已关闭',
+                detail: '聊天室已正式结束，当前无法继续发送消息。',
+                blockReason: '房间已关闭，无法发送消息',
+                countdownMs: null
+            }
+        }
+
+        if (status === 3) {
+            return {
+                kind: 'grace',
+                canSend: false,
+                title: '房间进入宽限期',
+                detail: graceRemaining != null && graceRemaining > 0
+                    ? `现在只能查看消息，${formatInlineCountdown(graceRemaining)} 后正式关闭。`
+                    : '现在只能查看消息，宽限期结束后会正式关闭。',
+                blockReason: '房间已到期，当前处于宽限期，只能查看消息',
+                countdownMs: graceRemaining
+            }
+        }
+
+        if (selfMuted) {
+            return {
+                kind: 'muted',
+                canSend: false,
+                title: '你已被房主禁言',
+                detail: '当前可以继续查看房间消息，等房主解除禁言后即可恢复发言。',
+                blockReason: '你已被房主禁言，暂时无法发送消息',
+                countdownMs: null
+            }
+        }
+
+        if ((status === 2) || (expireRemaining != null && expireRemaining > 0 && expireRemaining <= ROOM_GRACE_PERIOD_MS)) {
+            return {
+                kind: 'expiring',
+                canSend: true,
+                title: '房间即将到期',
+                detail: expireRemaining != null && expireRemaining > 0
+                    ? `${formatInlineCountdown(expireRemaining)} 后到期，到期后会进入 5 分钟宽限期。`
+                    : '房间即将到期，到期后会进入 5 分钟宽限期。',
+                blockReason: '',
+                countdownMs: expireRemaining
+            }
+        }
+
+        return {
+            kind: 'active',
+            canSend: true,
+            title: room.statusDesc || '开放中',
+            detail: expireRemaining != null && expireRemaining > 0
+                ? `房间剩余 ${formatInlineCountdown(expireRemaining)}。`
+                : '房间当前可正常聊天。',
+            blockReason: '',
+            countdownMs: expireRemaining
+        }
+    }
+
+    function updateMemberMuteState(roomId, accountId, muted) {
+        if (!roomId || accountId == null) return roomUsersMap[roomId] || []
+
+        const users = roomUsersMap[roomId] || []
+        if (!users.length) {
+            const room = getRoomRaw(roomId)
+            if (room && String(accountId) === String(getMemberId() || '')) {
+                room._selfMuted = Boolean(muted)
+            }
+            refreshRoomCountdowns()
+            return []
+        }
+
+        const nextUsers = users.map(user => {
+            if (user._id !== String(accountId)) return user
+            return {
+                ...user,
+                _raw: {
+                    ...(user._raw || {}),
+                    isMuted: Boolean(muted)
+                }
+            }
+        })
+
+        roomUsersMap[roomId] = nextUsers
+        syncRoomPresenceState(roomId, nextUsers)
+        if (currentRoomId.value === roomId) {
+            syncMessagesWithRoomUsers(roomId)
+        }
+        refreshRoomCountdowns()
+        return nextUsers
+    }
+
+    function removeMemberFromRoom(roomId, accountId) {
+        if (!roomId || accountId == null) return roomUsersMap[roomId] || []
+
+        const nextUsers = (roomUsersMap[roomId] || []).filter(user => user._id !== String(accountId))
+        roomUsersMap[roomId] = nextUsers
+        syncRoomPresenceState(roomId, nextUsers)
+        if (currentRoomId.value === roomId) {
+            syncMessagesWithRoomUsers(roomId)
+        }
+        refreshRoomCountdowns()
+        return nextUsers
+    }
+
+    async function loadRoomUsersWithState(roomId) {
+        const users = await baseLoadRoomUsers(roomId)
+        syncRoomPresenceState(roomId, users)
+        refreshRoomCountdowns()
+        return users
+    }
+
+    function onYouMutedEnhanced(_, roomId = currentRoomId.value) {
+        const memberId = getMemberId()
+        if (!roomId || memberId == null) return
+        updateMemberMuteState(roomId, memberId, true)
+    }
+
+    function onYouUnmutedEnhanced(_, roomId = currentRoomId.value) {
+        const memberId = getMemberId()
+        if (!roomId || memberId == null) return
+        updateMemberMuteState(roomId, memberId, false)
+    }
+
+    function onRoomExpiringEnhanced(data, roomId) {
+        baseOnRoomExpiring(data, roomId)
+        const room = getRoomRaw(roomId)
+        if (!room) return
+        room.status = 2
+        room.statusDesc = room.statusDesc || '即将到期'
+        refreshRoomCountdowns()
+    }
+
+    function onRoomGraceEnhanced(data, roomId) {
+        baseOnRoomGrace(data, roomId)
+        const room = getRoomRaw(roomId)
+        if (!room) return
+        const expireAt = parseRoomTime(room.expireTime)
+        room.status = 3
+        room.statusDesc = '宽限期'
+        room.graceEndTime = expireAt != null
+            ? new Date(expireAt + ROOM_GRACE_PERIOD_MS).toISOString()
+            : new Date(Date.now() + ROOM_GRACE_PERIOD_MS).toISOString()
+        refreshRoomCountdowns()
+    }
+
+    function onRoomClosedEnhanced(data, roomId) {
+        baseOnRoomClosed(data, roomId)
+        const room = getRoomRaw(roomId)
+        if (room) {
+            room.status = 4
+            room.statusDesc = '已关闭'
+        }
+    }
+
+    function onRoomExtendedEnhanced(data, roomId) {
+        baseOnRoomExtended(data, roomId)
+        const room = getRoomRaw(roomId)
+        if (!room) return
+        delete room.graceEndTime
+        delete room._graceEndTime
+        if (room.status !== 4) {
+            room.status = Number(data?.status ?? room.status ?? 1)
+            room.statusDesc = data?.statusDesc || '开放中'
+        }
+        refreshRoomCountdowns()
+    }
+
+    async function muteMember(roomId, targetAccountId) {
+        await roomApi.muteMember({ roomId, targetAccountId })
+        updateMemberMuteState(roomId, targetAccountId, true)
+        return true
+    }
+
+    async function unmuteMember(roomId, targetAccountId) {
+        await roomApi.unmuteMember({ roomId, targetAccountId })
+        updateMemberMuteState(roomId, targetAccountId, false)
+        return true
+    }
+
+    async function kickMember(roomId, targetAccountId) {
+        await roomApi.kickMember({ roomId, targetAccountId })
+        removeMemberFromRoom(roomId, targetAccountId)
+        return true
+    }
+
+    async function sendMessageWithGuard(payload) {
+        const roomState = getRoomState(currentRoomId.value)
+        if (!roomState.canSend) {
+            throw new Error(roomState.blockReason || '当前无法发送消息')
+        }
+
+        const sent = await baseSendMessage(payload)
+        if (!sent) {
+            throw new Error('发送失败，请稍后再试')
+        }
+        return true
+    }
+
     return {
         rooms, roomsRaw, messages, currentRoomId,
         loadingRooms, roomsLoaded, messagesLoaded, unreadMap,
-        loadRooms, loadMessages, loadRoomUsers, sendMessage,
+        loadRooms, loadMessages, loadRoomUsers: loadRoomUsersWithState, sendMessage: sendMessageWithGuard,
         createRoom, joinRoom, leaveRoom, closeRoom,
         doAck, refreshRoomCountdowns, refreshAllRoomUsers,
-        isCurrentUserHost, canRecallMessage, canDeleteMessage,
-        hideMessageForSelf, recallMessage, deleteMessage, deleteMessageForAll, onTypingStatus,
+        isCurrentUserHost, isCurrentUserMuted, getRoomState, canRecallMessage, canDeleteMessage,
+        hideMessageForSelf, recallMessage, deleteMessage, deleteMessageForAll, toggleReaction, onTypingStatus,
+        kickMember, muteMember, unmuteMember,
         onChatBroadcast, onUserJoin, onUserLeave,
-        onYouMuted, onYouUnmuted, onYouKicked,
-        onRoomExpiring, onRoomGrace, onRoomClosed,
+        onYouMuted: onYouMutedEnhanced, onYouUnmuted: onYouUnmutedEnhanced, onYouKicked,
+        onRoomExpiring: onRoomExpiringEnhanced, onRoomGrace: onRoomGraceEnhanced, onRoomClosed: onRoomClosedEnhanced,
         onUserOnline, onUserOffline, onMemberInfoChanged,
-        onMsgRecalled, onMsgDeleted, onRoomExtended, onMsgReactionUpdate
+        onMsgRecalled, onMsgDeleted, onRoomExtended: onRoomExtendedEnhanced, onMsgReactionUpdate
     }
 }

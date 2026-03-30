@@ -191,7 +191,7 @@ public class RoomChannelManager {
      * 3. 如果用户在线，加入 roomOnlineChannels
      * 4. 广播 USER_JOIN
      */
-    public void joinRoom(String roomId, Long userId, String nickname, String avatar, boolean isHost) {
+    public void joinRoom(String roomId, Long userId, String nickname, String avatar, boolean isHost, boolean isMuted) {
 
         if (roomId == null || roomId.isBlank()) {
             log.warn("[加入房间] roomId 为空, userId={}", userId);
@@ -225,7 +225,7 @@ public class RoomChannelManager {
                 .nickname(nickname != null ? nickname : "匿名用户")
                 .avatar(avatar != null ? avatar : "")
                 .isHost(isHost)
-                .isMuted(false)
+                .isMuted(isMuted)
                 .lastActiveTime(System.currentTimeMillis())
                 .build();
         // 4. 原子加入房间

@@ -13,14 +13,23 @@
     <style>
         /* 全局基础 — 消除白色闪烁 */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body, #app {
-            height: 100%;
+        html, body {
+            min-height: 100%;
             width: 100%;
-            overflow: hidden;
+            overflow-x: hidden;
             background: #F5F0E8;
             font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            overflow-y: auto;
+        }
+
+        #app {
+            min-height: 100%;
+            width: 100%;
         }
     </style>
 </head>

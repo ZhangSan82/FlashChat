@@ -1,0 +1,68 @@
+# ============================================
+# FlashChat 敏感词库
+# 格式：词语,分类,级别（分类和级别可省略）
+# 级别：REJECT = 拒绝发送 | REPLACE = 替换为 ***
+# 未指定级别时使用 yaml 配置的 default-strategy
+# ============================================
+
+# ---- 辱骂类（替换，不阻断聊天） ----
+笨蛋,辱骂,REPLACE
+白痴,辱骂,REPLACE
+废物,辱骂,REPLACE
+垃圾,辱骂,REPLACE
+滚蛋,辱骂,REPLACE
+去死,辱骂,REPLACE
+傻逼,辱骂,REPLACE
+他妈的,辱骂,REPLACE
+妈的,辱骂,REPLACE
+操你,辱骂,REPLACE
+草泥马,辱骂,REPLACE
+你妈,辱骂,REPLACE
+狗东西,辱骂,REPLACE
+脑残,辱骂,REPLACE
+智障,辱骂,REPLACE
+贱人,辱骂,REPLACE
+混蛋,辱骂,REPLACE
+
+# ---- 歧视类（替换） ----
+黑鬼,歧视,REPLACE
+支那,歧视,REPLACE
+
+# ---- 色情类（严重的拒绝，轻微的替换） ----
+约炮,色情,REJECT
+裸聊,色情,REJECT
+色情网站,色情,REJECT
+援交,色情,REJECT
+
+# ---- 违法类（直接拒绝） ----
+买枪,违法,REJECT
+卖枪,违法,REJECT
+冰毒,违法,REJECT
+摇头丸,违法,REJECT
+大麻,违法,REJECT
+赌博网站,违法,REJECT
+洗钱,违法,REJECT
+代开发票,违法,REJECT
+
+# ---- 诈骗/广告类（直接拒绝） ----
+免费领取,广告,REJECT
+日赚万元,广告,REJECT
+兼职刷单,广告,REJECT
+加微信,广告,REPLACE
+加我qq,广告,REPLACE
+代理赚钱,广告,REJECT
+
+# ---- 自我伤害类（直接拒绝，保护用户） ----
+自杀方法,自我伤害,REJECT
+一起去死,自我伤害,REJECT
+
+# ---- 谐音/变体（本地DFA能拦截的固定变体） ----
+# 更复杂的谐音绕过（如拼音首字母、emoji替代）交给AI审核处理
+傻b,辱骂,REPLACE
+sb,辱骂,REPLACE
+nmsl,辱骂,REPLACE
+cnm,辱骂,REPLACE
+wtf,辱骂,REPLACE
+md,辱骂,REPLACE
+nmd,辱骂,REPLACE
+wdnmd,辱骂,REPLACE
