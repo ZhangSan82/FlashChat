@@ -3,6 +3,8 @@ package com.flashchat.chatservice.service.impl;
 
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.flashchat.chatservice.audit.MessageAuditChain;
+import com.flashchat.chatservice.audit.MessageAuditContext;
 import com.flashchat.chatservice.config.MsgIdGenerator;
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
@@ -15,6 +17,7 @@ import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.msg.FileDTO;
 import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.*;
+import com.flashchat.chatservice.ratelimit.MessageRateLimiter;
 import com.flashchat.chatservice.service.*;
 import com.flashchat.chatservice.service.strategy.msg.AbstractMsgHandler;
 import com.flashchat.chatservice.service.strategy.msg.MsgHandlerFactory;
@@ -46,6 +49,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private final UnreadService unreadService;
     private final MsgIdGenerator msgIdGenerator;
     private final MessageWindowService messageWindowService;
+    private final MessageAuditChain  messageAuditChain;
     /** 撤回时间窗口：2 分钟（秒级精度） */
     private static final long RECALL_TIME_LIMIT_SECONDS = 2 * 60;
     /** 消息状态：正常 */
@@ -99,6 +103,21 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         String bodyJson = handler.buildBodyJson(files);
         String contentSummary = handler.buildContentSummary(content, files);
         Integer msgType = handler.getMsgTypeEnum().getType();
+        // ===== 4.5 消息审核 =====
+        MessageAuditContext auditCtx = MessageAuditContext.of(
+                contentSummary,files,roomId,accountId,msgType);
+        messageAuditChain.execute(auditCtx);
+        if (auditCtx.isRejected()) {
+            // 通过 WS 通知发送者（MSG_REJECTED 已有前端监听，会 Toast 提示）
+            roomChannelManager.sendToUser(accountId,
+                    WsRespDTO.of(roomId, WsRespDTOTypeEnum.MSG_REJECTED,
+                            auditCtx.getRejectReason()));
+            throw new ClientException(auditCtx.getRejectReason());
+        }
+        // REPLACE：使用审核后的内容替换原始摘要
+        if (auditCtx.isReplaced()) {
+            contentSummary = auditCtx.getEffectiveContent();
+        }
         // ===== 5. 回复消息校验 =====
         MessageDO replyMsg = null;
         if (request.getReplyMsgId() != null) {

@@ -183,8 +183,8 @@ public class AccountController {
      */
     @GetMapping("/credits/transactions")
     public Result<List<CreditTransactionRespDTO>> getCreditTransactions(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer size) {
+            @RequestParam(value = "page",defaultValue = "1") Integer page,
+            @RequestParam(value = "size",defaultValue = "20") Integer size) {
         Long loginId = UserContext.getRequiredLoginId();
         // 参数边界保护
         if (page < 1) page = 1;

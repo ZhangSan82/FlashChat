@@ -71,6 +71,30 @@ flashchat:
     # 生产环境改为实际域名：https://flashchat.com
     base-url: http://localhost:3002
 
+  rate-limit:
+    enabled: true
+    user-global:
+      window-ms: 60000
+      max-count: 30
+    user-room:
+      window-ms: 10000
+      max-count: 10
+    room-global:
+      window-ms: 60000
+      max-count: 200
+
+  audit:
+    enabled: true
+    content-length:
+      enabled: true
+      min-length: 1
+      max-length: 500
+    sensitive-word:
+      enabled: true
+      dict-path: classpath:audit/sensitive-words.txt
+      reload-interval-ms: 300000
+      default-strategy: REPLACE
+
 
   file:
     # 文件存储根路径（相对路径或绝对路径）
