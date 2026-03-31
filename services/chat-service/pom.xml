@@ -37,6 +37,10 @@
             <groupId>com.flashchat</groupId>
             <artifactId>FlashChat-service-user</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.flashchat</groupId>
+            <artifactId>FlashChat-framework-channel</artifactId>
+        </dependency>
 
 
         <!-- BCrypt 密码加密 -->

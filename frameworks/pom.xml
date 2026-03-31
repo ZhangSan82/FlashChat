@@ -18,5 +18,6 @@
         <module>convention</module>
         <module>cache</module>
         <module>user</module>
+        <module>channel</module>
     </modules>
 </project>

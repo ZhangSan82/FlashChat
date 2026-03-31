@@ -1,6 +1,10 @@
 package com.flashchat.chatservice.websocket.manager;
 
 
+import com.flashchat.channel.ChannelPushService;
+import com.flashchat.channel.ChannelQueryService;
+import com.flashchat.channel.event.MemberOfflineEvent;
+import com.flashchat.channel.event.MemberOnlineEvent;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.req.UserJoinMsgReqDTO;
 import com.flashchat.chatservice.dto.req.UserLeaveMsgReqDTO;
@@ -16,6 +20,7 @@ import io.micrometer.core.instrument.Timer;
 import io.netty.channel.Channel;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -25,9 +30,10 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 @Component
-public class RoomChannelManager {
+public class RoomChannelManager implements ChannelPushService, ChannelQueryService {
 
     private final MeterRegistry meterRegistry;
+    private final ApplicationEventPublisher applicationEventPublisher;
     // ==================== 监控指标 ====================
     private final Counter broadcastCounter;
     private final Counter slowClientSkipCounter;
@@ -68,8 +74,9 @@ public class RoomChannelManager {
     private final ConcurrentHashMap<String, Set<Channel>> roomOnlineChannels =
             new ConcurrentHashMap<>();
 
-    public RoomChannelManager(MeterRegistry meterRegistry) {
+    public RoomChannelManager(MeterRegistry meterRegistry,ApplicationEventPublisher applicationEventPublisher) {
         this.meterRegistry = meterRegistry;
+        this.applicationEventPublisher = applicationEventPublisher;
 
         // 动态 Gauge
         meterRegistry.gaugeMapSize("websocket.online.users", Tags.empty(), userChannels);
@@ -127,6 +134,11 @@ public class RoomChannelManager {
         } else {
             log.info("[用户上线] userId={}", userId);
         }
+        try {
+            applicationEventPublisher.publishEvent(new MemberOnlineEvent(this, userId));
+        } catch (Exception e) {
+            log.error("[上线事件发布失败] userId={}", userId, e);
+        }
     }
 
     /**
@@ -162,6 +174,13 @@ public class RoomChannelManager {
         }
         log.info("[用户离线] userId={}, 仍保留 {} 个房间成员关系",
                 userId, roomsSnapshot.size());
+        if (userId != null) {
+            try {
+                applicationEventPublisher.publishEvent(new MemberOfflineEvent(this, userId));
+            } catch (Exception e) {
+                log.error("[离线事件发布失败] userId={}", userId, e);
+            }
+        }
     }
 
     /**
@@ -745,6 +764,93 @@ public class RoomChannelManager {
             }
             log.info("[清理残留房间] room={}, 清理 {} 名成员", roomId, members.size());
         }
+    }
+
+    @Override
+    public void sendToUser(Long accountId, int type, String roomId, Object data) {
+        if (accountId == null || accountId < 0) {
+            // 负数 ID 是 AI 玩家，没有 WS 连接，静默跳过
+            return;
+        }
+        Channel ch = userChannels.get(accountId);
+        if (ch != null && ch.isActive()) {
+            String json = JsonUtil.toJson(buildWsResp(type, roomId, data));
+            ch.writeAndFlush(new TextWebSocketFrame(json));
+        }
+    }
+
+    @Override
+    public void sendToUsers(Collection<Long> accountIds, int type, String roomId, Object data) {
+        if (accountIds == null || accountIds.isEmpty()) {
+            return;
+        }
+        String json = JsonUtil.toJson(buildWsResp(type, roomId, data));
+        Set<Channel> toFlush = new HashSet<>();
+        for (Long accountId : accountIds) {
+            if (accountId == null || accountId < 0) {
+                continue;
+            }
+            Channel ch = userChannels.get(accountId);
+            if (ch != null && ch.isActive() && ch.isWritable()) {
+                ch.write(new TextWebSocketFrame(json));
+                toFlush.add(ch);
+            } else if (ch != null && ch.isActive() && !ch.isWritable()) {
+                slowClientSkipCounter.increment();
+            }
+        }
+        for (Channel ch : toFlush) {
+            ch.flush();
+        }
+    }
+
+    @Override
+    public void broadcastToRoom(String roomId, int type, Object data) {
+        Set<Channel> channels = roomOnlineChannels.get(roomId);
+        if (channels == null || channels.isEmpty()) {
+            return;
+        }
+        String json = JsonUtil.toJson(buildWsResp(type, roomId, data));
+        for (Channel ch : channels) {
+            if (!ch.isActive()) continue;
+            if (!ch.isWritable()) {
+                slowClientSkipCounter.increment();
+                continue;
+            }
+            ch.write(new TextWebSocketFrame(json));
+        }
+        for (Channel ch : channels) {
+            ch.flush();
+        }
+    }
+
+    /**
+     * 构建标准 WS 推送结构体
+     * <p>
+     * 统一格式：{ "type": int, "roomId": string|null, "data": object }
+     * 与现有的 WsRespDTO 结构一致。
+     */
+    private Map<String, Object> buildWsResp(int type, String roomId, Object data) {
+        Map<String, Object> resp = new LinkedHashMap<>(3);
+        resp.put("type", type);
+        resp.put("roomId", roomId);
+        resp.put("data", data);
+        return resp;
+    }
+
+
+    /**
+     * 查询用户是否在线
+     */
+    @Override
+    public boolean isRoomMember(String roomId, Long accountId) {
+        // 当前实现：offline 不移除 roomMembers，断线后仍返回 true，与持久化语义一致
+        ConcurrentHashMap<Long, RoomMemberInfo> members = roomMembers.get(roomId);
+        return members != null && members.containsKey(accountId);
+    }
+
+    @Override
+    public int getRoomOnlineCount(String roomId) {
+        return getOnlineCountInRoom(roomId);
     }
 }
 

@@ -18,5 +18,6 @@
         <module>chat-service</module>
         <module>aggregation-service</module>
         <module>user-service</module>
+        <module>game-service</module>
     </modules>
 </project>

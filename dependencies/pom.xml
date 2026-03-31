@@ -78,6 +78,11 @@
                 <artifactId>FlashChat-framework-user</artifactId>
                 <version>${flashchat.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.flashchat</groupId>
+                <artifactId>FlashChat-framework-channel</artifactId>
+                <version>${flashchat.version}</version>
+            </dependency>
 
             <!-- ==================== 监控 ==================== -->
             <dependency>

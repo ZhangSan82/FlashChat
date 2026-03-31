@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.cache.toolkit.CacheUtil;
+import com.flashchat.channel.event.MemberKickedFromRoomEvent;
 import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
 import com.flashchat.chatservice.dao.enums.*;
@@ -29,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +57,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final CreditService creditService;
     private final TransactionTemplate transactionTemplate;
     private final RoomMapper roomMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
     private static final long CACHE_TIMEOUT = 60000L;
     /**单用户最多同时加入的房间数 */
     private static final int MAX_ROOMS_PER_USER = 50;
@@ -441,6 +444,12 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         unreadService.removeRoomUnread(targetAccountId, roomId);
         log.info("[踢人成功] room={}, operator={}, target={}",
                 roomId, ctx.getOperatorAccountId(), targetAccountId);
+        try {
+            applicationEventPublisher.publishEvent(new MemberKickedFromRoomEvent(this,targetAccountId,roomId
+                                    ,ctx.getOperatorAccountId()));
+        } catch (Exception e) {
+            log.error("[踢人事件发布失败] room={}, target={}", roomId, targetAccountId, e);
+        }
     }
 
     @Override
