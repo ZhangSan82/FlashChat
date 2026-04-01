@@ -16,7 +16,7 @@ public enum PlayerStatusEnum {
     /** 存活：正常参与游戏 */
     ALIVE("ALIVE", "存活"),
 
-    /** 已淘汰：被投票出局或被踢出 */
+    /** 已淘汰：被投票出局 */
     ELIMINATED("ELIMINATED", "已淘汰"),
 
     /** 掉线：WebSocket 断开，超过重连窗口后进入托管模式 */
