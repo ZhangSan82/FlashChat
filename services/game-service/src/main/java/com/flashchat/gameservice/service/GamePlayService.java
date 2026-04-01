@@ -1,5 +1,8 @@
 package com.flashchat.gameservice.service;
 
+import com.baomidou.mybatisplus.extension.service.IService;
+import com.flashchat.gameservice.dao.entity.GamePlayerDO;
+import com.flashchat.gameservice.dao.entity.GameRoomDO;
 import com.flashchat.gameservice.dto.req.StartGameReqDTO;
 import com.flashchat.gameservice.dto.req.SubmitDescriptionReqDTO;
 import com.flashchat.gameservice.dto.req.SubmitVoteReqDTO;
@@ -9,7 +12,7 @@ import com.flashchat.gameservice.dto.resp.GameStateRespDTO;
 /**
  * 游戏进行服务
  */
-public interface GamePlayService {
+public interface GamePlayService extends  IService<GamePlayerDO> {
 
     /**
      * 开始游戏（仅创建者）

@@ -1,13 +1,15 @@
 package com.flashchat.gameservice.service;
 
 
+import com.baomidou.mybatisplus.extension.service.IService;
+import com.flashchat.gameservice.dao.entity.GameRoomDO;
 import com.flashchat.gameservice.dto.req.*;
 import com.flashchat.gameservice.dto.resp.GameInfoRespDTO;
 
 /**
  * 游戏房间管理服务
  */
-public interface GameRoomService {
+public interface GameRoomService extends IService<GameRoomDO> {
 
     /**
      * 创建游戏
