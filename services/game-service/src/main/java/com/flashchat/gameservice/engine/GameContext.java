@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -55,6 +56,14 @@ public class GameContext {
 
     /** 所有游戏玩家的 accountId（含 AI 负数 ID），用于广播过滤 */
     private final Set<Long> playerAccountIds;
+
+    /** AI 玩家虚拟 accountId 计数器，每次 decrementAndGet 生成 -1, -2, -3... */
+    private final AtomicLong aiIdCounter = new AtomicLong(0);
+
+    /** 本轮自动投票的 playerId 集合（AI 自动投 / DISCONNECTED 自动投 / 超时补票） */
+    private final Set<Long> autoVoterIds = ConcurrentHashMap.newKeySet();
+
+
 
     /** 全部玩家列表（按 playerOrder 排序，游戏开始后不可变） */
     private List<GamePlayerInfo> allPlayers;
@@ -285,6 +294,7 @@ public class GameContext {
         currentRound.incrementAndGet();
         currentRoundDescriptions.clear();
         votes.clear();
+        autoVoterIds.clear();
     }
 
     /**
@@ -312,6 +322,30 @@ public class GameContext {
         }
         return true;
     }
+
+    /**
+     * 生成下一个 AI 玩家的虚拟 accountId
+     *
+     * @return 负数 ID：-1, -2, -3...
+     */
+    public long nextAiAccountId() {
+        return aiIdCounter.decrementAndGet();
+    }
+
+    /**
+     * 标记某玩家本轮为自动投票
+     */
+    public void markAutoVoter(Long playerId) {
+        autoVoterIds.add(playerId);
+    }
+
+    /**
+     * 判断某玩家本轮是否为自动投票
+     */
+    public boolean isAutoVoter(Long playerId) {
+        return autoVoterIds.contains(playerId);
+    }
+
 
     // ==================== 定时器管理 ====================
 
