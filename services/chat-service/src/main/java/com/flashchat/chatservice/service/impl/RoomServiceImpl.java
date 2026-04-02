@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.cache.toolkit.CacheUtil;
+import com.flashchat.channel.GameStateQueryService;
 import com.flashchat.channel.event.MemberKickedFromRoomEvent;
 import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
@@ -58,6 +59,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final TransactionTemplate transactionTemplate;
     private final RoomMapper roomMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final GameStateQueryService gameStateQueryService;
     private static final long CACHE_TIMEOUT = 60000L;
     /**单用户最多同时加入的房间数 */
     private static final int MAX_ROOMS_PER_USER = 50;
@@ -419,6 +421,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         HostOperationContext ctx = validateHostOperation(request.getRoomId(), request.getTargetAccountId());
         String roomId = request.getRoomId();
         Long targetAccountId = ctx.getTargetAccountId();
+        if (gameStateQueryService.isInPlayingGame(roomId, targetAccountId)) {
+            throw new ClientException("该用户正在游戏中，请等待游戏结束后再操作");
+        }
         // ===== DB 事务 =====
         final boolean[] kicked = {false};
         transactionTemplate.executeWithoutResult(txStatus -> {

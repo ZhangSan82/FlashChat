@@ -305,6 +305,35 @@ public class GameContext {
     }
 
     /**
+     * 幂等记录发言。
+     * <p>
+     * 谁是卧底每轮每个玩家只允许存在一条发言记录，
+     * 这里用 synchronizedList 的同一把锁把“检查 + 写入”合成原子操作，
+     * 避免掉线跳过、超时跳过、正常提交三条路径并发写出重复记录。
+     */
+    public boolean addDescriptionIfAbsent(DescriptionRecord record) {
+        synchronized (currentRoundDescriptions) {
+            boolean exists = currentRoundDescriptions.stream()
+                    .anyMatch(item -> item.getPlayerId().equals(record.getPlayerId()));
+            if (exists) {
+                return false;
+            }
+            currentRoundDescriptions.add(record);
+            return true;
+        }
+    }
+
+    /**
+     * 判断某玩家本轮是否已经产生过发言记录。
+     */
+    public boolean hasDescriptionRecord(Long playerId) {
+        synchronized (currentRoundDescriptions) {
+            return currentRoundDescriptions.stream()
+                    .anyMatch(item -> item.getPlayerId().equals(playerId));
+        }
+    }
+
+    /**
      * 投票（幂等）
      */
     public boolean castVote(Long voterPlayerId, Long targetPlayerId) {

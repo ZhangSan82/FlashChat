@@ -2,17 +2,24 @@ package com.flashchat.gameservice.engine;
 
 import com.flashchat.channel.ChannelPushService;
 import com.flashchat.channel.event.GameEndedNotifyEvent;
+import com.flashchat.gameservice.ai.AiContextAssembler;
+import com.flashchat.gameservice.ai.AiPlayerService;
+import com.flashchat.gameservice.ai.model.AiDescribeInput;
+import com.flashchat.gameservice.ai.model.AiVoteInput;
 import com.flashchat.gameservice.constant.GameWsEventType;
 import com.flashchat.gameservice.dao.entity.GamePlayerDO;
 import com.flashchat.gameservice.dao.entity.WordPairDO;
 import com.flashchat.gameservice.dao.enums.*;
 import com.flashchat.gameservice.timer.GameTurnTimer;
+import com.flashchat.gameservice.service.GamePersistService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -27,7 +34,13 @@ public class WhoIsSpyEngine {
     private final ChannelPushService channelPushService;
     private final GameContextManager gameContextManager;
     private final GameTurnTimer gameTurnTimer;
+    private final GamePersistService gamePersistService;
     private final ApplicationEventPublisher eventPublisher;
+    private final AiContextAssembler aiContextAssembler;
+    private final AiPlayerService aiPlayerService;
+
+    @Qualifier("aiPlayerExecutor")
+    private final ExecutorService aiPlayerExecutor;
 
     /**
      * 分配角色、词语、发言顺序，然后启动第一轮
@@ -61,12 +74,15 @@ public class WhoIsSpyEngine {
                     .aiPersona(AiPersonaEnum.of(pdo.getAiPersona()))
                     .build());
         }
-        // 3. 初始化上下文
+        // 3. 抢占开局状态，避免重复开始
+        if (!ctx.casGameStatus(GameStatusEnum.WAITING, GameStatusEnum.PLAYING)) {
+            throw new IllegalStateException("当前游戏状态不允许开始");
+        }
+        // 4. 初始化上下文
         ctx.initPlayers(playerInfos);
         ctx.setCivilianWord(wordPair.getWordA());
         ctx.setSpyWord(wordPair.getWordB());
-        ctx.casGameStatus(GameStatusEnum.WAITING, GameStatusEnum.PLAYING);
-        // 4. 广播游戏开始
+        // 5. 广播游戏开始
         List<Map<String, Object>> playerList = playerInfos.stream()
                 .map(p -> {
                     Map<String, Object> m = new LinkedHashMap<>();
@@ -81,7 +97,7 @@ public class WhoIsSpyEngine {
         startData.put("gameId", ctx.getGameId());
         startData.put("players", playerList);
         broadcastToPlayers(ctx, GameWsEventType.GAME_STARTED, startData);
-        // 5. 私发每个玩家的角色和词语
+        // 6. 私发每个玩家的角色和词语
         for (GamePlayerInfo p : playerInfos) {
             Map<String, Object> roleData = new LinkedHashMap<>();
             roleData.put("role", p.getRole().getCode());
@@ -91,7 +107,7 @@ public class WhoIsSpyEngine {
         }
         log.info("[Engine] 游戏开始 gameId={}, 玩家={}, 卧底数={}",
                 ctx.getGameId(), totalPlayers, spyCount);
-        // 6. 启动第一轮
+        // 7. 启动第一轮
         ctx.setRoundStartOrder(1);
         startNewRound(ctx);
     }
@@ -130,9 +146,7 @@ public class WhoIsSpyEngine {
             }
             if (target.getStatus() == PlayerStatusEnum.DISCONNECTED) {
                 // 不在此处记录和广播 — 收集起来等 CAS 成功后处理
-                boolean alreadyRecorded = ctx.getCurrentRoundDescriptions().stream()
-                        .anyMatch(d -> d.getPlayerId().equals(target.getPlayerId()));
-                if (!alreadyRecorded) {
+                if (!ctx.hasDescriptionRecord(target.getPlayerId())) {
                     skippedDisconnected.add(target);
                 }
                 continue;
@@ -169,15 +183,17 @@ public class WhoIsSpyEngine {
      */
     private void processSkippedDisconnected(GameContext ctx, List<GamePlayerInfo> skipped) {
         for (GamePlayerInfo dc : skipped) {
-            ctx.addDescription(new GameContext.DescriptionRecord(
+            boolean recorded = ctx.addDescriptionIfAbsent(new GameContext.DescriptionRecord(
                     dc.getPlayerId(), dc.getAccountId(),
                     dc.getNickname(), null, true));
-            Map<String, Object> skipData = new LinkedHashMap<>();
-            skipData.put("speakerAccountId", dc.getAccountId());
-            skipData.put("speakerNickname", dc.getNickname());
-            skipData.put("message", dc.getNickname() + " 掉线，跳过发言");
-            broadcastToPlayers(ctx, GameWsEventType.GAME_PLAYER_DISCONNECTED, skipData);
-            broadcastDescription(ctx, dc.getAccountId(), dc.getNickname(), null, true);
+            if (recorded) {
+                Map<String, Object> skipData = new LinkedHashMap<>();
+                skipData.put("speakerAccountId", dc.getAccountId());
+                skipData.put("speakerNickname", dc.getNickname());
+                skipData.put("message", dc.getNickname() + " 掉线，跳过发言");
+                broadcastToPlayers(ctx, GameWsEventType.GAME_PLAYER_DISCONNECTED, skipData);
+                broadcastDescription(ctx, dc.getAccountId(), dc.getNickname(), null, true);
+            }
         }
     }
 
@@ -207,9 +223,14 @@ public class WhoIsSpyEngine {
         // 取消超时定时器
         ctx.cancelCurrentTurnTimer();
         // 记录发言
-        ctx.addDescription(new GameContext.DescriptionRecord(
+        boolean recorded = ctx.addDescriptionIfAbsent(new GameContext.DescriptionRecord(
                 player.getPlayerId(), player.getAccountId(),
                 player.getNickname(), content, false));
+        if (!recorded) {
+            log.debug("[Engine] 发言记录已存在，忽略重复提交 gameId={}, player={}",
+                    ctx.getGameId(), player.getNickname());
+            return;
+        }
         // 广播发言内容
         broadcastDescription(ctx, player.getAccountId(), player.getNickname(), content, false);
         log.info("[Engine] 发言提交 gameId={}, player={}, order={}",
@@ -242,6 +263,7 @@ public class WhoIsSpyEngine {
         voteData.put("roundNumber", ctx.getCurrentRound().get());
         broadcastToPlayers(ctx, GameWsEventType.GAME_VOTE_PHASE, voteData);
         gameTurnTimer.scheduleVoteTimeout(ctx, timeoutSeconds, () -> handleVoteTimeout(ctx));
+        submitAiVotes(ctx);
         log.info("[Engine] 进入投票阶段 gameId={}, round={}, timeout={}s",
                 ctx.getGameId(), ctx.getCurrentRound().get(), timeoutSeconds);
     }
@@ -305,6 +327,54 @@ public class WhoIsSpyEngine {
     }
 
     /**
+     * 处理玩家掉线后的轮内影响。
+     * <p>
+     * 1. 如果当前轮到该玩家发言：立即记为跳过并推进下一位
+     * 2. 如果当前处于投票阶段且该玩家未投票：立即自动补票，避免全员等待超时
+     */
+    public void handlePlayerDisconnected(GameContext ctx, GamePlayerInfo player) {
+        if (ctx.getGameStatus().get() != GameStatusEnum.PLAYING || player == null) {
+            return;
+        }
+
+        if (ctx.getCurrentPhase().get() == RoundPhaseEnum.DESCRIBING
+                && ctx.getCurrentSpeakerOrder().get() == player.getPlayerOrder()) {
+            ctx.cancelCurrentTurnTimer();
+            boolean recorded = ctx.addDescriptionIfAbsent(new GameContext.DescriptionRecord(
+                    player.getPlayerId(), player.getAccountId(),
+                    player.getNickname(), null, true));
+            if (recorded) {
+                broadcastDescription(ctx, player.getAccountId(),
+                        player.getNickname(), null, true);
+            }
+            advanceToNextSpeaker(ctx, player.getPlayerOrder());
+            return;
+        }
+
+        if (ctx.getCurrentPhase().get() == RoundPhaseEnum.VOTING) {
+            Long playerId = player.getPlayerId();
+            if (playerId == null || ctx.getVotes().containsKey(playerId)) {
+                return;
+            }
+            Long randomTarget = pickRandomVoteTarget(ctx, playerId);
+            if (randomTarget == null) {
+                return;
+            }
+            boolean accepted = ctx.castVote(playerId, randomTarget);
+            if (!accepted) {
+                return;
+            }
+            ctx.markAutoVoter(playerId);
+            log.info("[Engine] 掉线自动补票 gameId={}, voter={}, target={}",
+                    ctx.getGameId(), player.getAccountId(), ctx.toAccountId(randomTarget));
+            if (ctx.allVoted()) {
+                ctx.cancelCurrentTurnTimer();
+                judge(ctx);
+            }
+        }
+    }
+
+    /**
      * 统计票数 → 淘汰 → 判断胜负
      */
     public void judge(GameContext ctx) {
@@ -316,6 +386,7 @@ public class WhoIsSpyEngine {
             if (!ctx.getVotes().containsKey(p.getPlayerId())) {
                 Long randomTarget = pickRandomVoteTarget(ctx, p.getPlayerId());
                 if (randomTarget != null) {
+                    ctx.markAutoVoter(p.getPlayerId());
                     ctx.castVote(p.getPlayerId(), randomTarget);
                     log.debug("[Engine] 自动补票 gameId={}, voter={}, target={}",
                             ctx.getGameId(), ctx.toAccountId(p.getPlayerId()),
@@ -356,6 +427,8 @@ public class WhoIsSpyEngine {
         resultData.put("isTie", isTie);
         resultData.put("roundNumber", ctx.getCurrentRound().get());
         broadcastToPlayers(ctx, GameWsEventType.GAME_VOTE_RESULT, resultData);
+        // 每轮判定完成后立即落库，避免进入下一轮后当前轮数据被清空
+        gamePersistService.persistRoundResult(ctx, eliminatedPlayerId, isTie);
         log.info("[Engine] 判定完成 gameId={}, round={}, tie={}, eliminated={}",
                 ctx.getGameId(), ctx.getCurrentRound().get(), isTie,
                 eliminated != null ? eliminated.getNickname() : "无");
@@ -397,10 +470,12 @@ public class WhoIsSpyEngine {
         endData.put("spyWord", ctx.getSpyWord());
         endData.put("playerRoles", playerRoles);
         broadcastToPlayers(ctx, GameWsEventType.GAME_ENDED, endData);
+        // 结束时补齐最终胜负和玩家状态，保证历史查询可以直接走 DB
+        gamePersistService.persistGameEnd(ctx, winner, reason);
         String summary = buildGameSummary(ctx, winner);
         eventPublisher.publishEvent(new GameEndedNotifyEvent(
                 this, ctx.getRoomId(), ctx.getGameId(),
-                winner != null ? winner.getCode() : null, summary));
+                summary, winner != null ? winner.getCode() : null));
         gameContextManager.remove(ctx.getGameId());
         log.info("[Engine] 游戏结束 gameId={}, winner={}, reason={}",
                 ctx.getGameId(), winner, reason);
@@ -426,29 +501,191 @@ public class WhoIsSpyEngine {
         if (player.isAi()) {
             // MVP 阶段：AI 同步占位发言，不启动定时器
             broadcastToPlayers(ctx, GameWsEventType.GAME_AI_THINKING, turnData);
+            submitAiDescribeTask(ctx, player, timeoutSeconds);
+            return;
+            /*
             String aiContent = "[AI] 这个词让我联想到日常生活中很常见的东西";
-            ctx.addDescription(new GameContext.DescriptionRecord(
+            boolean recorded = ctx.addDescriptionIfAbsent(new GameContext.DescriptionRecord(
                     player.getPlayerId(), player.getAccountId(),
                     player.getNickname(), aiContent, false));
-            broadcastDescription(ctx, player.getAccountId(),
-                    player.getNickname(), aiContent, false);
+            if (recorded) {
+                broadcastDescription(ctx, player.getAccountId(),
+                        player.getNickname(), aiContent, false);
+            }
             // 同步推进到下一位（递归深度 ≤ 连续AI数，MVP最多4，不会栈溢出）
             advanceToNextSpeaker(ctx, player.getPlayerOrder());
+        */
         } else {
             // 真人玩家：广播轮次开始 + 启动超时定时器
             broadcastToPlayers(ctx, GameWsEventType.GAME_TURN_START, turnData);
             int expectedOrder = player.getPlayerOrder();
             gameTurnTimer.scheduleDescribeTimeout(ctx, timeoutSeconds, () -> {
+                if (ctx.getCurrentPhase().get() != RoundPhaseEnum.DESCRIBING) {
+                    return;
+                }
                 // CAS 检查：如果 speakerOrder 已经被推进（玩家正常提交），跳过
                 if (ctx.getCurrentSpeakerOrder().get() == expectedOrder) {
-                    ctx.addDescription(new GameContext.DescriptionRecord(
+                    boolean recorded = ctx.addDescriptionIfAbsent(new GameContext.DescriptionRecord(
                             player.getPlayerId(), player.getAccountId(),
                             player.getNickname(), null, true));
-                    broadcastDescription(ctx, player.getAccountId(),
-                            player.getNickname(), null, true);
+                    if (recorded) {
+                        broadcastDescription(ctx, player.getAccountId(),
+                                player.getNickname(), null, true);
+                    }
                     advanceToNextSpeaker(ctx, expectedOrder);
                 }
             });
+        }
+    }
+
+    /**
+     * AI 发言输入在引擎线程里同步组装，保证快照和当前局面一致。
+     */
+    private void submitAiDescribeTask(GameContext ctx, GamePlayerInfo aiPlayer, int timeoutSeconds) {
+        int expectedOrder = aiPlayer.getPlayerOrder();
+        AiDescribeInput input = aiContextAssembler.buildDescribeInput(ctx, aiPlayer);
+
+        gameTurnTimer.scheduleDescribeTimeout(ctx, timeoutSeconds,
+                () -> handleAiDescribeSafetyTimeout(ctx, aiPlayer, expectedOrder));
+
+        aiPlayerExecutor.submit(() -> {
+            try {
+                String content = aiPlayerService.generateDescription(input);
+                completeAiDescription(ctx, aiPlayer, expectedOrder, content);
+            } catch (Exception ex) {
+                log.error("[Engine] AI 发言任务异常 gameId={}, aiAccountId={}",
+                        ctx.getGameId(), aiPlayer.getAccountId(), ex);
+                completeAiDescription(ctx, aiPlayer, expectedOrder, null);
+            }
+        });
+    }
+
+    /**
+     * AI 发言完成后的统一收口。
+     */
+    private void completeAiDescription(GameContext ctx,
+                                       GamePlayerInfo aiPlayer,
+                                       int expectedOrder,
+                                       String content) {
+        if (ctx.getGameStatus().get() != GameStatusEnum.PLAYING
+                || ctx.getCurrentPhase().get() != RoundPhaseEnum.DESCRIBING) {
+            return;
+        }
+        if (ctx.getCurrentSpeakerOrder().get() != expectedOrder) {
+            return;
+        }
+
+        ctx.cancelCurrentTurnTimer();
+
+        boolean skipped = content == null || content.isBlank();
+        boolean recorded = ctx.addDescriptionIfAbsent(new GameContext.DescriptionRecord(
+                aiPlayer.getPlayerId(), aiPlayer.getAccountId(),
+                aiPlayer.getNickname(), skipped ? null : content, skipped));
+        if (recorded) {
+            broadcastDescription(ctx, aiPlayer.getAccountId(),
+                    aiPlayer.getNickname(), skipped ? null : content, skipped);
+        }
+
+        advanceToNextSpeaker(ctx, expectedOrder);
+    }
+
+    /**
+     * AI 主流程安全超时。
+     * <p>
+     * 理论上 AI 服务内部会更早完成超时降级，这里只是最后一道兜底。
+     */
+    private void handleAiDescribeSafetyTimeout(GameContext ctx,
+                                               GamePlayerInfo aiPlayer,
+                                               int expectedOrder) {
+        if (ctx.getCurrentPhase().get() != RoundPhaseEnum.DESCRIBING) {
+            return;
+        }
+        if (ctx.getCurrentSpeakerOrder().get() != expectedOrder) {
+            return;
+        }
+
+        boolean recorded = ctx.addDescriptionIfAbsent(new GameContext.DescriptionRecord(
+                aiPlayer.getPlayerId(), aiPlayer.getAccountId(),
+                aiPlayer.getNickname(), null, true));
+        if (recorded) {
+            broadcastDescription(ctx, aiPlayer.getAccountId(),
+                    aiPlayer.getNickname(), null, true);
+        }
+
+        log.warn("[Engine] AI 发言主流程超时，按跳过处理 gameId={}, aiAccountId={}",
+                ctx.getGameId(), aiPlayer.getAccountId());
+        advanceToNextSpeaker(ctx, expectedOrder);
+    }
+
+    /**
+     * 投票阶段异步提交所有存活 AI 的投票任务。
+     */
+    private void submitAiVotes(GameContext ctx) {
+        List<GamePlayerInfo> aiPlayers = ctx.getAlivePlayers().stream()
+                .filter(GamePlayerInfo::isAi)
+                .filter(GamePlayerInfo::isInGame)
+                .toList();
+        if (aiPlayers.isEmpty()) {
+            return;
+        }
+
+        for (GamePlayerInfo aiPlayer : aiPlayers) {
+            AiVoteInput input = aiContextAssembler.buildVoteInput(ctx, aiPlayer);
+            aiPlayerExecutor.submit(() -> {
+                try {
+                    Long targetPlayerId = aiPlayerService.generateVoteTarget(input);
+                    if (targetPlayerId == null) {
+                        targetPlayerId = pickRandomVoteTarget(ctx, aiPlayer.getPlayerId());
+                    }
+                    if (targetPlayerId != null) {
+                        completeAiVote(ctx, aiPlayer, targetPlayerId);
+                    }
+                } catch (Exception ex) {
+                    log.error("[Engine] AI 投票任务异常 gameId={}, aiAccountId={}",
+                            ctx.getGameId(), aiPlayer.getAccountId(), ex);
+                    Long randomTarget = pickRandomVoteTarget(ctx, aiPlayer.getPlayerId());
+                    if (randomTarget != null) {
+                        completeAiVote(ctx, aiPlayer, randomTarget);
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * AI 投票完成后的统一收口。
+     */
+    private void completeAiVote(GameContext ctx, GamePlayerInfo aiPlayer, Long targetPlayerId) {
+        if (ctx.getGameStatus().get() != GameStatusEnum.PLAYING
+                || ctx.getCurrentPhase().get() != RoundPhaseEnum.VOTING) {
+            return;
+        }
+
+        Long voterPlayerId = aiPlayer.getPlayerId();
+        if (voterPlayerId == null || ctx.getVotes().containsKey(voterPlayerId)) {
+            return;
+        }
+
+        GamePlayerInfo target = ctx.getPlayerByPlayerId(targetPlayerId);
+        if (target == null || !target.isInGame() || voterPlayerId.equals(targetPlayerId)) {
+            targetPlayerId = pickRandomVoteTarget(ctx, voterPlayerId);
+            if (targetPlayerId == null) {
+                return;
+            }
+        }
+
+        boolean accepted = ctx.castVote(voterPlayerId, targetPlayerId);
+        if (!accepted) {
+            return;
+        }
+
+        ctx.markAutoVoter(voterPlayerId);
+        log.info("[Engine] AI 投票完成 gameId={}, voterAccountId={}, targetAccountId={}",
+                ctx.getGameId(), aiPlayer.getAccountId(), ctx.toAccountId(targetPlayerId));
+
+        if (ctx.allVoted()) {
+            ctx.cancelCurrentTurnTimer();
+            judge(ctx);
         }
     }
 

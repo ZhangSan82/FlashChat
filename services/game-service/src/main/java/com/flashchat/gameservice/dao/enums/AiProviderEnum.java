@@ -15,8 +15,8 @@ public enum AiProviderEnum {
     /** DeepSeek */
     DEEPSEEK("DEEPSEEK", "DeepSeek"),
 
-    /** kimi */
-    OPENAI("KIMI", "KIMI"),
+    /** Kimi */
+    KIMI("KIMI", "KIMI"),
 
     /** 千问  */
     QWEN("QWEN", "通义千问");

@@ -1,1 +1,14 @@
-spring.application.name=game-service
+spring:
+  application:
+    name: game-service
+
+flashchat:
+  ai:
+    kimi:
+      enabled: false
+      base-url: https://api.moonshot.cn
+      api-key: ""
+      model: ""
+      temperature: 0.7
+      max-tokens: 128
+      default-timeout-seconds: 15

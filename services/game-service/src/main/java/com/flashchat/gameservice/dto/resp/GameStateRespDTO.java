@@ -57,6 +57,13 @@ public class GameStateRespDTO {
     private List<DescriptionDTO> currentRoundDescriptions;
 
     /**
+     * 当前可投票目标列表。
+     * <p>
+     * 仅在投票阶段返回，重连后前端可直接用它恢复投票面板。
+     */
+    private List<VoteTargetDTO> votableTargets;
+
+    /**
      * 发言记录（公开信息）
      */
     @Data
@@ -68,5 +75,18 @@ public class GameStateRespDTO {
         private String speakerNickname;
         private String content;
         private Boolean isSkipped;
+    }
+
+    /**
+     * 投票目标信息
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class VoteTargetDTO {
+        private Long accountId;
+        private String nickname;
+        private String status;
     }
 }
