@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * 游戏 AI 配置。
  * <p>
- * 第一版只接入 KIMI，因此当前只维护 KIMI 的连接参数。
+ * 第一版只接入 KIMI，当前通过硅基流动的 OpenAI 兼容接口访问。
  */
 @Data
 @ConfigurationProperties(prefix = "flashchat.ai.kimi")
@@ -20,21 +20,21 @@ public class GameAiProperties {
     private boolean enabled = false;
 
     /**
-     * KIMI API 基础地址。
+     * 硅基流动 OpenAI 兼容 API 基础地址。
      */
-    private String baseUrl = "https://api.moonshot.cn";
+    private String baseUrl = "https://api.siliconflow.cn";
 
     /**
-     * KIMI API Key。
+     * 硅基流动 API Key。
      */
     private String apiKey;
 
     /**
      * 调用模型名称。
      * <p>
-     * 不在代码里写死，方便后续切换具体模型。
+     * 默认使用当前已验证可用的 Kimi-K2-Instruct-0905。
      */
-    private String model;
+    private String model = "moonshotai/Kimi-K2-Instruct-0905";
 
     /**
      * 默认采样温度。

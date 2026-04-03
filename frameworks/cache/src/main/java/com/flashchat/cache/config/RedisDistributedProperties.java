@@ -9,10 +9,13 @@ import java.util.concurrent.TimeUnit;
  * 缓存配置（Redis + 本地缓存）
  */
 @Data
-@ConfigurationProperties(prefix = RedisDistributedProperties.PREFIX)
+@ConfigurationProperties(prefix = "flashchat.cache")
 public class RedisDistributedProperties {
 
-    public static final String PREFIX = "flashchat.cache.redis";
+    /**
+     * 缓存配置统一挂在 flashchat.cache 下，和各服务的 application.yaml 保持一致。
+     */
+    public static final String PREFIX = "flashchat.cache";
     /**
      * Redis 配置
      */
