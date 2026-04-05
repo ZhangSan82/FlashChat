@@ -32,6 +32,14 @@
             <groupId>com.flashchat</groupId>
             <artifactId>FlashChat-service-game</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.flashchat</groupId>
+            <artifactId>FlashChat-framework-convention</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.flashchat</groupId>
+            <artifactId>FlashChat-framework-cache</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

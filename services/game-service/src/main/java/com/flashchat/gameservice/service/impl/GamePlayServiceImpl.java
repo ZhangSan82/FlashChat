@@ -17,6 +17,7 @@ import com.flashchat.gameservice.dao.mapper.GamePlayerMapper;
 import com.flashchat.gameservice.dto.req.StartGameReqDTO;
 import com.flashchat.gameservice.dto.req.SubmitDescriptionReqDTO;
 import com.flashchat.gameservice.dto.req.SubmitVoteReqDTO;
+import com.flashchat.gameservice.dto.resp.GameConfigRespDTO;
 import com.flashchat.gameservice.dto.resp.GamePlayerRespDTO;
 import com.flashchat.gameservice.dto.resp.GameResultRespDTO;
 import com.flashchat.gameservice.dto.resp.GameStateRespDTO;
@@ -161,14 +162,19 @@ public class GamePlayServiceImpl extends ServiceImpl<GamePlayerMapper, GamePlaye
         GameRoomDO room = getRequiredGameRoom(normalizedGameId);
         GamePlayerDO myPlayerRecord = getRequiredPlayerRecord(normalizedGameId, accountId);
         GameContext context = gameContextManager.getContext(normalizedGameId);
+        GameConfig config = context != null ? context.getConfig() : parseConfig(room.getConfig());
 
         if (context == null && GameStatusEnum.PLAYING.getCode().equals(room.getGameStatus())) {
             throw new ServiceException("当前版本暂不支持进程重启后的游戏恢复，请稍后重试");
         }
 
+        List<GamePlayerDO> playerRecords = queryPlayersByGame(normalizedGameId);
         List<GamePlayerRespDTO> players = context != null && !context.getAllPlayers().isEmpty()
                 ? context.getAllPlayers().stream().map(this::toPlayerResp).toList()
-                : queryPlayersByGame(normalizedGameId).stream().map(this::toPlayerResp).toList();
+                : playerRecords.stream().map(this::toPlayerResp).toList();
+        Map<Long, GamePlayerDO> playerById = playerRecords.stream()
+                .filter(player -> player.getId() != null)
+                .collect(Collectors.toMap(GamePlayerDO::getId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
 
         GamePlayerInfo currentPlayer = context != null ? context.getPlayerByAccountId(accountId) : null;
         GamePlayerInfo currentSpeaker = context != null
@@ -176,29 +182,31 @@ public class GamePlayServiceImpl extends ServiceImpl<GamePlayerMapper, GamePlaye
                 ? context.getCurrentSpeaker()
                 : null;
 
-        return GameStateRespDTO.builder()
-                .gameId(room.getGameId())
-                .roomId(room.getRoomId())
-                .gameStatus(context != null ? context.getGameStatus().get().getCode() : room.getGameStatus())
-                .currentPhase(context != null && context.getCurrentPhase().get() != null
-                        ? context.getCurrentPhase().get().name()
-                        : null)
-                .currentRound(context != null ? context.getCurrentRound().get() : room.getCurrentRound())
-                .myRole(currentPlayer != null && currentPlayer.getRole() != null
-                        ? currentPlayer.getRole().getCode()
-                        : myPlayerRecord.getRole())
-                .myWord(currentPlayer != null ? currentPlayer.getWord() : myPlayerRecord.getWord())
-                .myVoted(buildMyVoted(context, accountId))
-                .currentSpeakerAccountId(currentSpeaker != null ? currentSpeaker.getAccountId() : null)
-                .currentSpeakerNickname(currentSpeaker != null ? currentSpeaker.getNickname() : null)
-                .currentSpeakerOrder(currentSpeaker != null ? currentSpeaker.getPlayerOrder() : null)
-                .turnDeadline(context != null && context.getCurrentPhase().get() != null
-                        ? context.getTurnDeadline()
-                        : null)
-                .players(players)
-                .currentRoundDescriptions(buildCurrentDescriptions(context))
-                .votableTargets(buildVotableTargets(context))
-                .build();
+        GameStateRespDTO response = new GameStateRespDTO();
+        response.setGameId(room.getGameId());
+        response.setRoomId(room.getRoomId());
+        response.setGameStatus(context != null ? context.getGameStatus().get().getCode() : room.getGameStatus());
+        response.setCurrentPhase(context != null && context.getCurrentPhase().get() != null
+                ? context.getCurrentPhase().get().name()
+                : null);
+        response.setCurrentRound(context != null ? context.getCurrentRound().get() : room.getCurrentRound());
+        response.setMyRole(currentPlayer != null && currentPlayer.getRole() != null
+                ? currentPlayer.getRole().getCode()
+                : myPlayerRecord.getRole());
+        response.setMyWord(currentPlayer != null ? currentPlayer.getWord() : myPlayerRecord.getWord());
+        response.setMyVoted(buildMyVoted(context, accountId));
+        response.setCurrentSpeakerAccountId(currentSpeaker != null ? currentSpeaker.getAccountId() : null);
+        response.setCurrentSpeakerNickname(currentSpeaker != null ? currentSpeaker.getNickname() : null);
+        response.setCurrentSpeakerOrder(currentSpeaker != null ? currentSpeaker.getPlayerOrder() : null);
+        response.setTurnDeadline(context != null && context.getCurrentPhase().get() != null
+                ? context.getTurnDeadline()
+                : null);
+        response.setPlayers(players);
+        response.setConfig(GameConfigRespDTO.from(config));
+        response.setCurrentRoundDescriptions(buildCurrentDescriptions(context));
+        response.setVotableTargets(buildVotableTargets(context));
+        response.setRoundResults(buildStateRoundResults(queryRoundsByGame(normalizedGameId), playerById));
+        return response;
     }
 
     @Override
@@ -461,6 +469,27 @@ public class GamePlayServiceImpl extends ServiceImpl<GamePlayerMapper, GamePlaye
                 .descriptions(buildRoundDescriptions(descriptions, playerById))
                 .votes(buildRoundVotes(votes, playerById))
                 .build();
+    }
+
+    private List<GameStateRespDTO.RoundResultDTO> buildStateRoundResults(List<GameRoundDO> rounds,
+                                                                         Map<Long, GamePlayerDO> playerById) {
+        if (rounds == null || rounds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return rounds.stream()
+                .map(round -> {
+                    GamePlayerDO eliminated = round.getEliminatedPlayerId() != null
+                            ? playerById.get(round.getEliminatedPlayerId())
+                            : null;
+                    return GameStateRespDTO.RoundResultDTO.builder()
+                            .roundNumber(round.getRoundNumber())
+                            .eliminatedAccountId(eliminated != null ? eliminated.getAccountId() : null)
+                            .eliminatedNickname(eliminated != null ? eliminated.getNickname() : null)
+                            .eliminatedRole(eliminated != null ? eliminated.getRole() : null)
+                            .isTie(round.getIsTie() != null && round.getIsTie() == 1)
+                            .build();
+                })
+                .toList();
     }
 
     private List<GameResultRespDTO.DescriptionDTO> buildRoundDescriptions(List<GameDescriptionDO> descriptions,

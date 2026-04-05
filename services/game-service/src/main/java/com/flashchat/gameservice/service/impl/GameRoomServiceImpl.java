@@ -24,6 +24,7 @@ import com.flashchat.gameservice.dto.req.CancelGameReqDTO;
 import com.flashchat.gameservice.dto.req.CreateGameReqDTO;
 import com.flashchat.gameservice.dto.req.JoinGameReqDTO;
 import com.flashchat.gameservice.dto.req.LeaveGameReqDTO;
+import com.flashchat.gameservice.dto.resp.GameConfigRespDTO;
 import com.flashchat.gameservice.dto.resp.GameInfoRespDTO;
 import com.flashchat.gameservice.dto.resp.GamePlayerRespDTO;
 import com.flashchat.gameservice.engine.GameActionLockManager;
@@ -407,6 +408,26 @@ public class GameRoomServiceImpl extends ServiceImpl<GameRoomMapper, GameRoomDO>
         return buildGameInfoResp(room, config, players);
     }
 
+    @Override
+    public GameInfoRespDTO getActiveGame(String roomId) {
+        String normalizedRoomId = normalizeRequiredText(roomId, "roomId cannot be blank");
+        GameRoomDO room = this.lambdaQuery()
+                .select(GameRoomDO::getId, GameRoomDO::getGameId, GameRoomDO::getRoomId,
+                        GameRoomDO::getGameType, GameRoomDO::getGameStatus, GameRoomDO::getCurrentRound,
+                        GameRoomDO::getConfig, GameRoomDO::getCreatorId, GameRoomDO::getCreateTime)
+                .eq(GameRoomDO::getRoomId, normalizedRoomId)
+                .ne(GameRoomDO::getGameStatus, GameStatusEnum.ENDED.getCode())
+                .orderByDesc(GameRoomDO::getCreateTime)
+                .last("LIMIT 1")
+                .one();
+        if (room == null) {
+            return null;
+        }
+        GameConfig config = parseConfig(room.getConfig());
+        List<GamePlayerDO> players = queryPlayersByGame(room.getGameId());
+        return buildGameInfoResp(room, config, players);
+    }
+
     /**
      * 解析并补齐配置默认值。
      * <p>
@@ -517,19 +538,20 @@ public class GameRoomServiceImpl extends ServiceImpl<GameRoomMapper, GameRoomDO>
 
     private GameInfoRespDTO buildGameInfoResp(GameRoomDO room, GameConfig config, List<GamePlayerDO> players) {
         List<GamePlayerRespDTO> playerDTOs = players.stream().map(this::toPlayerResp).toList();
-        return GameInfoRespDTO.builder()
-                .gameId(room.getGameId())
-                .roomId(room.getRoomId())
-                .gameType(room.getGameType())
-                .gameStatus(room.getGameStatus())
-                .currentRound(room.getCurrentRound())
-                .playerCount(playerDTOs.size())
-                .maxPlayers(config.getMaxPlayersOrDefault())
-                .minPlayers(config.getMinPlayersOrDefault())
-                .creatorId(room.getCreatorId())
-                .createTime(room.getCreateTime())
-                .players(playerDTOs)
-                .build();
+        GameInfoRespDTO response = new GameInfoRespDTO();
+        response.setGameId(room.getGameId());
+        response.setRoomId(room.getRoomId());
+        response.setGameType(room.getGameType());
+        response.setGameStatus(room.getGameStatus());
+        response.setCurrentRound(room.getCurrentRound());
+        response.setPlayerCount(playerDTOs.size());
+        response.setMaxPlayers(config.getMaxPlayersOrDefault());
+        response.setMinPlayers(config.getMinPlayersOrDefault());
+        response.setCreatorId(room.getCreatorId());
+        response.setCreateTime(room.getCreateTime());
+        response.setConfig(GameConfigRespDTO.from(config));
+        response.setPlayers(playerDTOs);
+        return response;
     }
 
     private GamePlayerRespDTO toPlayerResp(GamePlayerDO player) {

@@ -236,11 +236,12 @@ public class GameEventListener {
     }
 
     private void broadcastPlayerDisconnected(GameContext ctx, GamePlayerInfo player, String message) {
-        Map<String, Object> data = new LinkedHashMap<>(4);
+        Map<String, Object> data = new LinkedHashMap<>(5);
         data.put("accountId", player.getAccountId());
         data.put("nickname", player.getNickname());
         data.put("status", PlayerStatusEnum.DISCONNECTED.getCode());
         data.put("message", message);
+        data.put("isCurrentSpeaker", false);
         channelPushService.sendToUsers(ctx.getPlayerAccountIds(),
                 GameWsEventType.GAME_PLAYER_DISCONNECTED, ctx.getRoomId(), data);
     }

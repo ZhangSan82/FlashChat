@@ -147,6 +147,30 @@
               </div>
             </section>
 
+            <section v-if="showGameCreate" class="info-card info-game-card">
+              <div class="info-card-head">
+                <span>房间游戏</span>
+                <span class="info-badge active">可创建</span>
+              </div>
+              <div class="info-game-title">谁是卧底</div>
+              <p class="info-game-desc">开局后进入等待大厅，邀请玩家加入后即可开始。</p>
+              <div class="info-game-actions">
+                <button class="info-game-btn primary" type="button" :disabled="gameActionPending" @click="handleQuickCreate">
+                  {{ gameActionPending ? '准备中...' : '开始组局' }}
+                </button>
+                <button class="info-game-btn ghost" type="button" @click="gameAdvancedOpen = !gameAdvancedOpen">
+                  {{ gameAdvancedOpen ? '收起设置' : '展开设置' }}
+                </button>
+              </div>
+              <div v-if="gameAdvancedOpen" class="info-game-settings">
+                <label><span>最少人数</span><input v-model.number="gameCreateForm.minPlayers" type="number" min="4" max="10" /></label>
+                <label><span>最多人数</span><input v-model.number="gameCreateForm.maxPlayers" type="number" min="4" max="10" /></label>
+                <label><span>发言秒数</span><input v-model.number="gameCreateForm.describeTimeout" type="number" min="15" max="120" /></label>
+                <label><span>投票秒数</span><input v-model.number="gameCreateForm.voteTimeout" type="number" min="10" max="90" /></label>
+                <label><span>最多 AI</span><input v-model.number="gameCreateForm.maxAiPlayers" type="number" min="0" max="8" /></label>
+              </div>
+            </section>
+
             <section class="info-actions">
               <div v-if="isHost" class="info-host-note">
                 房主不能直接离开房间，请使用“关闭房间”结束本次会话。
@@ -176,7 +200,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { getShareUrl } from '@/api/room'
 import { formatCountdown, calcProgress, getCountdownColor } from '@/utils/formatter'
 import { generateQRCodeDataUrl } from '@/utils/qrcode'
@@ -188,15 +212,23 @@ const props = defineProps({
   members: { type: Array, default: () => [] },
   isHost: { type: Boolean, default: false },
   currentAccountId: { type: [String, Number], default: '' },
-  roomState: { type: Object, default: () => ({}) }
+  roomState: { type: Object, default: () => ({}) },
+  showGameCreate: { type: Boolean, default: false },
+  gameActionPending: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['close', 'leave', 'close-room', 'extend-room', 'resize-room', 'member-action'])
+const emit = defineEmits(['close', 'leave', 'close-room', 'extend-room', 'resize-room', 'member-action', 'create-game'])
 
 const now = ref(Date.now())
 const resolvedShareUrl = ref('')
 const qrDataUrl = ref('')
 const copied = ref(false)
+const gameAdvancedOpen = ref(false)
+const gameCreateForm = reactive({ minPlayers: 4, maxPlayers: 8, describeTimeout: 60, voteTimeout: 30, maxAiPlayers: 4 })
+
+function handleQuickCreate() {
+  emit('create-game', { ...gameCreateForm })
+}
 
 let timer = null
 
@@ -417,16 +449,26 @@ function formatDateTime(value) {
 }
 
 .info-panel {
-  width: 460px;
+  width: 484px;
   max-width: 96vw;
   height: 100%;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid rgba(77, 52, 31, 0.12);
+  border-left: 1px solid var(--fc-border-strong);
+  background: var(--fc-panel-elevated);
+  box-shadow: var(--fc-shadow-panel);
+  position: relative;
+  overflow: hidden;
+}
+
+.info-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
   background:
-    radial-gradient(circle at top right, rgba(221, 193, 163, 0.24), transparent 28%),
-    linear-gradient(180deg, rgba(252, 248, 242, 0.98), rgba(245, 237, 226, 0.98));
-  box-shadow: -24px 0 56px rgba(61, 40, 22, 0.18);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 20%),
+    radial-gradient(circle at top right, rgba(224, 194, 161, 0.14), transparent 28%);
+  pointer-events: none;
 }
 
 .info-head {
@@ -437,7 +479,7 @@ function formatDateTime(value) {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  background: linear-gradient(180deg, rgba(249, 243, 235, 0.96), rgba(249, 243, 235, 0.82), transparent);
+  background: linear-gradient(180deg, rgba(251, 246, 239, 0.96), rgba(251, 246, 239, 0.82), transparent);
   backdrop-filter: blur(12px);
 }
 
@@ -457,8 +499,8 @@ function formatDateTime(value) {
 .info-title {
   margin-top: 8px;
   font-family: var(--fc-font-display);
-  font-size: 34px;
-  line-height: 1;
+  font-size: 38px;
+  line-height: 0.96;
   font-weight: 600;
   color: var(--fc-text);
 }
@@ -466,7 +508,7 @@ function formatDateTime(value) {
 .info-close {
   width: 42px;
   height: 42px;
-  border: 1px solid rgba(77, 52, 31, 0.12);
+  border: 1px solid rgba(72, 49, 28, 0.12);
   border-radius: 50%;
   background: rgba(255, 250, 243, 0.82);
   color: var(--fc-text);
@@ -485,24 +527,39 @@ function formatDateTime(value) {
   flex: 1;
   overflow: auto;
   padding: 0 22px 24px;
+  position: relative;
+  z-index: 1;
 }
 
 .info-hero,
 .info-card,
 .info-action {
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid rgba(72, 49, 28, 0.08);
   border-radius: 28px;
-  background: rgba(255, 250, 243, 0.78);
+  background: var(--fc-panel);
   box-shadow: var(--fc-shadow-soft);
 }
 
 .info-hero {
   overflow: hidden;
+  position: relative;
+}
+
+.info-hero::before,
+.info-card::before,
+.info-action::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), transparent 46%),
+    radial-gradient(circle at top right, rgba(182, 118, 57, 0.08), transparent 34%);
+  pointer-events: none;
 }
 
 .info-hero-cover {
   position: relative;
-  min-height: 276px;
+  min-height: 292px;
   padding: 24px 24px 22px;
   background-size: cover;
   background-position: center;
@@ -637,6 +694,7 @@ function formatDateTime(value) {
   gap: 14px;
   align-items: center;
   padding: 18px 24px 20px;
+  background: rgba(255, 250, 243, 0.84);
 }
 
 .info-summary-item strong {
@@ -658,6 +716,8 @@ function formatDateTime(value) {
 .info-card {
   margin-top: 16px;
   padding: 20px;
+  position: relative;
+  overflow: hidden;
 }
 
 .info-card-head {
@@ -712,7 +772,8 @@ function formatDateTime(value) {
 .info-meta-item {
   padding: 14px;
   border-radius: 20px;
-  background: rgba(243, 231, 215, 0.88);
+  background: rgba(243, 231, 215, 0.72);
+  border: 1px solid rgba(72, 49, 28, 0.06);
 }
 
 .info-meta-item strong {
@@ -806,11 +867,11 @@ function formatDateTime(value) {
   width: 100%;
   margin-top: 10px;
   padding: 12px 14px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid rgba(72, 49, 28, 0.08);
   border-radius: 16px;
   background: rgba(243, 231, 215, 0.92);
   color: var(--fc-text-sec);
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: var(--fc-font-mono);
   font-size: 12px;
 }
 
@@ -837,18 +898,18 @@ function formatDateTime(value) {
 
 .info-members {
   margin-top: 14px;
+  display: grid;
+  gap: 10px;
 }
 
 .info-member {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 0;
-  border-bottom: 1px solid rgba(77, 52, 31, 0.06);
-}
-
-.info-member:last-child {
-  border-bottom: 0;
+  padding: 14px;
+  border: 1px solid rgba(72, 49, 28, 0.06);
+  border-radius: 20px;
+  background: rgba(255, 250, 243, 0.72);
 }
 
 .info-member-avatar-wrap {
@@ -920,7 +981,7 @@ function formatDateTime(value) {
 
 .info-mini-btn {
   padding: 8px 12px;
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid rgba(72, 49, 28, 0.10);
   border-radius: 999px;
   background: rgba(255, 250, 243, 0.92);
   color: var(--fc-text);
@@ -962,6 +1023,7 @@ function formatDateTime(value) {
 }
 
 .info-action {
+  position: relative;
   padding: 16px 18px;
   text-align: left;
   cursor: pointer;
@@ -970,25 +1032,112 @@ function formatDateTime(value) {
 
 .info-action:hover {
   transform: translateY(-1px);
-  border-color: rgba(140, 90, 43, 0.16);
+  border-color: rgba(138, 78, 34, 0.16);
   box-shadow: 0 18px 36px rgba(61, 40, 22, 0.12);
 }
 
 .info-action strong {
   display: block;
-  font-family: var(--fc-font);
-  font-size: 15px;
+  font-family: var(--fc-font-display);
+  font-size: 22px;
+  line-height: 1;
   color: var(--fc-text);
 }
 
 .info-action small {
   display: block;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .info-action.danger strong,
 .info-action.danger small {
   color: var(--fc-danger);
+}
+
+.info-game-card {
+  background: linear-gradient(180deg, rgba(255, 250, 243, 0.9), rgba(244, 232, 214, 0.84));
+}
+
+.info-game-title {
+  margin-top: 14px;
+  font-family: var(--fc-font-display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--fc-text);
+}
+
+.info-game-desc {
+  margin-top: 6px;
+  font-family: var(--fc-font);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fc-text-sec);
+}
+
+.info-game-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.info-game-btn {
+  padding: 11px 18px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-family: var(--fc-font);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.info-game-btn:hover {
+  transform: translateY(-1px);
+}
+
+.info-game-btn.primary {
+  background: linear-gradient(135deg, #bd7b3c 0%, #8a4e22 100%);
+  color: #fffaf3;
+  box-shadow: 0 14px 26px rgba(138, 78, 34, 0.22);
+}
+
+.info-game-btn.ghost {
+  background: rgba(255, 250, 243, 0.84);
+  border-color: rgba(72, 49, 28, 0.10);
+  color: var(--fc-text-sec);
+}
+
+.info-game-btn:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.info-game-settings {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.info-game-settings label {
+  display: grid;
+  gap: 6px;
+  font-family: var(--fc-font);
+  font-size: 13px;
+  color: var(--fc-text-sec);
+}
+
+.info-game-settings input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(72, 49, 28, 0.10);
+  background: rgba(255, 250, 243, 0.92);
+  color: var(--fc-text);
+  font: inherit;
+  font-size: 14px;
 }
 
 .info-enter-active,

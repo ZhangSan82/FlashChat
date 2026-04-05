@@ -1,7 +1,5 @@
 package com.flashchat.gameservice.controller;
 
-import com.flashchat.convention.result.Result;
-import com.flashchat.convention.result.Results;
 import com.flashchat.gameservice.dto.req.AddAiPlayerReqDTO;
 import com.flashchat.gameservice.dto.req.CancelGameReqDTO;
 import com.flashchat.gameservice.dto.req.CreateGameReqDTO;
@@ -48,96 +46,105 @@ public class GameController {
      * 创建游戏
      */
     @PostMapping("/create")
-    public Result<GameInfoRespDTO> createGame(@Valid @RequestBody CreateGameReqDTO request) {
+    public com.flashchat.convention.result.Result<GameInfoRespDTO> createGame(@Valid @RequestBody CreateGameReqDTO request) {
         log.info("[创建游戏] roomId={}", request.getRoomId());
-        return Results.success(gameRoomService.createGame(request));
+        return com.flashchat.convention.result.Results.success(gameRoomService.createGame(request));
     }
 
     /**
      * 加入游戏
      */
     @PostMapping("/join")
-    public Result<GameInfoRespDTO> joinGame(@Valid @RequestBody JoinGameReqDTO request) {
+    public com.flashchat.convention.result.Result<GameInfoRespDTO> joinGame(@Valid @RequestBody JoinGameReqDTO request) {
         log.info("[加入游戏] gameId={}", request.getGameId());
-        return Results.success(gameRoomService.joinGame(request));
+        return com.flashchat.convention.result.Results.success(gameRoomService.joinGame(request));
     }
 
     /**
      * 退出游戏
      */
     @PostMapping("/leave")
-    public Result<Void> leaveGame(@Valid @RequestBody LeaveGameReqDTO request) {
+    public com.flashchat.convention.result.Result<Void> leaveGame(@Valid @RequestBody LeaveGameReqDTO request) {
         log.info("[退出游戏] gameId={}", request.getGameId());
         gameRoomService.leaveGame(request);
-        return Results.success();
+        return com.flashchat.convention.result.Results.success();
     }
 
     /**
      * 取消游戏
      */
     @PostMapping("/cancel")
-    public Result<Void> cancelGame(@Valid @RequestBody CancelGameReqDTO request) {
+    public com.flashchat.convention.result.Result<Void> cancelGame(@Valid @RequestBody CancelGameReqDTO request) {
         log.info("[取消游戏] gameId={}", request.getGameId());
         gameRoomService.cancelGame(request);
-        return Results.success();
+        return com.flashchat.convention.result.Results.success();
     }
 
     /**
      * 添加 AI 玩家
      */
     @PostMapping("/ai/add")
-    public Result<GameInfoRespDTO> addAiPlayer(@Valid @RequestBody AddAiPlayerReqDTO request) {
+    public com.flashchat.convention.result.Result<GameInfoRespDTO> addAiPlayer(@Valid @RequestBody AddAiPlayerReqDTO request) {
         log.info("[添加AI] gameId={}, provider={}, persona={}",
                 request.getGameId(), request.getProvider(), request.getPersona());
-        return Results.success(gameRoomService.addAiPlayer(request));
+        return com.flashchat.convention.result.Results.success(gameRoomService.addAiPlayer(request));
     }
 
     /**
      * 开始游戏
      */
     @PostMapping("/start")
-    public Result<Void> startGame(@Valid @RequestBody StartGameReqDTO request) {
+    public com.flashchat.convention.result.Result<Void> startGame(@Valid @RequestBody StartGameReqDTO request) {
         log.info("[开始游戏] gameId={}", request.getGameId());
         gamePlayService.startGame(request);
-        return Results.success();
+        return com.flashchat.convention.result.Results.success();
     }
 
     /**
      * 提交发言
      */
     @PostMapping("/describe")
-    public Result<Void> submitDescription(@Valid @RequestBody SubmitDescriptionReqDTO request) {
+    public com.flashchat.convention.result.Result<Void> submitDescription(@Valid @RequestBody SubmitDescriptionReqDTO request) {
         log.info("[提交发言] gameId={}", request.getGameId());
         gamePlayService.submitDescription(request);
-        return Results.success();
+        return com.flashchat.convention.result.Results.success();
     }
 
     /**
      * 提交投票
      */
     @PostMapping("/vote")
-    public Result<Void> submitVote(@Valid @RequestBody SubmitVoteReqDTO request) {
+    public com.flashchat.convention.result.Result<Void> submitVote(@Valid @RequestBody SubmitVoteReqDTO request) {
         log.info("[提交投票] gameId={}, targetAccountId={}",
                 request.getGameId(), request.getTargetAccountId());
         gamePlayService.submitVote(request);
-        return Results.success();
+        return com.flashchat.convention.result.Results.success();
     }
 
     /**
      * 查询游戏实时状态
      */
     @GetMapping("/state/{gameId}")
-    public Result<GameStateRespDTO> getGameState(@PathVariable("gameId") String gameId) {
+    public com.flashchat.convention.result.Result<GameStateRespDTO> getGameState(@PathVariable("gameId") String gameId) {
         log.info("[查询状态] gameId={}", gameId);
-        return Results.success(gamePlayService.getGameState(gameId));
+        return com.flashchat.convention.result.Results.success(gamePlayService.getGameState(gameId));
+    }
+
+    /**
+     * 查询房间当前活跃游戏
+     */
+    @GetMapping("/active/{roomId}")
+    public com.flashchat.convention.result.Result<GameInfoRespDTO> getActiveGame(@PathVariable("roomId") String roomId) {
+        log.info("[查询活跃游戏] roomId={}", roomId);
+        return com.flashchat.convention.result.Results.success(gameRoomService.getActiveGame(roomId));
     }
 
     /**
      * 查询游戏历史记录
      */
     @GetMapping("/history/{gameId}")
-    public Result<GameResultRespDTO> getGameHistory(@PathVariable("gameId") String gameId) {
+    public com.flashchat.convention.result.Result<GameResultRespDTO> getGameHistory(@PathVariable("gameId") String gameId) {
         log.info("[查询历史] gameId={}", gameId);
-        return Results.success(gamePlayService.getGameHistory(gameId));
+        return com.flashchat.convention.result.Results.success(gamePlayService.getGameHistory(gameId));
     }
 }

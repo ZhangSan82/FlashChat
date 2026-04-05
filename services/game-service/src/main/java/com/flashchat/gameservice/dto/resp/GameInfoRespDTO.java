@@ -1,7 +1,6 @@
 package com.flashchat.gameservice.dto.resp;
 
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -12,7 +11,6 @@ import java.util.List;
  * 游戏信息响应
  */
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class GameInfoRespDTO {
@@ -46,6 +44,9 @@ public class GameInfoRespDTO {
 
     /** 创建时间 */
     private LocalDateTime createTime;
+
+    /** 前端展示用配置 */
+    private GameConfigRespDTO config;
 
     /** 玩家列表 */
     private List<GamePlayerRespDTO> players;

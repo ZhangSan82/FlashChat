@@ -31,6 +31,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class WhoIsSpyEngine {
 
+    private static final int VOTE_RESULT_DISPLAY_SECONDS = 2;
+
     private final ChannelPushService channelPushService;
     private final GameContextManager gameContextManager;
     private final GameTurnTimer gameTurnTimer;
@@ -144,6 +146,10 @@ public class WhoIsSpyEngine {
             if (target.getStatus() == PlayerStatusEnum.ELIMINATED) {
                 continue;
             }
+            // 每名玩家每轮只能发言一次；已有本轮记录时直接跳过，避免重复绕回。
+            if (ctx.hasDescriptionRecord(target.getPlayerId())) {
+                continue;
+            }
             if (target.getStatus() == PlayerStatusEnum.DISCONNECTED) {
                 // 不在此处记录和广播 — 收集起来等 CAS 成功后处理
                 if (!ctx.hasDescriptionRecord(target.getPlayerId())) {
@@ -188,9 +194,11 @@ public class WhoIsSpyEngine {
                     dc.getNickname(), null, true));
             if (recorded) {
                 Map<String, Object> skipData = new LinkedHashMap<>();
-                skipData.put("speakerAccountId", dc.getAccountId());
-                skipData.put("speakerNickname", dc.getNickname());
+                skipData.put("accountId", dc.getAccountId());
+                skipData.put("nickname", dc.getNickname());
+                skipData.put("status", PlayerStatusEnum.DISCONNECTED.getCode());
                 skipData.put("message", dc.getNickname() + " 掉线，跳过发言");
+                skipData.put("isCurrentSpeaker", true);
                 broadcastToPlayers(ctx, GameWsEventType.GAME_PLAYER_DISCONNECTED, skipData);
                 broadcastDescription(ctx, dc.getAccountId(), dc.getNickname(), null, true);
             }
@@ -406,11 +414,14 @@ public class WhoIsSpyEngine {
         boolean isTie = maxVotedPlayerIds.size() > 1;
         Long eliminatedPlayerId = isTie ? null : maxVotedPlayerIds.get(0);
         // 3. 构建投票详情（转换为 accountId）
-        Map<Long, List<Long>> voteDetails = new LinkedHashMap<>();
+        Map<Long, List<Map<String, Object>>> voteDetails = new LinkedHashMap<>();
         ctx.getVotes().forEach((voterPId, targetPId) -> {
             Long targetAccId = ctx.toAccountId(targetPId);
             Long voterAccId = ctx.toAccountId(voterPId);
-            voteDetails.computeIfAbsent(targetAccId, k -> new ArrayList<>()).add(voterAccId);
+            Map<String, Object> voteItem = new LinkedHashMap<>();
+            voteItem.put("voterAccountId", voterAccId);
+            voteItem.put("isAuto", ctx.isAutoVoter(voterPId));
+            voteDetails.computeIfAbsent(targetAccId, k -> new ArrayList<>()).add(voteItem);
         });
         // 4. 执行淘汰
         GamePlayerInfo eliminated = null;
@@ -432,16 +443,8 @@ public class WhoIsSpyEngine {
         log.info("[Engine] 判定完成 gameId={}, round={}, tie={}, eliminated={}",
                 ctx.getGameId(), ctx.getCurrentRound().get(), isTie,
                 eliminated != null ? eliminated.getNickname() : "无");
-        // 6. 检查胜负
-        WinnerSideEnum winner = checkWinCondition(ctx);
-        if (winner != null) {
-            endGame(ctx, winner, EndReasonEnum.NORMAL);
-            return;
-        }
-        // 7. 游戏继续 → 下一轮
-        int nextStartOrder = findNextAliveOrderAfter(ctx, ctx.getRoundStartOrder());
-        ctx.setRoundStartOrder(nextStartOrder);
-        startNewRound(ctx);
+        // 6. 先展示投票结果，再推进到下一轮/结算
+        gameTurnTimer.schedulePostVoteDelay(ctx, VOTE_RESULT_DISPLAY_SECONDS, () -> proceedAfterVoteResult(ctx));
     }
 
     /**
@@ -469,7 +472,7 @@ public class WhoIsSpyEngine {
         endData.put("civilianWord", ctx.getCivilianWord());
         endData.put("spyWord", ctx.getSpyWord());
         endData.put("playerRoles", playerRoles);
-        broadcastToPlayers(ctx, GameWsEventType.GAME_ENDED, endData);
+        channelPushService.broadcastToRoom(ctx.getRoomId(), GameWsEventType.GAME_ENDED, endData);
         // 结束时补齐最终胜负和玩家状态，保证历史查询可以直接走 DB
         gamePersistService.persistGameEnd(ctx, winner, reason);
         String summary = buildGameSummary(ctx, winner);
@@ -702,6 +705,30 @@ public class WhoIsSpyEngine {
 
     private void broadcastToPlayers(GameContext ctx, int type, Object data) {
         channelPushService.sendToUsers(ctx.getPlayerAccountIds(), type, ctx.getRoomId(), data);
+    }
+
+    private void proceedAfterVoteResult(GameContext ctx) {
+        // 仅在投票判定阶段推进，避免重复推进或越阶段推进
+        if (ctx.getGameStatus().get() != GameStatusEnum.PLAYING
+                || ctx.getCurrentPhase().get() != RoundPhaseEnum.JUDGING) {
+            return;
+        }
+        // 先检查异常终止条件（全人类掉线）
+        if (allHumansGone(ctx)) {
+            log.warn("[Engine] 判定后推进检测到所有真人离线，终止游戏 gameId={}", ctx.getGameId());
+            endGame(ctx, null, EndReasonEnum.ALL_DISCONNECTED);
+            return;
+        }
+        // 再检查胜负
+        WinnerSideEnum winner = checkWinCondition(ctx);
+        if (winner != null) {
+            endGame(ctx, winner, EndReasonEnum.NORMAL);
+            return;
+        }
+        // 游戏继续 -> 下一轮
+        int nextStartOrder = findNextAliveOrderAfter(ctx, ctx.getRoundStartOrder());
+        ctx.setRoundStartOrder(nextStartOrder);
+        startNewRound(ctx);
     }
 
     private WinnerSideEnum checkWinCondition(GameContext ctx) {

@@ -11,7 +11,6 @@ import java.util.List;
  * 游戏完整状态响应
  */
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class GameStateRespDTO {
@@ -52,6 +51,11 @@ public class GameStateRespDTO {
     private List<GamePlayerRespDTO> players;
 
     /**
+     * 前端展示用配置
+     */
+    private GameConfigRespDTO config;
+
+    /**
      * 当前轮次发言记录
      */
     private List<DescriptionDTO> currentRoundDescriptions;
@@ -62,6 +66,13 @@ public class GameStateRespDTO {
      * 仅在投票阶段返回，重连后前端可直接用它恢复投票面板。
      */
     private List<VoteTargetDTO> votableTargets;
+
+    /**
+     * 已完成轮次结果。
+     * <p>
+     * 用于前端在重连或刷新后恢复“谁被淘汰了”的展示，不依赖 websocket 单次事件。
+     */
+    private List<RoundResultDTO> roundResults;
 
     /**
      * 发言记录（公开信息）
@@ -88,5 +99,20 @@ public class GameStateRespDTO {
         private Long accountId;
         private String nickname;
         private String status;
+    }
+
+    /**
+     * 已完成轮次结果。
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RoundResultDTO {
+        private Integer roundNumber;
+        private Long eliminatedAccountId;
+        private String eliminatedNickname;
+        private String eliminatedRole;
+        private Boolean isTie;
     }
 }

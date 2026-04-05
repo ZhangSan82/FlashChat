@@ -40,4 +40,9 @@ public interface GameRoomService extends IService<GameRoomDO> {
      * 查询游戏信息
      */
     GameInfoRespDTO getGameInfo(String gameId);
+
+    /**
+     * 查询房间当前活跃游戏，无则返回 null
+     */
+    GameInfoRespDTO getActiveGame(String roomId);
 }

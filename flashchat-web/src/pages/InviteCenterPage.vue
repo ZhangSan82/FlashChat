@@ -169,36 +169,33 @@ function formatDateTime(value) {
 <style scoped>
 .invites-page {
   min-height: 100vh;
-  padding: 28px;
+  padding: 32px;
   position: relative;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(221, 193, 163, 0.46), transparent 28%),
-    radial-gradient(circle at 100% 10%, rgba(173, 122, 68, 0.14), transparent 20%),
-    linear-gradient(180deg, #f4ebdd 0%, #e9dccb 100%);
+  background: var(--fc-app-gradient);
 }
 
 .invites-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(18px);
+  filter: blur(22px);
   pointer-events: none;
 }
 
 .invites-orb-a {
-  width: 240px;
-  height: 240px;
-  top: -90px;
+  width: 260px;
+  height: 260px;
+  top: -110px;
   right: -80px;
-  background: rgba(173, 122, 68, 0.14);
+  background: rgba(182, 118, 57, 0.14);
 }
 
 .invites-orb-b {
-  width: 220px;
-  height: 220px;
+  width: 240px;
+  height: 240px;
   bottom: -110px;
   left: -80px;
-  background: rgba(221, 193, 163, 0.26);
+  background: rgba(224, 194, 161, 0.22);
 }
 
 .invites-top,
@@ -216,31 +213,65 @@ function formatDateTime(value) {
   align-items: start;
 }
 
+.invites-hero,
+.invites-list-card,
+.invites-main-card,
+.invites-stat-card,
+.invites-item,
+.invites-state,
+.invites-notice {
+  position: relative;
+  overflow: hidden;
+}
+
+.invites-hero::before,
+.invites-list-card::before,
+.invites-main-card::before,
+.invites-stat-card::before,
+.invites-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.14), transparent 44%),
+    radial-gradient(circle at top right, rgba(182,118,57,0.08), transparent 32%);
+  pointer-events: none;
+}
+
 .invites-back,
 .invites-copy-main,
 .invites-copy-btn,
 .invites-refresh {
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 18px;
   font-family: var(--fc-font);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  transition: transform .2s ease, filter .2s ease, box-shadow .2s ease;
 }
 
 .invites-back,
 .invites-refresh,
 .invites-copy-btn {
   padding: 12px 16px;
-  background: rgba(255, 250, 243, 0.84);
+  background: rgba(255, 250, 243, 0.88);
   color: var(--fc-text-sec);
 }
 
 .invites-copy-main {
   padding: 12px 18px;
-  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
+  background: linear-gradient(135deg, #bd7b3c 0%, #8a4e22 100%);
   color: #fffaf3;
-  box-shadow: 0 16px 28px rgba(140, 90, 43, 0.22);
+  box-shadow: 0 18px 30px rgba(138, 78, 34, 0.22);
+}
+
+.invites-back:hover,
+.invites-copy-main:hover,
+.invites-copy-btn:hover,
+.invites-refresh:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
 }
 
 .invites-kicker {
@@ -255,14 +286,14 @@ function formatDateTime(value) {
 .invites-top-copy h1,
 .invites-list-head h2 {
   margin: 10px 0 10px;
-  font-family: var(--fc-font);
-  font-size: clamp(34px, 5vw, 52px);
-  line-height: 0.98;
+  font-family: var(--fc-font-display);
+  font-size: clamp(40px, 5vw, 58px);
+  line-height: 0.94;
   color: var(--fc-text);
 }
 
 .invites-list-head h2 {
-  font-size: 30px;
+  font-size: 34px;
 }
 
 .invites-top-copy p,
@@ -281,10 +312,11 @@ function formatDateTime(value) {
   width: fit-content;
   border-radius: 18px;
   background: rgba(255, 250, 243, 0.92);
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   font-family: var(--fc-font);
   font-size: 14px;
   color: var(--fc-text);
+  box-shadow: var(--fc-shadow-soft);
 }
 
 .invites-hero {
@@ -299,14 +331,14 @@ function formatDateTime(value) {
 .invites-list-card,
 .invites-item,
 .invites-state {
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 28px;
-  background: rgba(255, 250, 243, 0.82);
+  background: var(--fc-panel);
   box-shadow: var(--fc-shadow-soft);
 }
 
 .invites-main-card {
-  padding: 24px;
+  padding: 26px;
 }
 
 .invites-main-label {
@@ -320,8 +352,9 @@ function formatDateTime(value) {
 
 .invites-main-code {
   margin-top: 18px;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: clamp(28px, 6vw, 46px);
+  font-family: var(--fc-font-mono);
+  font-size: clamp(32px, 6vw, 52px);
+  line-height: 0.96;
   color: var(--fc-text);
   word-break: break-all;
 }
@@ -351,8 +384,9 @@ function formatDateTime(value) {
 .invites-stat-card strong {
   display: block;
   margin-top: 12px;
-  font-family: var(--fc-font);
-  font-size: 26px;
+  font-family: var(--fc-font-display);
+  font-size: 30px;
+  line-height: 0.96;
   color: var(--fc-text);
 }
 
@@ -409,8 +443,8 @@ function formatDateTime(value) {
 }
 
 .invites-item-code {
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 24px;
+  font-family: var(--fc-font-mono);
+  font-size: 26px;
   color: var(--fc-text);
 }
 
@@ -459,7 +493,7 @@ function formatDateTime(value) {
 
 @media (max-width: 720px) {
   .invites-page {
-    padding: 18px 16px 26px;
+    padding: 20px 16px 28px;
   }
 
   .invites-top,

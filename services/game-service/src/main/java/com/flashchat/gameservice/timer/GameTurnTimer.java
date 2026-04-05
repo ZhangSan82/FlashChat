@@ -71,6 +71,28 @@ public class GameTurnTimer {
     }
 
     /**
+     * Delay the next engine step after vote result broadcast.
+     * The task is bound to currentTurnTimer so cancelAll() can stop it safely.
+     */
+    public ScheduledFuture<?> schedulePostVoteDelay(GameContext context,
+                                                    int delaySeconds,
+                                                    Runnable action) {
+        context.cancelCurrentTurnTimer();
+        context.setTurnDeadline(System.currentTimeMillis() + delaySeconds * 1000L);
+
+        ScheduledFuture<?> future = timerExecutor.schedule(() -> {
+            try {
+                action.run();
+            } catch (Exception e) {
+                log.error("[投票结果展示延迟处理异常] gameId={}", context.getGameId(), e);
+            }
+        }, delaySeconds, TimeUnit.SECONDS);
+
+        context.setCurrentTurnTimer(future);
+        return future;
+    }
+
+    /**
      * 启动掉线重连定时任务
      */
     public ScheduledFuture<?> scheduleDisconnectTimeout(GameContext context,

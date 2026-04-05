@@ -1,28 +1,43 @@
 :root {
-  --fc-bg: #efe5d6;
-  --fc-bg-light: #fbf6ef;
-  --fc-bg-dark: #e5d7c5;
+  --fc-bg: #e9dece;
+  --fc-bg-light: #f7f0e6;
+  --fc-bg-dark: #dccdb8;
   --fc-surface: #fffaf3;
-  --fc-surface-soft: rgba(255, 250, 243, 0.78);
-  --fc-surface-muted: #f3e7d7;
-  --fc-text: #201813;
-  --fc-text-sec: #6b5b4b;
-  --fc-text-muted: #a89482;
-  --fc-accent: #ad7a44;
-  --fc-accent-strong: #8c5a2b;
-  --fc-accent-soft: #ddc1a3;
-  --fc-danger: #bb6a5e;
-  --fc-success: #6f9b6b;
-  --fc-warn: #d09a45;
-  --fc-border: rgba(77, 52, 31, 0.14);
-  --fc-border-strong: rgba(77, 52, 31, 0.24);
-  --fc-shadow-out: 0 18px 44px rgba(61, 40, 22, 0.12), 0 4px 14px rgba(61, 40, 22, 0.06);
-  --fc-shadow-soft: 0 12px 30px rgba(61, 40, 22, 0.08);
-  --fc-shadow-in: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  --fc-radius: 18px;
-  --fc-radius-xl: 30px;
+  --fc-surface-soft: rgba(255, 249, 241, 0.8);
+  --fc-surface-strong: rgba(255, 251, 246, 0.92);
+  --fc-surface-muted: #efe3d2;
+  --fc-panel: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(248, 239, 227, 0.9));
+  --fc-panel-elevated: linear-gradient(180deg, rgba(255, 252, 248, 0.98), rgba(244, 233, 219, 0.96));
+  --fc-text: #221812;
+  --fc-text-sec: #625140;
+  --fc-text-muted: #9a856d;
+  --fc-accent: #b67639;
+  --fc-accent-strong: #8a4e22;
+  --fc-accent-soft: #e0c2a1;
+  --fc-accent-veil: rgba(182, 118, 57, 0.16);
+  --fc-danger: #b8604b;
+  --fc-success: #62875d;
+  --fc-warn: #c5892c;
+  --fc-info: #557d8d;
+  --fc-border: rgba(72, 49, 28, 0.12);
+  --fc-border-strong: rgba(72, 49, 28, 0.22);
+  --fc-line: rgba(94, 71, 50, 0.08);
+  --fc-shadow-out: 0 24px 56px rgba(58, 37, 19, 0.14), 0 8px 22px rgba(58, 37, 19, 0.07);
+  --fc-shadow-soft: 0 16px 36px rgba(58, 37, 19, 0.1);
+  --fc-shadow-panel: 0 28px 70px rgba(54, 35, 18, 0.18), 0 10px 24px rgba(54, 35, 18, 0.08);
+  --fc-shadow-in: inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  --fc-radius-sm: 14px;
+  --fc-radius: 20px;
+  --fc-radius-lg: 28px;
+  --fc-radius-xl: 36px;
   --fc-radius-pill: 999px;
-  --fc-backdrop: rgba(24, 15, 10, 0.34);
+  --fc-backdrop: rgba(24, 15, 10, 0.42);
+  --fc-app-gradient:
+    radial-gradient(circle at 0% 0%, rgba(245, 228, 206, 0.8), transparent 28%),
+    radial-gradient(circle at 100% 8%, rgba(182, 118, 57, 0.14), transparent 20%),
+    radial-gradient(circle at 50% 100%, rgba(255, 250, 244, 0.3), transparent 34%),
+    linear-gradient(180deg, #f7efe5 0%, #e7d9c7 100%);
   --fc-font: 'Poppins', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --fc-font-display: 'Poppins', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --fc-font-display: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', 'Songti SC', 'STSong', 'Noto Serif SC', serif;
+  --fc-font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
 }

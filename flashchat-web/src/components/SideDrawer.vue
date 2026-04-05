@@ -4,11 +4,12 @@
       <div v-if="visible" class="dr-overlay" @click.self="$emit('close')">
         <aside class="dr-panel">
           <div class="dr-panel-glow"></div>
+          <div class="dr-panel-grid"></div>
 
           <div class="dr-head">
             <div>
               <div class="dr-kicker">FlashChat</div>
-              <div class="dr-sub">Command deck</div>
+              <div class="dr-sub">Salon Deck</div>
             </div>
             <button class="dr-close" type="button" aria-label="关闭" @click="$emit('close')">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -30,6 +31,15 @@
               <div class="dr-id-line">FlashChat ID：{{ accountId }}</div>
             </div>
           </section>
+
+          <div class="dr-profile-note">
+            从这里发起房间、浏览公开大厅，或者整理你的账户与邀请码。
+          </div>
+
+          <div class="dr-pills">
+            <span>私人会客厅</span>
+            <span>{{ accountId ? '身份已同步' : '游客模式' }}</span>
+          </div>
 
           <div class="dr-section">快捷入口</div>
           <nav class="dr-nav">
@@ -171,13 +181,13 @@ defineEmits(['close', 'action'])
 
 .dr-panel {
   position: relative;
-  width: 380px;
+  width: 400px;
   max-width: 92vw;
   height: 100%;
-  padding: 24px 22px 18px;
-  background: linear-gradient(180deg, rgba(255, 250, 243, 0.96), rgba(247, 239, 228, 0.98));
-  border-left: 1px solid rgba(77, 52, 31, 0.12);
-  box-shadow: -20px 0 50px rgba(61, 40, 22, 0.18);
+  padding: 26px 22px 18px;
+  background: var(--fc-panel-elevated);
+  border-left: 1px solid var(--fc-border-strong);
+  box-shadow: var(--fc-shadow-panel);
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
@@ -185,33 +195,57 @@ defineEmits(['close', 'action'])
   -webkit-overflow-scrolling: touch;
 }
 
+.dr-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 22%),
+    radial-gradient(circle at top right, rgba(224, 194, 161, 0.14), transparent 28%);
+  pointer-events: none;
+}
+
 .dr-panel-glow {
   position: absolute;
-  width: 220px;
-  height: 220px;
-  top: -90px;
-  right: -60px;
+  width: 260px;
+  height: 260px;
+  top: -110px;
+  right: -70px;
   border-radius: 50%;
-  background: rgba(173, 122, 68, 0.12);
-  filter: blur(20px);
+  background: rgba(182, 118, 57, 0.16);
+  filter: blur(26px);
+  pointer-events: none;
+}
+
+.dr-panel-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(72, 49, 28, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(72, 49, 28, 0.018) 1px, transparent 1px);
+  background-size: 36px 36px;
+  opacity: 0.18;
   pointer-events: none;
 }
 
 .dr-head,
 .dr-profile,
+.dr-profile-note,
+.dr-pills,
 .dr-nav,
 .dr-divider,
 .dr-foot,
 .dr-item {
   position: relative;
   z-index: 1;
+  flex-shrink: 0;
 }
 
 .dr-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
 }
 
 .dr-kicker {
@@ -224,8 +258,9 @@ defineEmits(['close', 'action'])
 
 .dr-sub {
   margin-top: 6px;
-  font-family: var(--fc-font);
-  font-size: 22px;
+  font-family: var(--fc-font-display);
+  font-size: 30px;
+  line-height: 0.98;
   font-weight: 700;
   color: var(--fc-text);
 }
@@ -252,10 +287,10 @@ defineEmits(['close', 'action'])
 .dr-profile {
   padding: 18px;
   border: 1px solid var(--fc-border);
-  border-radius: 22px;
-  background: rgba(255, 250, 243, 0.72);
+  border-radius: 24px;
+  background: rgba(255, 250, 243, 0.8);
   box-shadow: var(--fc-shadow-soft);
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -263,11 +298,11 @@ defineEmits(['close', 'action'])
 }
 
 .dr-avatar-shell {
-  width: 68px;
-  height: 68px;
-  padding: 4px;
+  width: 72px;
+  height: 72px;
+  padding: 5px;
   border-radius: 50%;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(221, 193, 163, 0.55));
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(224, 194, 161, 0.65));
 }
 
 .dr-avatar {
@@ -291,11 +326,11 @@ defineEmits(['close', 'action'])
 }
 
 .dr-name {
-  font-family: var(--fc-font);
-  font-size: 24px;
+  font-family: var(--fc-font-display);
+  font-size: 28px;
+  line-height: 0.96;
   font-weight: 700;
   color: var(--fc-text);
-  line-height: 1.1;
   word-break: break-word;
 }
 
@@ -305,6 +340,35 @@ defineEmits(['close', 'action'])
   font-size: 13px;
   color: var(--fc-text-sec);
   letter-spacing: 0.04em;
+}
+
+.dr-profile-note {
+  font-family: var(--fc-font);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fc-text-sec);
+}
+
+.dr-pills {
+  margin-top: 14px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dr-pills span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  border-radius: var(--fc-radius-pill);
+  border: 1px solid rgba(72, 49, 28, 0.08);
+  background: rgba(255, 250, 243, 0.82);
+  font-family: var(--fc-font);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fc-accent-strong);
 }
 
 .dr-section {
@@ -325,36 +389,50 @@ defineEmits(['close', 'action'])
 
 .dr-item {
   width: 100%;
+  min-height: 94px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
   padding: 16px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
-  border-radius: 22px;
-  background: rgba(255, 250, 243, 0.72);
+  border: 1px solid rgba(72, 49, 28, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 250, 243, 0.76);
   cursor: pointer;
   text-align: left;
   transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.dr-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.14), transparent 48%),
+    radial-gradient(circle at top right, rgba(182,118,57,0.08), transparent 34%);
+  pointer-events: none;
 }
 
 .dr-item:hover {
   transform: translateX(-2px);
-  border-color: rgba(77, 52, 31, 0.16);
-  background: #fffaf3;
+  border-color: rgba(72, 49, 28, 0.16);
+  background: rgba(255, 252, 248, 0.92);
   box-shadow: var(--fc-shadow-soft);
 }
 
 .dr-item-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 16px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  width: 46px;
+  height: 46px;
+  border-radius: 18px;
+  border: 1px solid rgba(72, 49, 28, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--fc-accent-strong);
-  background: rgba(243, 231, 215, 0.9);
+  background: rgba(243, 231, 215, 0.96);
   flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .dr-item-copy {
@@ -366,8 +444,9 @@ defineEmits(['close', 'action'])
 }
 
 .dr-item-copy strong {
-  font-family: var(--fc-font);
-  font-size: 15px;
+  font-family: var(--fc-font-display);
+  font-size: 20px;
+  line-height: 1;
   font-weight: 600;
   color: var(--fc-text);
 }
@@ -376,18 +455,19 @@ defineEmits(['close', 'action'])
   font-family: var(--fc-font);
   font-size: 12px;
   color: var(--fc-text-sec);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .dr-item-arrow {
-  font-size: 18px;
+  font-size: 16px;
   color: var(--fc-text-muted);
+  padding-top: 4px;
 }
 
 .dr-divider {
   height: 1px;
   margin: 16px 2px;
-  background: linear-gradient(90deg, transparent, rgba(77, 52, 31, 0.14), transparent);
+  background: linear-gradient(90deg, transparent, rgba(72, 49, 28, 0.16), transparent);
 }
 
 .dr-item-danger { color: var(--fc-danger); }
@@ -397,10 +477,11 @@ defineEmits(['close', 'action'])
 .dr-foot {
   margin-top: auto;
   padding-top: 18px;
+  padding-bottom: 4px;
   font-family: var(--fc-font);
   font-size: 12px;
   color: var(--fc-text-muted);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 
 .dr-enter-active { transition: opacity .28s ease; }

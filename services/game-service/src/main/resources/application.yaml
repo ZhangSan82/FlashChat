@@ -6,9 +6,9 @@ flashchat:
   ai:
     kimi:
       enabled: false
-      base-url: https://api.moonshot.cn
+      base-url: https://api.siliconflow.cn
       api-key: ""
-      model: ""
+      model: moonshotai/Kimi-K2-Instruct-0905
       temperature: 0.7
       max-tokens: 128
       default-timeout-seconds: 15

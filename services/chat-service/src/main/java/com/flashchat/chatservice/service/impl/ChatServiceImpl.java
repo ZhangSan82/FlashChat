@@ -71,7 +71,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
      */
     private static final List<Integer> VISIBLE_MSG_STATUS =
             List.of(MSG_STATUS_NORMAL, MSG_STATUS_RECALLED);
-
+    //TODO未来实现完全异步
     @Override
     public ChatBroadcastMsgRespDTO sendMsg(SendMsgReqDTO request) {
 
