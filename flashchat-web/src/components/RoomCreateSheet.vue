@@ -50,6 +50,31 @@
               </div>
             </div>
 
+            <label class="sheet-label">房间头像</label>
+            <div class="sheet-avatar-row">
+              <button class="sheet-avatar-picker" type="button" @click="triggerAvatarUpload">
+                <img v-if="roomAvatarPreview" class="sheet-avatar-img" :src="roomAvatarPreview" alt="room avatar" />
+                <span v-else class="sheet-avatar-fallback">{{ (form.title || '?').slice(0, 1).toUpperCase() }}</span>
+              </button>
+              <div class="sheet-avatar-actions">
+                <button class="sheet-avatar-btn" type="button" :disabled="avatarUploading" @click="triggerAvatarUpload">
+                  {{ avatarUploading ? '上传中...' : (form.avatarUrl ? '更换头像' : '上传头像') }}
+                </button>
+                <button
+                  v-if="form.avatarUrl"
+                  class="sheet-avatar-btn ghost"
+                  type="button"
+                  :disabled="avatarUploading"
+                  @click="clearAvatar"
+                >
+                  清除头像
+                </button>
+                <div class="sheet-avatar-hint">建议 1:1 图片，不超过 5MB</div>
+                <div v-if="avatarError" class="sheet-avatar-error">{{ avatarError }}</div>
+              </div>
+              <input ref="fileInput" type="file" accept="image/*" class="sheet-file-hidden" @change="onAvatarSelected" />
+            </div>
+
             <div class="sheet-grid">
               <div>
                 <label class="sheet-label">人数上限</label>
@@ -98,6 +123,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { getRoomPricing } from '@/api/room'
+import { uploadFile } from '@/api/file'
 
 const props = defineProps({
   visible: { type: Boolean, default: false }
@@ -119,18 +145,23 @@ const fallbackPricing = [
 
 const pricingLoading = ref(false)
 const pricingOptions = ref([...fallbackPricing])
+const avatarUploading = ref(false)
+const avatarError = ref('')
+const fileInput = ref(null)
 
 const form = reactive({
   title: '',
   duration: 'MIN_30',
   maxMembers: 50,
-  isPublic: 0
+  isPublic: 0,
+  avatarUrl: ''
 })
 
 const canSubmit = computed(() => form.title.trim().length > 0 && form.maxMembers >= 2 && form.maxMembers <= 200)
 const selectedPricing = computed(() =>
   pricingOptions.value.find(item => item.name === form.duration) || pricingOptions.value[0] || null
 )
+const roomAvatarPreview = computed(() => form.avatarUrl || '')
 
 watch(
   () => props.visible,
@@ -165,12 +196,57 @@ function submit() {
     title: form.title.trim(),
     duration: form.duration,
     maxMembers: Number(form.maxMembers),
-    isPublic: form.isPublic
+    isPublic: form.isPublic,
+    avatarUrl: form.avatarUrl || ''
   })
+  resetForm()
+}
+
+function resetForm() {
   form.title = ''
   form.duration = 'MIN_30'
   form.maxMembers = 50
   form.isPublic = 0
+  form.avatarUrl = ''
+  avatarError.value = ''
+}
+
+function triggerAvatarUpload() {
+  if (avatarUploading.value) return
+  fileInput.value?.click()
+}
+
+async function onAvatarSelected(event) {
+  const file = event.target?.files?.[0]
+  if (!file) return
+  avatarError.value = ''
+
+  if (!file.type?.startsWith('image/')) {
+    avatarError.value = '请选择图片文件'
+    if (fileInput.value) fileInput.value.value = ''
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    avatarError.value = '图片大小不能超过 5MB'
+    if (fileInput.value) fileInput.value.value = ''
+    return
+  }
+
+  avatarUploading.value = true
+  try {
+    const result = await uploadFile(file)
+    form.avatarUrl = result?.url || ''
+  } catch (error) {
+    avatarError.value = error?.message || '上传失败'
+  } finally {
+    avatarUploading.value = false
+    if (fileInput.value) fileInput.value.value = ''
+  }
+}
+
+function clearAvatar() {
+  form.avatarUrl = ''
+  avatarError.value = ''
 }
 </script>
 
@@ -183,7 +259,6 @@ function submit() {
   justify-content: center;
   padding: 20px;
   background: var(--fc-backdrop);
-  backdrop-filter: blur(18px);
   z-index: 9600;
 }
 
@@ -191,12 +266,10 @@ function submit() {
   width: min(640px, 100%);
   max-height: min(92vh, 860px);
   overflow: auto;
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 30px;
-  background:
-    radial-gradient(circle at top right, rgba(221, 193, 163, 0.24), transparent 30%),
-    linear-gradient(180deg, rgba(255, 250, 243, 0.98), rgba(247, 239, 228, 0.98));
-  box-shadow: 0 34px 60px rgba(61, 40, 22, 0.22);
+  background: var(--fc-surface);
+  box-shadow: var(--fc-shadow-panel);
 }
 
 .sheet-head,
@@ -223,20 +296,20 @@ function submit() {
 
 .sheet-title {
   margin: 8px 0 0;
-  font-family: var(--fc-font);
-  font-size: 28px;
-  line-height: 1.05;
+  font-family: var(--fc-font-display);
+  font-size: 20px;
+  line-height: 1.15;
   color: var(--fc-text);
 }
 
 .sheet-close {
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   border: 1px solid var(--fc-border);
   border-radius: 50%;
-  background: rgba(255, 250, 243, 0.82);
+  background: var(--fc-surface);
   color: var(--fc-text);
-  font-size: 26px;
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
 }
@@ -248,9 +321,9 @@ function submit() {
 .sheet-input {
   width: 100%;
   padding: 14px 16px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 18px;
-  background: rgba(243, 231, 215, 0.9);
+  background: var(--fc-bg);
   color: var(--fc-text);
   font-family: var(--fc-font);
   font-size: 15px;
@@ -258,8 +331,7 @@ function submit() {
 }
 
 .sheet-input:focus {
-  border-color: rgba(140, 90, 43, 0.24);
-  box-shadow: 0 0 0 4px rgba(173, 122, 68, 0.08);
+  border-color: var(--fc-border-strong);
 }
 
 .sheet-label {
@@ -267,10 +339,95 @@ function submit() {
   margin: 18px 0 10px;
 }
 
+.sheet-avatar-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.sheet-avatar-picker {
+  width: 74px;
+  height: 74px;
+  border: 1px solid var(--fc-border);
+  border-radius: 20px;
+  background: var(--fc-surface);
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sheet-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.sheet-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--fc-font-display);
+  font-size: 22px;
+  color: var(--fc-text);
+  background: var(--fc-accent);
+}
+
+.sheet-avatar-actions {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sheet-avatar-btn {
+  padding: 9px 12px;
+  border: 1px solid var(--fc-border);
+  border-radius: 999px;
+  background: var(--fc-surface);
+  color: var(--fc-text);
+  font-family: var(--fc-font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sheet-avatar-btn.ghost {
+  color: var(--fc-text-sec);
+}
+
+.sheet-avatar-btn:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.sheet-avatar-hint {
+  width: 100%;
+  font-family: var(--fc-font);
+  font-size: 12px;
+  color: var(--fc-text-muted);
+}
+
+.sheet-avatar-error {
+  width: 100%;
+  font-family: var(--fc-font);
+  font-size: 12px;
+  color: #a74f35;
+}
+
+.sheet-file-hidden {
+  display: none;
+}
+
 .sheet-loading {
   padding: 18px;
   border-radius: 18px;
-  background: rgba(255, 250, 243, 0.72);
+  background: var(--fc-surface);
   color: var(--fc-text-sec);
   font-family: var(--fc-font);
 }
@@ -287,28 +444,31 @@ function submit() {
   gap: 6px;
   padding: 16px;
   text-align: left;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 22px;
-  background: rgba(255, 250, 243, 0.76);
+  background: var(--fc-surface);
   cursor: pointer;
-  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
 }
 
 .sheet-price:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--fc-shadow-soft);
+  border-color: var(--fc-border-strong);
 }
 
 .sheet-price.active {
-  border-color: rgba(140, 90, 43, 0.24);
-  background: linear-gradient(180deg, rgba(251, 245, 236, 0.96), rgba(241, 225, 203, 0.96));
-  box-shadow: 0 16px 26px rgba(140, 90, 43, 0.14);
+  border-color: var(--fc-selected-border);
+  background: var(--fc-selected-bg);
+  box-shadow: var(--fc-selected-shadow);
+}
+
+.sheet-price.active .sheet-price-name {
+  color: var(--fc-selected-text);
 }
 
 .sheet-price-name {
   font-family: var(--fc-font);
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--fc-text);
 }
 
@@ -322,7 +482,7 @@ function submit() {
 .sheet-summary-cost {
   font-family: var(--fc-font);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--fc-accent-strong);
 }
 
@@ -338,16 +498,16 @@ function submit() {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 22px;
-  background: rgba(255, 250, 243, 0.78);
+  background: var(--fc-surface);
 }
 
 .sheet-summary-value {
   margin-top: 6px;
   font-family: var(--fc-font);
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--fc-text);
 }
 
@@ -365,20 +525,22 @@ function submit() {
 
 .sheet-toggle-btn {
   padding: 14px 12px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 18px;
-  background: rgba(255, 250, 243, 0.76);
+  background: var(--fc-surface);
   font-family: var(--fc-font);
   font-size: 14px;
   font-weight: 600;
   color: var(--fc-text-sec);
   cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease, color .18s ease;
 }
 
 .sheet-toggle-btn.active {
-  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
-  border-color: transparent;
-  color: #fffaf3;
+  background: var(--fc-selected-bg);
+  border-color: var(--fc-selected-border);
+  color: var(--fc-selected-text);
+  box-shadow: var(--fc-selected-shadow);
 }
 
 .sheet-hint {
@@ -398,7 +560,7 @@ function submit() {
 .sheet-btn {
   min-width: 132px;
   padding: 14px 18px;
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 18px;
   font-family: var(--fc-font);
   font-size: 14px;
@@ -407,14 +569,13 @@ function submit() {
 }
 
 .sheet-btn-ghost {
-  background: rgba(255, 250, 243, 0.78);
+  background: var(--fc-surface);
   color: var(--fc-text-sec);
 }
 
 .sheet-btn-primary {
-  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
+  background: var(--fc-accent);
   color: #fffaf3;
-  box-shadow: 0 16px 28px rgba(140, 90, 43, 0.22);
 }
 
 .sheet-btn:disabled {
@@ -438,6 +599,14 @@ function submit() {
   .sheet-pricing,
   .sheet-grid {
     grid-template-columns: 1fr;
+  }
+
+  .sheet-avatar-row {
+    flex-direction: column;
+  }
+
+  .sheet-avatar-actions {
+    width: 100%;
   }
 
   .sheet-summary {

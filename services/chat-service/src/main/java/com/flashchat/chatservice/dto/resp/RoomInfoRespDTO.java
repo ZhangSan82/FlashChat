@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -15,6 +16,7 @@ public class RoomInfoRespDTO {
 
     private String roomId;
     private String title;
+    private String avatarUrl;
     private Integer status;
     private String statusDesc;
     private Integer maxMembers;
@@ -28,4 +30,5 @@ public class RoomInfoRespDTO {
     private Integer memberCount;
     private LocalDateTime expireTime;
     private LocalDateTime createTime;
+    private List<RoomPreviewMessageRespDTO> recentMessages;
 }

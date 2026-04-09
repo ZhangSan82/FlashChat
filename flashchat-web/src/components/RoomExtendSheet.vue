@@ -188,7 +188,6 @@ function formatDateTime(value) {
   justify-content: center;
   padding: 20px;
   background: var(--fc-backdrop);
-  backdrop-filter: blur(18px);
   z-index: 9700;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -198,10 +197,10 @@ function formatDateTime(value) {
 .extend-card {
   width: min(620px, 100%);
   max-height: min(860px, calc(100dvh - 40px));
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 28px;
-  background: linear-gradient(180deg, rgba(255, 250, 243, 0.98), rgba(247, 239, 228, 0.98));
-  box-shadow: 0 30px 60px rgba(61, 40, 22, 0.22);
+  background: var(--fc-surface);
+  box-shadow: var(--fc-shadow-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -231,8 +230,8 @@ function formatDateTime(value) {
 
 .extend-title {
   margin: 8px 0 0;
-  font-family: var(--fc-font);
-  font-size: 26px;
+  font-family: var(--fc-font-display);
+  font-size: 20px;
   color: var(--fc-text);
 }
 
@@ -241,9 +240,9 @@ function formatDateTime(value) {
   height: 40px;
   border: 1px solid var(--fc-border);
   border-radius: 50%;
-  background: rgba(255, 250, 243, 0.82);
+  background: var(--fc-surface);
   color: var(--fc-text);
-  font-size: 24px;
+  font-size: 20px;
   cursor: pointer;
 }
 
@@ -260,16 +259,16 @@ function formatDateTime(value) {
 .extend-balance,
 .extend-summary {
   padding: 16px 18px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 22px;
-  background: rgba(255, 250, 243, 0.76);
+  background: var(--fc-surface);
 }
 
 .extend-room-name,
 .extend-summary-time {
   font-family: var(--fc-font);
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
   color: var(--fc-text);
 }
 
@@ -297,7 +296,7 @@ function formatDateTime(value) {
 }
 
 .extend-balance strong {
-  font-size: 24px;
+  font-size: 18px;
   color: var(--fc-accent-strong);
 }
 
@@ -313,23 +312,28 @@ function formatDateTime(value) {
   flex-direction: column;
   gap: 6px;
   padding: 16px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 22px;
-  background: rgba(255, 250, 243, 0.78);
+  background: var(--fc-surface);
   text-align: left;
   cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
 }
 
 .extend-option.active {
-  border-color: rgba(140, 90, 43, 0.24);
-  background: linear-gradient(180deg, rgba(251, 245, 236, 0.96), rgba(241, 225, 203, 0.96));
-  box-shadow: 0 16px 26px rgba(140, 90, 43, 0.14);
+  border-color: var(--fc-selected-border);
+  background: var(--fc-selected-bg);
+  box-shadow: var(--fc-selected-shadow);
+}
+
+.extend-option.active .extend-option-name {
+  color: var(--fc-selected-text);
 }
 
 .extend-option-name {
   font-family: var(--fc-font);
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--fc-text);
 }
 
@@ -343,7 +347,7 @@ function formatDateTime(value) {
 .extend-summary-cost {
   font-family: var(--fc-font);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--fc-accent-strong);
 }
 
@@ -374,7 +378,7 @@ function formatDateTime(value) {
 .extend-btn {
   min-width: 132px;
   padding: 14px 18px;
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 18px;
   font-family: var(--fc-font);
   font-size: 14px;
@@ -383,14 +387,13 @@ function formatDateTime(value) {
 }
 
 .extend-btn-ghost {
-  background: rgba(255, 250, 243, 0.78);
+  background: var(--fc-surface);
   color: var(--fc-text-sec);
 }
 
 .extend-btn-primary {
-  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
+  background: var(--fc-accent);
   color: #fffaf3;
-  box-shadow: 0 16px 28px rgba(140, 90, 43, 0.22);
 }
 
 .extend-btn:disabled {

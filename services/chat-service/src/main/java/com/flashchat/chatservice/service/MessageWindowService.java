@@ -50,6 +50,15 @@ public interface MessageWindowService {
     List<ChatBroadcastMsgRespDTO> getNewFromWindow(String roomId, Long lastAckMsgId);
 
     /**
+     * 获取房间最新 N 条消息（时间正序）
+     *
+     * @param roomId 房间 ID
+     * @param limit  条数上限
+     * @return 消息列表；null 表示窗口不可用需要降级 DB
+     */
+    List<ChatBroadcastMsgRespDTO> getLatestFromWindow(String roomId, int limit);
+
+    /**
      * 删除窗口（房间关闭时调用）
      *
      * @param roomId 房间 ID

@@ -93,8 +93,16 @@ public class FileServiceImpl implements FileService {
             throw new ClientException("不支持的文件类型: " + originalName);
         }
 
+        String contentType = file.getContentType();
+
         // ===== 2. 生成存储路径 =====
         String extension = FileSecurityConstants.getExtension(originalName);
+        if (extension.isEmpty()) {
+            extension = inferExtensionFromContentType(contentType);
+            if (!extension.isEmpty()) {
+                originalName = originalName + extension;
+            }
+        }
         String storedName = UUID.randomUUID().toString().replace("-", "") + extension;
         String datePath = LocalDate.now().format(DATE_DIR_FORMAT);
 
@@ -110,8 +118,10 @@ public class FileServiceImpl implements FileService {
             }
 
             // ===== 5. 构建返回值 =====
-            String url = urlPrefix + "/" + datePath + "/" + storedName;
-            String contentType = file.getContentType();
+            String normalizedPrefix = urlPrefix.endsWith("/")
+                    ? urlPrefix.substring(0, urlPrefix.length() - 1)
+                    : urlPrefix;
+            String url = normalizedPrefix + "/" + datePath + "/" + storedName;
 
             // 图片文件：preview 设为与 url 相同（vue-advanced-chat 用 preview 做缩略图）
             // 视频文件：preview 暂为 null（未来 Phase 2 可用 FFmpeg 生成封面）
@@ -141,5 +151,31 @@ public class FileServiceImpl implements FileService {
             log.error("[文件上传失败] name={}, error={}", originalName, e.getMessage(), e);
             throw new ServiceException("文件上传失败，请重试");
         }
+    }
+
+    private String inferExtensionFromContentType(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return "";
+        }
+        String normalized = contentType.toLowerCase();
+        return switch (normalized) {
+            case "image/jpeg", "image/jpg" -> ".jpg";
+            case "image/png" -> ".png";
+            case "image/gif" -> ".gif";
+            case "image/webp" -> ".webp";
+            case "image/bmp" -> ".bmp";
+            case "image/heic" -> ".heic";
+            case "video/mp4" -> ".mp4";
+            case "video/webm" -> ".webm";
+            case "video/quicktime" -> ".mov";
+            case "audio/mpeg" -> ".mp3";
+            case "audio/wav", "audio/wave", "audio/x-wav" -> ".wav";
+            case "audio/webm" -> ".webm";
+            case "audio/ogg" -> ".ogg";
+            case "application/pdf" -> ".pdf";
+            case "application/zip" -> ".zip";
+            case "text/plain" -> ".txt";
+            default -> "";
+        };
     }
 }

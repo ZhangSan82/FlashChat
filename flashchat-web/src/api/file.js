@@ -1,8 +1,12 @@
 import request from './request'
 
-export function uploadFile(file) {
+export function uploadFile(file, filename = '') {
     const fd = new FormData()
-    fd.append('file', file)
+    if (filename) {
+        fd.append('file', file, filename)
+    } else {
+        fd.append('file', file)
+    }
     return request.post('/file/upload', fd, {
         headers: { 'Content-Type': undefined },
         timeout: 30000

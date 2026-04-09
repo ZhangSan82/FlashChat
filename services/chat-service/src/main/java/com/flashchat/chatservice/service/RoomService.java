@@ -1,13 +1,20 @@
 package com.flashchat.chatservice.service;
 
-
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.flashchat.chatservice.dao.entity.RoomDO;
-import com.flashchat.chatservice.dto.req.*;
+import com.flashchat.chatservice.dto.req.PublicRoomListReqDTO;
+import com.flashchat.chatservice.dto.req.RoomAvatarUpdateReqDTO;
+import com.flashchat.chatservice.dto.req.RoomCloseReqDTO;
+import com.flashchat.chatservice.dto.req.RoomCreateReqDTO;
+import com.flashchat.chatservice.dto.req.RoomExtendReqDTO;
+import com.flashchat.chatservice.dto.req.RoomJoinReqDTO;
+import com.flashchat.chatservice.dto.req.RoomKickReqDTO;
+import com.flashchat.chatservice.dto.req.RoomLeaveReqDTO;
+import com.flashchat.chatservice.dto.req.RoomMuteReqDTO;
+import com.flashchat.chatservice.dto.req.RoomResizeReqDTO;
 import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomPricingRespDTO;
-import com.flashchat.convention.result.Result;
 import jakarta.validation.Valid;
 
 import java.util.List;
@@ -106,9 +113,8 @@ public interface RoomService extends IService<RoomDO> {
      */
     void resizeRoom(@Valid RoomResizeReqDTO request);
 
-    /**
-     * 强制进入宽限期（房主注销时调用）
-     */
+    RoomInfoRespDTO updateRoomAvatar(@Valid RoomAvatarUpdateReqDTO request);
+
     void doForceGrace(String roomId);
 
     RoomInfoRespDTO previewRoom(String roomId);

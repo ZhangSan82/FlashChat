@@ -1,10 +1,11 @@
 package com.flashchat.chatservice.dto.req;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 创建房间请求（MVP 阶段仅注册用户可用，通过 creatorUserId 标识）
+ * Create room request.
  */
 @Data
 public class RoomCreateReqDTO {
@@ -12,17 +13,16 @@ public class RoomCreateReqDTO {
     @NotBlank(message = "房间标题不能为空")
     private String title;
 
-    /** 最大人数，默认 50 */
+    /** max members, default 50 */
     private Integer maxMembers;
 
-    /** 0-私密 1-公开，默认 0 */
+    /** 0-private, 1-public, default 0 */
     private Integer isPublic;
 
-    /**
-     * 房间时长档位（枚举名）
-     * 默认：HOUR_2
-     */
+    /** room avatar URL, empty string clears avatar */
+    @Size(max = 512, message = "房间头像 URL 过长")
+    private String avatarUrl;
+
+    /** room duration enum name, default MIN_30 */
     private String duration;
-
-
 }

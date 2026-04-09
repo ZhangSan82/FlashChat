@@ -1,7 +1,5 @@
 <template>
   <div class="credits-page">
-    <div class="credits-orb credits-orb-a"></div>
-    <div class="credits-orb credits-orb-b"></div>
 
     <header class="credits-top">
       <button class="credits-back" type="button" @click="goRoomList">返回房间列表</button>
@@ -225,41 +223,10 @@ function formatDateTime(value) {
 <style scoped>
 .credits-page {
   min-height: 100vh;
-  padding: 32px;
-  position: relative;
-  overflow-x: hidden;
-  background: var(--fc-app-gradient);
-}
-
-.credits-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  pointer-events: none;
-}
-
-.credits-orb-a {
-  width: 260px;
-  height: 260px;
-  top: -110px;
-  right: -80px;
-  background: rgba(182, 118, 57, 0.14);
-}
-
-.credits-orb-b {
-  width: 240px;
-  height: 240px;
-  bottom: -110px;
-  left: -80px;
-  background: rgba(224, 194, 161, 0.22);
-}
-
-.credits-top,
-.credits-hero,
-.credits-ledger,
-.credits-notice {
-  position: relative;
-  z-index: 1;
+  padding: 40px;
+  background: var(--fc-bg);
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .credits-top {
@@ -269,124 +236,100 @@ function formatDateTime(value) {
   align-items: start;
 }
 
-.credits-hero,
-.credits-ledger,
-.credits-notice,
-.credits-balance-card,
-.credits-summary-card,
-.credits-state,
-.credits-item {
-  position: relative;
-  overflow: hidden;
-}
-
-.credits-hero::before,
-.credits-ledger::before,
-.credits-balance-card::before,
-.credits-summary-card::before,
-.credits-item::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.14), transparent 44%),
-    radial-gradient(circle at top right, rgba(182, 118, 57, 0.08), transparent 32%);
-  pointer-events: none;
-}
-
 .credits-back,
 .credits-sign,
 .credits-refresh {
   border: 1px solid var(--fc-border);
-  border-radius: 18px;
-  font-family: var(--fc-font);
+  border-radius: 999px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: transform .2s ease, filter .2s ease, box-shadow .2s ease;
+  transition: all .2s ease;
 }
 
 .credits-back,
 .credits-refresh {
-  padding: 12px 16px;
-  background: rgba(255, 250, 243, 0.88);
-  color: var(--fc-text-sec);
+  padding: 10px 16px;
+  background: var(--fc-surface);
+  color: var(--fc-text);
+}
+
+.credits-back:hover,
+.credits-refresh:hover {
+  border-color: var(--fc-border-strong);
 }
 
 .credits-sign {
-  padding: 12px 18px;
-  background: linear-gradient(135deg, #bd7b3c 0%, #8a4e22 100%);
-  color: #fffaf3;
-  box-shadow: 0 18px 30px rgba(138, 78, 34, 0.22);
+  padding: 10px 18px;
+  background: var(--fc-accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+.credits-sign:hover {
+  background: var(--fc-accent-strong);
 }
 
 .credits-sign:disabled,
 .credits-refresh:disabled {
   opacity: .55;
   cursor: not-allowed;
-  box-shadow: none;
-}
-
-.credits-back:hover,
-.credits-sign:hover,
-.credits-refresh:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.03);
 }
 
 .credits-kicker {
-  font-family: var(--fc-font);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--fc-text-muted);
+  color: var(--fc-accent);
 }
 
-.credits-top-copy h1,
-.credits-ledger-head h2 {
-  margin: 10px 0 10px;
+.credits-top-copy h1 {
+  margin: 12px 0 10px;
   font-family: var(--fc-font-display);
-  font-size: clamp(40px, 5vw, 58px);
-  line-height: 0.94;
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--fc-text);
 }
 
 .credits-ledger-head h2 {
-  font-size: 34px;
+  margin: 10px 0 10px;
+  font-family: var(--fc-font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--fc-text);
 }
 
 .credits-top-copy p,
 .credits-state p {
   max-width: 640px;
   margin: 0;
-  font-family: var(--fc-font);
-  font-size: 15px;
-  line-height: 1.7;
-  color: var(--fc-text-sec);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--fc-text-muted);
 }
 
 .credits-notice {
   margin-top: 20px;
   padding: 12px 18px;
-  border-radius: 18px;
+  border-radius: 12px;
   width: fit-content;
   border: 1px solid var(--fc-border);
-  font-family: var(--fc-font);
   font-size: 14px;
   font-weight: 500;
-  box-shadow: var(--fc-shadow-soft);
 }
 
-.credits-notice.is-success { background: rgba(235, 245, 230, 0.96); color: #42673f; }
-.credits-notice.is-error { background: rgba(253, 236, 234, 0.96); color: #8b3a35; }
-.credits-notice.is-info { background: rgba(255, 250, 243, 0.92); color: var(--fc-text); }
+.credits-notice.is-success { background: var(--fc-surface); color: var(--fc-success); }
+.credits-notice.is-error { background: var(--fc-surface); color: var(--fc-danger); }
+.credits-notice.is-info { background: var(--fc-surface); color: var(--fc-text); }
 
 .credits-hero {
-  margin-top: 24px;
+  margin-top: 32px;
   display: grid;
   grid-template-columns: 1.2fr 1fr;
-  gap: 18px;
+  gap: 16px;
 }
 
 .credits-balance-card,
@@ -395,20 +338,18 @@ function formatDateTime(value) {
 .credits-state,
 .credits-item {
   border: 1px solid var(--fc-border);
-  border-radius: 28px;
-  background: var(--fc-panel);
-  box-shadow: var(--fc-shadow-soft);
+  border-radius: var(--fc-radius-lg);
+  background: var(--fc-surface);
 }
 
 .credits-balance-card {
-  padding: 26px;
+  padding: 28px;
 }
 
 .credits-balance-label {
-  font-family: var(--fc-font);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
+  font-weight: 500;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--fc-text-muted);
 }
@@ -416,8 +357,9 @@ function formatDateTime(value) {
 .credits-balance-value {
   margin-top: 18px;
   font-family: var(--fc-font-display);
-  font-size: clamp(62px, 10vw, 94px);
-  line-height: 0.9;
+  font-size: clamp(42px, 8vw, 64px);
+  font-weight: 600;
+  line-height: 0.95;
   color: var(--fc-text);
 }
 
@@ -426,22 +368,21 @@ function formatDateTime(value) {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  font-family: var(--fc-font);
-  font-size: 14px;
+  font-size: 13px;
   color: var(--fc-text-sec);
 }
 
 .credits-balance-meta span {
-  padding: 7px 12px;
+  padding: 6px 12px;
   border-radius: var(--fc-radius-pill);
-  border: 1px solid rgba(72, 49, 28, 0.08);
-  background: rgba(255, 250, 243, 0.82);
-  color: var(--fc-accent-strong);
+  border: 1px solid var(--fc-border);
+  background: var(--fc-bg);
+  color: var(--fc-accent);
 }
 
 .credits-summary-grid {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .credits-summary-card {
@@ -450,10 +391,9 @@ function formatDateTime(value) {
 
 .credits-summary-card span {
   display: block;
-  font-family: var(--fc-font);
   font-size: 12px;
   color: var(--fc-text-muted);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -461,13 +401,14 @@ function formatDateTime(value) {
   display: block;
   margin-top: 12px;
   font-family: var(--fc-font-display);
-  font-size: 30px;
-  line-height: 0.96;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.05;
   color: var(--fc-text);
 }
 
 .credits-ledger {
-  margin-top: 22px;
+  margin-top: 24px;
   padding: 24px;
 }
 
@@ -485,10 +426,10 @@ function formatDateTime(value) {
 }
 
 .credits-spinner {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   margin: 0 auto 16px;
-  border: 3px solid rgba(77, 52, 31, 0.10);
+  border: 2px solid var(--fc-border);
   border-top-color: var(--fc-accent);
   border-radius: 50%;
   animation: credits-spin .7s linear infinite;
@@ -520,18 +461,17 @@ function formatDateTime(value) {
 
 .credits-item-title {
   font-family: var(--fc-font-display);
-  font-size: 26px;
-  line-height: 0.98;
-  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 600;
   color: var(--fc-text);
 }
 
 .credits-item-remark,
 .credits-item-time {
   margin-top: 6px;
-  font-family: var(--fc-font);
   font-size: 13px;
-  color: var(--fc-text-sec);
+  color: var(--fc-text-muted);
 }
 
 .credits-item-side {
@@ -540,19 +480,14 @@ function formatDateTime(value) {
 
 .credits-item-amount {
   font-family: var(--fc-font-display);
-  font-size: 30px;
-  line-height: 0.98;
-  font-weight: 700;
+  font-size: 20px;
+  line-height: 1.05;
+  font-weight: 600;
   color: var(--fc-text);
 }
 
-.credits-item-amount.positive {
-  color: var(--fc-success);
-}
-
-.credits-item-amount.negative {
-  color: var(--fc-danger);
-}
+.credits-item-amount.positive { color: var(--fc-success); }
+.credits-item-amount.negative { color: var(--fc-danger); }
 
 .credits-more {
   margin-top: 18px;
@@ -561,28 +496,17 @@ function formatDateTime(value) {
 }
 
 @media (max-width: 960px) {
-  .credits-hero {
-    grid-template-columns: 1fr;
-  }
+  .credits-hero { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
-  .credits-page {
-    padding: 20px 16px 28px;
-  }
-
-  .credits-top {
-    grid-template-columns: 1fr;
-  }
-
+  .credits-page { padding: 24px 16px 32px; }
+  .credits-top { grid-template-columns: 1fr; }
   .credits-item,
   .credits-ledger-head {
     flex-direction: column;
     align-items: flex-start;
   }
-
-  .credits-item-side {
-    text-align: left;
-  }
+  .credits-item-side { text-align: left; }
 }
 </style>

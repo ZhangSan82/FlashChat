@@ -1,43 +1,82 @@
 :root {
-  --fc-bg: #e9dece;
-  --fc-bg-light: #f7f0e6;
-  --fc-bg-dark: #dccdb8;
-  --fc-surface: #fffaf3;
-  --fc-surface-soft: rgba(255, 249, 241, 0.8);
-  --fc-surface-strong: rgba(255, 251, 246, 0.92);
-  --fc-surface-muted: #efe3d2;
-  --fc-panel: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(248, 239, 227, 0.9));
-  --fc-panel-elevated: linear-gradient(180deg, rgba(255, 252, 248, 0.98), rgba(244, 233, 219, 0.96));
-  --fc-text: #221812;
-  --fc-text-sec: #625140;
-  --fc-text-muted: #9a856d;
-  --fc-accent: #b67639;
-  --fc-accent-strong: #8a4e22;
-  --fc-accent-soft: #e0c2a1;
-  --fc-accent-veil: rgba(182, 118, 57, 0.16);
-  --fc-danger: #b8604b;
-  --fc-success: #62875d;
-  --fc-warn: #c5892c;
-  --fc-info: #557d8d;
-  --fc-border: rgba(72, 49, 28, 0.12);
-  --fc-border-strong: rgba(72, 49, 28, 0.22);
-  --fc-line: rgba(94, 71, 50, 0.08);
-  --fc-shadow-out: 0 24px 56px rgba(58, 37, 19, 0.14), 0 8px 22px rgba(58, 37, 19, 0.07);
-  --fc-shadow-soft: 0 16px 36px rgba(58, 37, 19, 0.1);
-  --fc-shadow-panel: 0 28px 70px rgba(54, 35, 18, 0.18), 0 10px 24px rgba(54, 35, 18, 0.08);
-  --fc-shadow-in: inset 0 1px 0 rgba(255, 255, 255, 0.58);
-  --fc-radius-sm: 14px;
-  --fc-radius: 20px;
-  --fc-radius-lg: 28px;
-  --fc-radius-xl: 36px;
+  /* ── surfaces ── */
+  --fc-bg: #F8F5F0;
+  --fc-bg-light: #FAF8F4;
+  --fc-bg-dark: #F3EEE8;
+  --fc-surface: #FFFFFF;
+  --fc-surface-soft: rgba(255, 255, 255, 0.82);
+  --fc-surface-strong: rgba(255, 255, 255, 0.94);
+  --fc-surface-muted: #F3EEE8;
+  --fc-panel: #FFFFFF;
+  --fc-panel-elevated: #FFFFFF;
+
+  /* ── text ── */
+  --fc-text: #1C1714;
+  --fc-text-sec: #5C4F42;
+  --fc-text-muted: #9E9083;
+
+  /* ── accent ── */
+  --fc-accent: #D4AF37;
+  --fc-accent-strong: #A88310;
+  --fc-accent-soft: #E8D89B;
+  --fc-accent-veil: rgba(212, 175, 55, 0.12);
+  --fc-selected-bg: linear-gradient(180deg, #FFF8E7 0%, #F4E4BF 100%);
+  --fc-selected-bg-soft: rgba(212, 175, 55, 0.18);
+  --fc-selected-border: rgba(168, 131, 16, 0.50);
+  --fc-selected-ring: rgba(212, 175, 55, 0.28);
+  --fc-selected-text: #3F3429;
+  --fc-selected-shadow: 0 0 0 2px var(--fc-selected-ring), 0 8px 16px rgba(168, 131, 16, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+
+  /* ── semantic ── */
+  --fc-danger: #B8604B;
+  --fc-success: #527A4D;
+  --fc-warn: #9E6E1F;
+  --fc-info: #4A7080;
+
+  /* ── borders ── */
+  --fc-border: rgba(28, 23, 20, 0.08);
+  --fc-border-strong: rgba(28, 23, 20, 0.14);
+  --fc-line: rgba(28, 23, 20, 0.06);
+
+  /* ── shadows — reduced, no heavy panel shadows ── */
+  --fc-shadow-out: 0 12px 32px rgba(28, 23, 20, 0.08);
+  --fc-shadow-soft: 0 4px 16px rgba(28, 23, 20, 0.06);
+  --fc-shadow-panel: 0 24px 64px rgba(28, 23, 20, 0.12);
+  --fc-shadow-in: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+
+  /* ── radii — slightly smaller ── */
+  --fc-radius-sm: 12px;
+  --fc-radius: 16px;
+  --fc-radius-lg: 24px;
+  --fc-radius-xl: 28px;
   --fc-radius-pill: 999px;
-  --fc-backdrop: rgba(24, 15, 10, 0.42);
-  --fc-app-gradient:
-    radial-gradient(circle at 0% 0%, rgba(245, 228, 206, 0.8), transparent 28%),
-    radial-gradient(circle at 100% 8%, rgba(182, 118, 57, 0.14), transparent 20%),
-    radial-gradient(circle at 50% 100%, rgba(255, 250, 244, 0.3), transparent 34%),
-    linear-gradient(180deg, #f7efe5 0%, #e7d9c7 100%);
-  --fc-font: 'Poppins', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --fc-font-display: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', 'Songti SC', 'STSong', 'Noto Serif SC', serif;
+
+  /* ── overlay ── */
+  --fc-backdrop: rgba(28, 23, 20, 0.32);
+
+  /* ── app background — clean, no multi-layer gradient ── */
+  --fc-app-gradient: #F8F5F0;
+
+  /* ── fonts — Lora serif for display ── */
+  --fc-font: 'Karla', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --fc-font-display: 'Playfair Display SC', 'Noto Serif SC', 'PingFang SC', Georgia, serif;
   --fc-font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* ── typography scale ── */
+  --fc-fs-xs: 10px;
+  --fc-fs-sm: 11px;
+  --fc-fs-base: 13px;
+  --fc-fs-md: 14px;
+  --fc-fs-lg: 15px;
+  --fc-fs-xl: 17px;
+  --fc-fs-2xl: 20px;
+  --fc-fs-3xl: 24px;
+  --fc-fs-4xl: 30px;
+  --fc-fs-5xl: clamp(34px, 4vw, 44px);
+
+  /* ── font weights ── */
+  --fc-fw-normal: 400;
+  --fc-fw-medium: 500;
+  --fc-fw-semibold: 600;
+  --fc-fw-bold: 700;
 }

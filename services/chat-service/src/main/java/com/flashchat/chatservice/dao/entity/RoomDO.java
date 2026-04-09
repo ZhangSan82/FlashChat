@@ -42,6 +42,11 @@ public class RoomDO {
     private String title;
 
     /**
+     * 鎴块棿澶村儚 URL锛堝厑璁哥┖涓诧紝绌轰覆琛ㄧず浣跨敤榛樿澶村儚锛?
+     */
+    private String avatarUrl;
+
+    /**
      * 最大人数（2-100，默认 50）
      */
     private Integer maxMembers;

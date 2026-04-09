@@ -1,14 +1,17 @@
 package com.flashchat.chatservice.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.cache.toolkit.CacheUtil;
 import com.flashchat.channel.GameStateQueryService;
 import com.flashchat.channel.event.MemberKickedFromRoomEvent;
+import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.entity.RoomDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
 import com.flashchat.chatservice.dao.enums.*;
+import com.flashchat.chatservice.dao.mapper.MessageMapper;
 import com.flashchat.chatservice.dao.mapper.RoomMapper;
 import com.flashchat.chatservice.delay.producer.RoomDelayProducer;
 import com.flashchat.chatservice.dto.context.HostOperationContext;
@@ -37,6 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.ZoneId;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -58,6 +62,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final CreditService creditService;
     private final TransactionTemplate transactionTemplate;
     private final RoomMapper roomMapper;
+    private final MessageMapper messageMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final GameStateQueryService gameStateQueryService;
     private static final long CACHE_TIMEOUT = 60000L;
@@ -65,6 +70,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private static final int MAX_ROOMS_PER_USER = 50;
     /** 房主注销时的宽限期时长（分钟） */
     private static final int FORCE_GRACE_MINUTES = 5;
+    private static final int PREVIEW_MESSAGE_LIMIT = 10;
+    private static final int MSG_STATUS_NORMAL = 0;
+    private static final int MSG_STATUS_RECALLED = 2;
 
 
     @Value("${flashchat.share.base-url:http://localhost:3002}")
@@ -98,6 +106,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .roomId(roomId)
                 .creatorId(creatorId)//t_account.id
                 .title(request.getTitle())
+                .avatarUrl(normalizeRoomAvatarUrl(request.getAvatarUrl()))
                 .maxMembers(request.getMaxMembers() != null ? request.getMaxMembers() : 50)
                 .currentMembers(1)
                 .isPublic(request.getIsPublic() != null ? request.getIsPublic() : 0)
@@ -156,7 +165,118 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         roomChannelManager.joinRoom(roomId, creator.getId(),
                 creator.getNickname(), resolveAccountAvatar(creator), true, false);
-        return buildRoomInfoResp(room);
+        return this.buildRoomInfoResp(room);
+    }
+
+    private List<RoomPreviewMessageRespDTO> loadPreviewRecentMessages(String roomId) {
+        List<ChatBroadcastMsgRespDTO> windowMessages =
+                messageWindowService.getLatestFromWindow(roomId, PREVIEW_MESSAGE_LIMIT);
+        if (windowMessages != null && !windowMessages.isEmpty()) {
+            return windowMessages.stream()
+                    .filter(Objects::nonNull)
+                    .map(this::toPreviewMessageFromWindow)
+                    .filter(Objects::nonNull)
+                    .limit(PREVIEW_MESSAGE_LIMIT)
+                    .collect(Collectors.toList());
+        }
+
+        List<MessageDO> dbMessages = messageMapper.selectList(
+                new LambdaQueryWrapper<MessageDO>()
+                        .select(
+                                MessageDO::getId,
+                                MessageDO::getSenderId,
+                                MessageDO::getNickname,
+                                MessageDO::getAvatarColor,
+                                MessageDO::getContent,
+                                MessageDO::getStatus,
+                                MessageDO::getCreateTime
+                        )
+                        .eq(MessageDO::getRoomId, roomId)
+                        .in(MessageDO::getStatus, List.of(MSG_STATUS_NORMAL, MSG_STATUS_RECALLED))
+                        .notIn(MessageDO::getMsgType,
+                                MessageTypeEnum.SYSTEM.getType(),
+                                MessageTypeEnum.GAME.getType())
+                        .orderByDesc(MessageDO::getId)
+                        .last("limit " + PREVIEW_MESSAGE_LIMIT)
+        );
+        if (dbMessages == null || dbMessages.isEmpty()) {
+            return List.of();
+        }
+
+        Collections.reverse(dbMessages);
+        return dbMessages.stream()
+                .map(this::toPreviewMessageFromDb)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private RoomPreviewMessageRespDTO toPreviewMessageFromWindow(ChatBroadcastMsgRespDTO msg) {
+        if (Boolean.TRUE.equals(msg.getSystem())) {
+            return null;
+        }
+        String content = Boolean.TRUE.equals(msg.getDeleted())
+                ? "此消息已撤回"
+                : normalizePreviewContent(msg.getContent());
+        if (content.isEmpty()) {
+            content = "[文件]";
+        }
+        long timestamp = msg.getTimestamp() != null
+                ? msg.getTimestamp()
+                : System.currentTimeMillis();
+        return RoomPreviewMessageRespDTO.builder()
+                .indexId(msg.getIndexId())
+                .senderId(msg.getSenderId())
+                .username(normalizePreviewUsername(msg.getUsername()))
+                .avatar(msg.getAvatar())
+                .content(content)
+                .timestamp(timestamp)
+                .build();
+    }
+
+    private RoomPreviewMessageRespDTO toPreviewMessageFromDb(MessageDO message) {
+        String content = Objects.equals(message.getStatus(), MSG_STATUS_RECALLED)
+                ? "此消息已撤回"
+                : normalizePreviewContent(message.getContent());
+        if (content.isEmpty()) {
+            content = "[文件]";
+        }
+
+        return RoomPreviewMessageRespDTO.builder()
+                .indexId(message.getId())
+                .senderId(message.getSenderId() == null ? "" : String.valueOf(message.getSenderId()))
+                .username(normalizePreviewUsername(message.getNickname()))
+                .avatar(message.getAvatarColor())
+                .content(content)
+                .timestamp(toEpochMillis(message.getCreateTime()))
+                .build();
+    }
+
+    private String normalizePreviewUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return "匿名用户";
+        }
+        return username.trim();
+    }
+
+    private String normalizePreviewContent(String content) {
+        if (content == null) {
+            return "";
+        }
+        String normalized = content.replaceAll("\\s+", " ").trim();
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        if (normalized.length() <= 120) {
+            return normalized;
+        }
+        return normalized.substring(0, 120) + "...";
+    }
+
+    private long toEpochMillis(LocalDateTime createTime) {
+        if (createTime == null) {
+            return System.currentTimeMillis();
+        }
+        return createTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
 
     /** 加入房间 */
@@ -914,6 +1034,46 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
 
     @Override
+    public RoomInfoRespDTO updateRoomAvatar(RoomAvatarUpdateReqDTO request) {
+        String roomId = request.getRoomId();
+        Long operatorId = UserContext.getRequiredLoginId();
+
+        RoomDO room = getRoomByRoomId(roomId);
+        if (room == null) {
+            throw new ClientException("房间不存在");
+        }
+        RoomStatusEnum status = RoomStatusEnum.of(room.getStatus());
+        if (status == null || status == RoomStatusEnum.CLOSED) {
+            throw new ClientException("房间已关闭，无法操作");
+        }
+
+        RoomMemberDO operatorMember = roomMemberService
+                .getRoomMemberByRoomIdAndAccountId(roomId, operatorId);
+        if (operatorMember == null
+                || operatorMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
+            throw new ClientException("你不在该房间中");
+        }
+        if (operatorMember.getRole() != RoomMemberRoleEnum.HOST.getCode()) {
+            throw new ClientException("只有房主可以修改房间头像");
+        }
+
+        String avatarUrl = normalizeRoomAvatarUrl(request.getAvatarUrl());
+        boolean updated = this.lambdaUpdate()
+                .eq(RoomDO::getRoomId, roomId)
+                .ne(RoomDO::getStatus, RoomStatusEnum.CLOSED.getCode())
+                .set(RoomDO::getAvatarUrl, avatarUrl)
+                .update();
+        if (!updated) {
+            throw new ClientException("更新房间头像失败，请重试");
+        }
+
+        evictRoomCache(roomId);
+        log.info("[更新房间头像成功] room={}, operator={}, hasAvatar={}",
+                roomId, operatorId, avatarUrl != null && !avatarUrl.isBlank());
+        return buildRoomInfoResp(getRoomByRoomId(roomId));
+    }
+
+    @Override
     public void doForceGrace(String roomId) {
         RoomDO room = getRoomByRoomId(roomId);
         if (room == null) {
@@ -968,6 +1128,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         return RoomInfoRespDTO.builder()
                 .roomId(room.getRoomId())
                 .title(room.getTitle())
+                .avatarUrl(room.getAvatarUrl())
                 .status(room.getStatus())
                 .statusDesc(status != null ? status.getDesc() : "未知")
                 .maxMembers(room.getMaxMembers())
@@ -977,6 +1138,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .onlineCount(onlineCount)
                 .expireTime(room.getExpireTime())
                 .createTime(room.getCreateTime())
+                .recentMessages(List.of())
                 .build();
 
 }
@@ -987,7 +1149,9 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         if (room == null) {
             throw new ClientException("房间不存在");
         }
-        return buildRoomInfoResp(room);
+        RoomInfoRespDTO resp = buildRoomInfoResp(room);
+        resp.setRecentMessages(loadPreviewRecentMessages(roomId));
+        return resp;
     }
 
     /**
@@ -1030,6 +1194,24 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     /**
      *  Room 缓存失效
      */
+    private String normalizeRoomAvatarUrl(String avatarUrl) {
+        if (avatarUrl == null) {
+            return "";
+        }
+        String trimmed = avatarUrl.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        boolean allowed = trimmed.startsWith("http://")
+                || trimmed.startsWith("https://")
+                || trimmed.startsWith("/uploads/")
+                || trimmed.startsWith("data:image/");
+        if (!allowed) {
+            throw new ClientException("房间头像 URL 格式错误");
+        }
+        return trimmed;
+    }
+
     private void evictRoomCache(String roomId) {
         try {
             multistageCacheProxy.delete(CacheUtil.buildKey("flashchat", "room", roomId));

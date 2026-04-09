@@ -121,19 +121,19 @@ async function doSubmit() {
 <style scoped>
 .dlg-ov { position:fixed;inset:0;background:rgba(0,0,0,.2);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:9999; }
 .dlg-card { background:#F5F0E8;border-radius:20px;box-shadow:6px 6px 12px #D1CBC3,-6px -6px 12px #fff;padding:28px 32px;width:90%;max-width:400px; }
-.dlg-h { font-family:'Poppins',sans-serif;font-size:20px;font-weight:700;color:#2C2825;margin:0 0 6px; }
-.dlg-desc { font-family:'Poppins',sans-serif;font-size:13px;color:#8A857E;margin:0 0 24px;line-height:1.5; }
+.dlg-h { font-family:var(--fc-font);font-size:20px;font-weight:700;color:#2C2825;margin:0 0 6px; }
+.dlg-desc { font-family:var(--fc-font);font-size:13px;color:#8A857E;margin:0 0 24px;line-height:1.5; }
 .dlg-grp { margin-bottom:16px; }
-.dlg-grp>label { display:block;font-family:'Poppins',sans-serif;font-size:13px;font-weight:500;color:#8A857E;margin-bottom:8px; }
-.dlg-input { width:100%;padding:12px 16px;background:#F0EBE3;border:none;border-radius:10px;box-shadow:inset 3px 3px 6px #D1CBC3,inset -3px -3px 6px #fff;font-family:'Poppins',sans-serif;font-size:14px;color:#2C2825;outline:none; }
+.dlg-grp>label { display:block;font-family:var(--fc-font);font-size:13px;font-weight:500;color:#8A857E;margin-bottom:8px; }
+.dlg-input { width:100%;padding:12px 16px;background:#F0EBE3;border:none;border-radius:10px;box-shadow:inset 3px 3px 6px #D1CBC3,inset -3px -3px 6px #fff;font-family:var(--fc-font);font-size:14px;color:#2C2825;outline:none; }
 .dlg-input:focus { box-shadow:inset 4px 4px 8px #CBC6BE,inset -4px -4px 8px #fff; }
 .dlg-input::placeholder { color:#B5B0A8; }
-.dlg-error { font-family:'Poppins',sans-serif;font-size:13px;color:#D4736C;text-align:center;margin:0 0 8px;padding:8px;background:rgba(212,115,108,.08);border-radius:8px; }
+.dlg-error { font-family:var(--fc-font);font-size:13px;color:#D4736C;text-align:center;margin:0 0 8px;padding:8px;background:rgba(212,115,108,.08);border-radius:8px; }
 .dlg-err-enter-active { transition:all .2s; }
 .dlg-err-leave-active { transition:all .15s; }
 .dlg-err-enter-from,.dlg-err-leave-to { opacity:0;transform:translateY(-4px); }
 .dlg-acts { display:flex;justify-content:flex-end;gap:12px;margin-top:20px; }
-.dlg-btn { padding:10px 24px;border:none;border-radius:10px;font-family:'Poppins',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s; }
+.dlg-btn { padding:10px 24px;border:none;border-radius:10px;font-family:var(--fc-font);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s; }
 .dlg-cancel { background:#F5F0E8;box-shadow:3px 3px 6px #D1CBC3,-3px -3px 6px #fff;color:#8A857E; }
 .dlg-cancel:hover { box-shadow:inset 3px 3px 6px #D1CBC3,inset -3px -3px 6px #fff; }
 .dlg-ok { background:#C8956C;box-shadow:3px 3px 6px rgba(200,149,108,.3),-2px -2px 4px rgba(255,255,255,.6);color:#fff; }
@@ -148,20 +148,20 @@ async function doSubmit() {
 <style scoped>
 .dlg-ov {
   background: var(--fc-backdrop);
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
 }
 
 .dlg-card {
-  background: linear-gradient(180deg, rgba(255, 250, 243, 0.96), rgba(247, 239, 228, 0.98));
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
   border-radius: 28px;
-  box-shadow: 0 30px 60px rgba(61, 40, 22, 0.18);
+  box-shadow: var(--fc-shadow-panel);
   padding: 30px 30px 28px;
 }
 
 .dlg-h {
-  font-family: var(--fc-font);
-  font-size: 24px;
+  font-family: var(--fc-font-display);
+  font-size: 18px;
   color: var(--fc-text);
 }
 
@@ -179,15 +179,14 @@ async function doSubmit() {
 }
 
 .dlg-input {
-  background: rgba(243, 231, 215, 0.92);
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  background: var(--fc-bg);
+  border: 1px solid var(--fc-border);
   border-radius: 16px;
   box-shadow: none;
 }
 
 .dlg-input:focus {
-  border-color: rgba(140, 90, 43, 0.24);
-  box-shadow: 0 0 0 4px rgba(173, 122, 68, 0.08);
+  border-color: var(--fc-border-strong);
 }
 
 .dlg-error {
@@ -196,18 +195,17 @@ async function doSubmit() {
 }
 
 .dlg-btn {
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 16px;
 }
 
 .dlg-cancel {
-  background: rgba(255, 250, 243, 0.78);
+  background: var(--fc-surface);
   box-shadow: none;
   color: var(--fc-text-sec);
 }
 
 .dlg-ok {
-  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
-  box-shadow: 0 16px 28px rgba(140, 90, 43, 0.22);
+  background: var(--fc-accent);
 }
 </style>

@@ -66,6 +66,40 @@
               </div>
             </section>
 
+            <section v-if="isHost" class="info-card">
+              <div class="info-card-head">
+                <span>房间头像</span>
+                <span class="info-badge waiting">{{ room?.avatarUrl ? '已设置' : '默认' }}</span>
+              </div>
+              <div class="info-avatar-edit">
+                <div class="info-avatar-edit-preview">
+                  <img :src="roomVisualUrl" :alt="roomName" />
+                </div>
+                <div class="info-avatar-edit-actions">
+                  <button class="info-mini-btn" type="button" :disabled="avatarUploading" @click="triggerRoomAvatarUpload">
+                    {{ avatarUploading ? '上传中...' : '上传/更换' }}
+                  </button>
+                  <button
+                    class="info-mini-btn"
+                    type="button"
+                    :disabled="avatarUploading || !room?.avatarUrl"
+                    @click="clearRoomAvatar"
+                  >
+                    清除头像
+                  </button>
+                  <div class="info-avatar-edit-hint">请尽量使用 1:1 图片，建议 5MB 以内</div>
+                  <div v-if="avatarUploadError" class="info-avatar-edit-error">{{ avatarUploadError }}</div>
+                </div>
+                <input
+                  ref="avatarInputRef"
+                  type="file"
+                  accept="image/*"
+                  class="info-file-hidden"
+                  @change="onRoomAvatarSelected"
+                />
+              </div>
+            </section>
+
             <section v-if="showLifecycleCard" class="info-card info-card-alert" :class="`is-${roomState.kind}`">
               <div class="info-card-head">
                 <span>生命周期提醒</span>
@@ -79,7 +113,7 @@
             <section v-if="resolvedShareUrl" class="info-card">
               <div class="info-card-head">
                 <span>分享房间</span>
-                <button class="info-copy" type="button" @click="copyShareUrl">
+                <button class="info-copy" :class="{ copied }" type="button" @click="copyShareUrl">
                   {{ copied ? '已复制' : '复制链接' }}
                 </button>
               </div>
@@ -158,7 +192,13 @@
                 <button class="info-game-btn primary" type="button" :disabled="gameActionPending" @click="handleQuickCreate">
                   {{ gameActionPending ? '准备中...' : '开始组局' }}
                 </button>
-                <button class="info-game-btn ghost" type="button" @click="gameAdvancedOpen = !gameAdvancedOpen">
+                <button
+                  class="info-game-btn ghost"
+                  :class="{ active: gameAdvancedOpen }"
+                  :aria-expanded="gameAdvancedOpen ? 'true' : 'false'"
+                  type="button"
+                  @click="gameAdvancedOpen = !gameAdvancedOpen"
+                >
                   {{ gameAdvancedOpen ? '收起设置' : '展开设置' }}
                 </button>
               </div>
@@ -202,6 +242,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { getShareUrl } from '@/api/room'
+import { uploadFile } from '@/api/file'
 import { formatCountdown, calcProgress, getCountdownColor } from '@/utils/formatter'
 import { generateQRCodeDataUrl } from '@/utils/qrcode'
 import { getRoomDisplayName, getRoomVisualUrl } from '@/utils/roomVisual'
@@ -217,13 +258,16 @@ const props = defineProps({
   gameActionPending: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['close', 'leave', 'close-room', 'extend-room', 'resize-room', 'member-action', 'create-game'])
+const emit = defineEmits(['close', 'leave', 'close-room', 'extend-room', 'resize-room', 'member-action', 'create-game', 'update-avatar'])
 
 const now = ref(Date.now())
 const resolvedShareUrl = ref('')
 const qrDataUrl = ref('')
 const copied = ref(false)
 const gameAdvancedOpen = ref(false)
+const avatarUploading = ref(false)
+const avatarUploadError = ref('')
+const avatarInputRef = ref(null)
 const gameCreateForm = reactive({ minPlayers: 4, maxPlayers: 8, describeTimeout: 60, voteTimeout: 30, maxAiPlayers: 4 })
 
 function handleQuickCreate() {
@@ -258,6 +302,16 @@ watch(resolvedShareUrl, async (url) => {
   }
   qrDataUrl.value = (await generateQRCodeDataUrl(url, 200)) || ''
 })
+
+watch(
+  () => props.visible,
+  (visible) => {
+    if (visible) return
+    avatarUploadError.value = ''
+    avatarUploading.value = false
+    if (avatarInputRef.value) avatarInputRef.value.value = ''
+  }
+)
 
 const roomName = computed(() => getRoomDisplayName(props.room))
 const roomVisualUrl = computed(() => getRoomVisualUrl(props.room))
@@ -385,6 +439,46 @@ async function copyShareUrl() {
   }, 1800)
 }
 
+function triggerRoomAvatarUpload() {
+  if (avatarUploading.value) return
+  avatarUploadError.value = ''
+  avatarInputRef.value?.click()
+}
+
+async function onRoomAvatarSelected(event) {
+  const file = event.target?.files?.[0]
+  if (!file) return
+  avatarUploadError.value = ''
+
+  if (!file.type?.startsWith('image/')) {
+    avatarUploadError.value = '请选择图片文件'
+    if (avatarInputRef.value) avatarInputRef.value.value = ''
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    avatarUploadError.value = '图片大小不能超过 5MB'
+    if (avatarInputRef.value) avatarInputRef.value.value = ''
+    return
+  }
+
+  avatarUploading.value = true
+  try {
+    const result = await uploadFile(file)
+    if (!result?.url) throw new Error('上传结果异常')
+    emit('update-avatar', result.url)
+  } catch (error) {
+    avatarUploadError.value = error?.message || '上传失败'
+  } finally {
+    avatarUploading.value = false
+    if (avatarInputRef.value) avatarInputRef.value.value = ''
+  }
+}
+
+function clearRoomAvatar() {
+  avatarUploadError.value = ''
+  emit('update-avatar', '')
+}
+
 function hasAvatarImage(member) {
   return typeof member?.avatar === 'string' && member.avatar.length > 0 && !member.avatar.startsWith('#')
 }
@@ -444,7 +538,6 @@ function formatDateTime(value) {
   display: flex;
   justify-content: flex-end;
   background: var(--fc-backdrop);
-  backdrop-filter: blur(18px);
   z-index: 9500;
 }
 
@@ -461,15 +554,7 @@ function formatDateTime(value) {
   overflow: hidden;
 }
 
-.info-panel::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 20%),
-    radial-gradient(circle at top right, rgba(224, 194, 161, 0.14), transparent 28%);
-  pointer-events: none;
-}
+/* .info-panel ::before overlay removed for fusion design */
 
 .info-head {
   position: sticky;
@@ -479,8 +564,7 @@ function formatDateTime(value) {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  background: linear-gradient(180deg, rgba(251, 246, 239, 0.96), rgba(251, 246, 239, 0.82), transparent);
-  backdrop-filter: blur(12px);
+  background: linear-gradient(180deg, var(--fc-surface), transparent);
 }
 
 .info-kicker,
@@ -499,28 +583,34 @@ function formatDateTime(value) {
 .info-title {
   margin-top: 8px;
   font-family: var(--fc-font-display);
-  font-size: 38px;
-  line-height: 0.96;
+  font-size: 24px;
+  line-height: 1.1;
   font-weight: 600;
   color: var(--fc-text);
 }
 
 .info-close {
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(72, 49, 28, 0.12);
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--fc-border);
   border-radius: 50%;
-  background: rgba(255, 250, 243, 0.82);
+  background: linear-gradient(180deg, #fffdf9 0%, #f8f1e7 100%);
   color: var(--fc-text);
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  transition: transform 0.2s ease, filter 0.2s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 4px 10px rgba(73, 52, 31, 0.08);
+  transition: border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
 }
 
 .info-close:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.02);
+  border-color: var(--fc-accent-weak);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 16px rgba(73, 52, 31, 0.14);
+}
+
+.info-close:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 4px 10px rgba(73, 52, 31, 0.1);
 }
 
 .info-body {
@@ -534,7 +624,7 @@ function formatDateTime(value) {
 .info-hero,
 .info-card,
 .info-action {
-  border: 1px solid rgba(72, 49, 28, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 28px;
   background: var(--fc-panel);
   box-shadow: var(--fc-shadow-soft);
@@ -545,17 +635,7 @@ function formatDateTime(value) {
   position: relative;
 }
 
-.info-hero::before,
-.info-card::before,
-.info-action::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.14), transparent 46%),
-    radial-gradient(circle at top right, rgba(182, 118, 57, 0.08), transparent 34%);
-  pointer-events: none;
-}
+/* ::before gradient overlays removed for fusion design */
 
 .info-hero-cover {
   position: relative;
@@ -565,13 +645,9 @@ function formatDateTime(value) {
   background-position: center;
 }
 
+/* .info-hero-mist removed for fusion design */
 .info-hero-mist {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 38%),
-    radial-gradient(circle at 20% 18%, rgba(255, 249, 241, 0.28), transparent 30%);
-  pointer-events: none;
+  display: none;
 }
 
 .info-hero-content {
@@ -592,21 +668,24 @@ function formatDateTime(value) {
   align-items: center;
   justify-content: center;
   padding: 6px 12px;
+  border: 1px solid transparent;
   border-radius: 999px;
   font-family: var(--fc-font);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .info-status-pill {
-  background: rgba(255, 250, 243, 0.88);
+  background: var(--fc-surface);
   color: var(--fc-text);
 }
 
 .info-status-pill.active,
 .info-badge.active {
-  background: rgba(235, 245, 230, 0.96);
+  background: linear-gradient(180deg, #F4FAF2 0%, #E4F3DF 100%);
+  border-color: rgba(82, 122, 77, 0.34);
   color: #42673f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 8px rgba(82, 122, 77, 0.14);
 }
 
 .info-status-pill.warning,
@@ -632,7 +711,7 @@ function formatDateTime(value) {
 .info-members-count,
 .info-member-role,
 .info-member-tag {
-  background: rgba(243, 231, 215, 0.92);
+  background: var(--fc-bg);
   color: var(--fc-accent-strong);
 }
 
@@ -662,11 +741,11 @@ function formatDateTime(value) {
 .info-name {
   max-width: 100%;
   font-family: var(--fc-font-display);
-  font-size: 44px;
-  line-height: 0.94;
+  font-size: 30px;
+  line-height: 1.05;
   font-weight: 600;
   color: #fffaf3;
-  text-shadow: 0 10px 28px rgba(33, 23, 13, 0.22);
+  text-shadow: 0 8px 22px rgba(33, 23, 13, 0.22);
 }
 
 .info-meta {
@@ -681,7 +760,6 @@ function formatDateTime(value) {
   padding: 7px 12px;
   border-radius: 999px;
   background: rgba(255, 250, 243, 0.16);
-  backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 250, 243, 0.18);
   color: rgba(255, 250, 243, 0.88);
   font-family: var(--fc-font);
@@ -694,15 +772,15 @@ function formatDateTime(value) {
   gap: 14px;
   align-items: center;
   padding: 18px 24px 20px;
-  background: rgba(255, 250, 243, 0.84);
+  background: var(--fc-surface);
 }
 
 .info-summary-item strong {
   display: block;
   margin-top: 8px;
   font-family: var(--fc-font-display);
-  font-size: 28px;
-  line-height: 1;
+  font-size: 20px;
+  line-height: 1.1;
   font-weight: 600;
   color: var(--fc-text);
 }
@@ -737,8 +815,8 @@ function formatDateTime(value) {
 
 .info-countdown {
   font-family: var(--fc-font-display);
-  font-size: 34px;
-  line-height: 0.96;
+  font-size: 24px;
+  line-height: 1.05;
   font-weight: 600;
   color: var(--fc-text);
 }
@@ -772,16 +850,67 @@ function formatDateTime(value) {
 .info-meta-item {
   padding: 14px;
   border-radius: 20px;
-  background: rgba(243, 231, 215, 0.72);
-  border: 1px solid rgba(72, 49, 28, 0.06);
+  background: var(--fc-bg);
+  border: 1px solid var(--fc-border);
 }
 
 .info-meta-item strong {
   display: block;
   margin-top: 8px;
   font-family: var(--fc-font);
-  font-size: 18px;
+  font-size: 15px;
   color: var(--fc-text);
+}
+
+.info-avatar-edit {
+  margin-top: 14px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.info-avatar-edit-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid var(--fc-border);
+  background: var(--fc-surface);
+  flex-shrink: 0;
+}
+
+.info-avatar-edit-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.info-avatar-edit-actions {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.info-avatar-edit-hint {
+  width: 100%;
+  font-family: var(--fc-font);
+  font-size: 12px;
+  color: var(--fc-text-muted);
+}
+
+.info-avatar-edit-error {
+  width: 100%;
+  font-family: var(--fc-font);
+  font-size: 12px;
+  color: #a74f35;
+}
+
+.info-file-hidden {
+  display: none;
 }
 
 .info-card-alert {
@@ -789,33 +918,25 @@ function formatDateTime(value) {
   overflow: hidden;
 }
 
-.info-card-alert::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 48%);
-  pointer-events: none;
-}
-
 .info-card-alert.is-expiring {
-  background: linear-gradient(180deg, rgba(255, 246, 232, 0.95), rgba(255, 238, 213, 0.92));
+  background: #fff6e8;
 }
 
 .info-card-alert.is-grace,
 .info-card-alert.is-closed {
-  background: linear-gradient(180deg, rgba(255, 241, 238, 0.95), rgba(253, 230, 224, 0.92));
+  background: #fff1ee;
 }
 
 .info-card-alert.is-muted {
-  background: linear-gradient(180deg, rgba(244, 239, 233, 0.95), rgba(235, 226, 216, 0.92));
+  background: #f4efe9;
 }
 
 .info-alert-title {
   position: relative;
   margin-top: 14px;
   font-family: var(--fc-font-display);
-  font-size: 28px;
-  line-height: 1;
+  font-size: 20px;
+  line-height: 1.15;
   color: var(--fc-text);
 }
 
@@ -846,13 +967,36 @@ function formatDateTime(value) {
 }
 
 .info-copy {
-  border: 0;
-  background: transparent;
+  padding: 8px 14px;
+  border: 1px solid rgba(95, 68, 43, 0.16);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fffdf9 0%, #f7f0e5 100%);
   color: var(--fc-accent-strong);
   font-family: var(--fc-font);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 4px 10px rgba(82, 58, 35, 0.08);
+  transition: border-color 0.22s ease, background 0.22s ease, color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+}
+
+.info-copy:hover {
+  border-color: rgba(160, 122, 71, 0.42);
+  background: linear-gradient(180deg, #fffefb 0%, #f3e8d8 100%);
+  color: var(--fc-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 8px 16px rgba(82, 58, 35, 0.14);
+}
+
+.info-copy:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 4px 10px rgba(82, 58, 35, 0.1);
+}
+
+.info-copy.copied {
+  background: linear-gradient(180deg, #f4faf2 0%, #e7f3e1 100%);
+  border-color: rgba(90, 140, 78, 0.35);
+  color: #42673f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 6px 14px rgba(82, 122, 77, 0.14);
 }
 
 .info-share-grid {
@@ -885,7 +1029,7 @@ function formatDateTime(value) {
   align-items: center;
   justify-content: center;
   border-radius: 22px;
-  background: linear-gradient(180deg, rgba(248, 239, 227, 0.92), rgba(240, 228, 212, 0.92));
+  background: var(--fc-bg);
 }
 
 .info-qr {
@@ -907,9 +1051,9 @@ function formatDateTime(value) {
   align-items: center;
   gap: 12px;
   padding: 14px;
-  border: 1px solid rgba(72, 49, 28, 0.06);
+  border: 1px solid var(--fc-border);
   border-radius: 20px;
-  background: rgba(255, 250, 243, 0.72);
+  background: var(--fc-surface);
 }
 
 .info-member-avatar-wrap {
@@ -980,27 +1124,49 @@ function formatDateTime(value) {
 }
 
 .info-mini-btn {
-  padding: 8px 12px;
-  border: 1px solid rgba(72, 49, 28, 0.10);
+  min-height: 34px;
+  padding: 8px 14px;
+  border: 1px solid rgba(90, 64, 38, 0.16);
   border-radius: 999px;
-  background: rgba(255, 250, 243, 0.92);
+  background: linear-gradient(180deg, #fffdf9 0%, #f8f1e7 100%);
   color: var(--fc-text);
   font-family: var(--fc-font);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 3px 8px rgba(73, 52, 31, 0.06);
+  transition: border-color 0.22s ease, background 0.22s ease, color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
 }
 
 .info-mini-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 18px rgba(61, 40, 22, 0.10);
+  border-color: rgba(160, 122, 71, 0.42);
+  background: linear-gradient(180deg, #fffefb 0%, #f4eadb 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 16px rgba(73, 52, 31, 0.12);
+}
+
+.info-mini-btn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 4px 10px rgba(73, 52, 31, 0.09);
+}
+
+.info-mini-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .info-mini-btn.danger {
-  background: linear-gradient(135deg, #d58d73 0%, #ba5b40 100%);
-  border-color: rgba(167, 79, 53, 0.20);
+  background: linear-gradient(180deg, #cc7558 0%, #b75b42 100%);
+  border-color: #b65a41;
   color: #fffaf3;
+  box-shadow: 0 6px 14px rgba(158, 68, 53, 0.24);
+}
+
+.info-mini-btn.danger:hover {
+  border-color: #a74f3a;
+  background: linear-gradient(180deg, #d27d60 0%, #bd6247 100%);
+  box-shadow: 0 8px 18px rgba(158, 68, 53, 0.3);
 }
 
 .info-member-footnote {
@@ -1027,20 +1193,28 @@ function formatDateTime(value) {
   padding: 16px 18px;
   text-align: left;
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  background: linear-gradient(180deg, #fffdf9 0%, #f8f1e7 100%);
+  border-color: rgba(95, 67, 41, 0.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 7px 16px rgba(73, 52, 31, 0.08);
+  transition: border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
 }
 
 .info-action:hover {
-  transform: translateY(-1px);
-  border-color: rgba(138, 78, 34, 0.16);
-  box-shadow: 0 18px 36px rgba(61, 40, 22, 0.12);
+  border-color: rgba(160, 122, 71, 0.44);
+  background: linear-gradient(180deg, #fffefb 0%, #f4eadb 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 12px 24px rgba(73, 52, 31, 0.12);
+}
+
+.info-action:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 6px 14px rgba(73, 52, 31, 0.1);
 }
 
 .info-action strong {
   display: block;
   font-family: var(--fc-font-display);
-  font-size: 22px;
-  line-height: 1;
+  font-size: 17px;
+  line-height: 1.15;
   color: var(--fc-text);
 }
 
@@ -1054,15 +1228,25 @@ function formatDateTime(value) {
   color: var(--fc-danger);
 }
 
+.info-action.danger {
+  background: linear-gradient(180deg, rgba(255, 246, 243, 0.98) 0%, rgba(255, 236, 231, 0.9) 100%);
+  border-color: rgba(186, 91, 64, 0.28);
+}
+
+.info-action.danger:hover {
+  border-color: rgba(176, 73, 46, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 12px 24px rgba(176, 73, 46, 0.16);
+}
+
 .info-game-card {
-  background: linear-gradient(180deg, rgba(255, 250, 243, 0.9), rgba(244, 232, 214, 0.84));
+  background: var(--fc-surface);
 }
 
 .info-game-title {
   margin-top: 14px;
   font-family: var(--fc-font-display);
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 600;
   color: var(--fc-text);
 }
 
@@ -1082,36 +1266,80 @@ function formatDateTime(value) {
 }
 
 .info-game-btn {
-  padding: 11px 18px;
+  min-height: 44px;
+  padding: 11px 20px;
   border: 1px solid transparent;
   border-radius: 999px;
   font-family: var(--fc-font);
   font-size: 14px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.22s ease, background 0.22s ease, color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
 }
 
 .info-game-btn:hover {
-  transform: translateY(-1px);
+  border-color: var(--fc-border-strong);
 }
 
 .info-game-btn.primary {
-  background: linear-gradient(135deg, #bd7b3c 0%, #8a4e22 100%);
+  border-color: rgba(175, 128, 40, 0.32);
+  background: linear-gradient(180deg, #dcb537 0%, #c79b23 100%);
   color: #fffaf3;
-  box-shadow: 0 14px 26px rgba(138, 78, 34, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 212, 0.62), 0 10px 18px rgba(164, 118, 34, 0.28);
+}
+
+.info-game-btn.primary:hover {
+  border-color: rgba(162, 116, 29, 0.42);
+  background: linear-gradient(180deg, #e1be48 0%, #cd9f29 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 222, 0.64), 0 13px 22px rgba(164, 118, 34, 0.34);
+}
+
+.info-game-btn.primary:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 212, 0.56), 0 7px 14px rgba(164, 118, 34, 0.26);
 }
 
 .info-game-btn.ghost {
-  background: rgba(255, 250, 243, 0.84);
-  border-color: rgba(72, 49, 28, 0.10);
-  color: var(--fc-text-sec);
+  border-color: rgba(95, 67, 41, 0.18);
+  background: linear-gradient(180deg, #fffdf9 0%, #f7f0e5 100%);
+  color: var(--fc-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 6px 14px rgba(73, 52, 31, 0.08);
+}
+
+.info-game-btn.ghost:hover {
+  border-color: rgba(160, 122, 71, 0.42);
+  background: linear-gradient(180deg, #fffefb 0%, #f3e8d8 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 18px rgba(73, 52, 31, 0.14);
+}
+
+.info-game-btn.ghost.active {
+  border-color: rgba(185, 144, 53, 0.38);
+  background: linear-gradient(180deg, #f8f1de 0%, #efe2c5 100%);
+  color: var(--fc-accent-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74), 0 9px 18px rgba(169, 131, 52, 0.18);
+}
+
+.info-game-btn.ghost:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 5px 12px rgba(73, 52, 31, 0.1);
 }
 
 .info-game-btn:disabled {
-  opacity: 0.56;
+  opacity: 0.52;
   cursor: not-allowed;
+  box-shadow: none;
   transform: none;
+}
+
+.info-close:focus-visible,
+.info-copy:focus-visible,
+.info-mini-btn:focus-visible,
+.info-action:focus-visible,
+.info-game-btn:focus-visible {
+  outline: none;
+  border-color: rgba(183, 142, 52, 0.62);
+  box-shadow: 0 0 0 3px rgba(213, 175, 90, 0.24);
 }
 
 .info-game-settings {
@@ -1133,8 +1361,8 @@ function formatDateTime(value) {
   width: 100%;
   padding: 10px 12px;
   border-radius: 16px;
-  border: 1px solid rgba(72, 49, 28, 0.10);
-  background: rgba(255, 250, 243, 0.92);
+  border: 1px solid var(--fc-border);
+  background: var(--fc-surface);
   color: var(--fc-text);
   font: inherit;
   font-size: 14px;
@@ -1161,6 +1389,16 @@ function formatDateTime(value) {
   opacity: 0;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .info-close,
+  .info-copy,
+  .info-mini-btn,
+  .info-action,
+  .info-game-btn {
+    transition: none;
+  }
+}
+
 @media (max-width: 640px) {
   .info-panel {
     width: 100%;
@@ -1181,7 +1419,7 @@ function formatDateTime(value) {
   }
 
   .info-name {
-    font-size: 38px;
+    font-size: 26px;
   }
 
   .info-summary {
@@ -1196,6 +1434,14 @@ function formatDateTime(value) {
   .info-share-grid,
   .info-meta-grid {
     grid-template-columns: 1fr;
+  }
+
+  .info-avatar-edit {
+    flex-direction: column;
+  }
+
+  .info-avatar-edit-actions {
+    width: 100%;
   }
 
   .info-qr-shell {

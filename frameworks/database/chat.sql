@@ -88,6 +88,7 @@ CREATE TABLE t_room (
                         room_id         VARCHAR(32)  NOT NULL                COMMENT '房间业务ID（URL/QR码中使用）',
                         creator_id      BIGINT       NOT NULL                COMMENT '创建者（t_account.id）',
                         title           VARCHAR(64)  NOT NULL DEFAULT ''     COMMENT '房间标题',
+                        avatar_url      VARCHAR(512) NOT NULL DEFAULT ''     COMMENT '房间头像URL',
                         max_members     INT          NOT NULL DEFAULT 50     COMMENT '最大人数',
                         is_public       TINYINT(1)   NOT NULL DEFAULT 0      COMMENT '0=私密（仅扫码/链接） 1=公开（展示在房间列表）',
                         status          TINYINT      NOT NULL DEFAULT 0      COMMENT '0=等待中 1=活跃 2=即将到期 3=宽限期 4=已关闭',

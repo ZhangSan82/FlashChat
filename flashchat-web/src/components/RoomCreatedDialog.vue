@@ -133,8 +133,7 @@ async function copyShareUrl() {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(36, 24, 14, 0.28);
-  backdrop-filter: blur(16px);
+  background: var(--fc-backdrop);
   z-index: 9700;
 }
 
@@ -142,12 +141,10 @@ async function copyShareUrl() {
   position: relative;
   width: min(460px, 100%);
   padding: 28px;
-  border: 1px solid rgba(77, 52, 31, 0.12);
+  border: 1px solid var(--fc-border);
   border-radius: 30px;
-  background:
-    radial-gradient(circle at top right, rgba(221, 193, 163, 0.24), transparent 32%),
-    linear-gradient(180deg, rgba(255, 250, 243, 0.98), rgba(247, 239, 228, 0.98));
-  box-shadow: 0 34px 60px rgba(61, 40, 22, 0.22);
+  background: var(--fc-surface);
+  box-shadow: var(--fc-shadow-panel);
   text-align: center;
 }
 
@@ -155,13 +152,13 @@ async function copyShareUrl() {
   position: absolute;
   top: 18px;
   right: 18px;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--fc-border);
   border-radius: 50%;
-  background: rgba(255, 250, 243, 0.88);
+  background: var(--fc-surface);
   color: var(--fc-text);
-  font-size: 26px;
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
 }
@@ -181,9 +178,9 @@ async function copyShareUrl() {
 
 .created-room-title {
   margin: 10px 0 10px;
-  font-family: var(--fc-font);
-  font-size: 30px;
-  line-height: 1.04;
+  font-family: var(--fc-font-display);
+  font-size: 22px;
+  line-height: 1.1;
   color: var(--fc-text);
 }
 
@@ -208,8 +205,7 @@ async function copyShareUrl() {
   align-items: center;
   justify-content: center;
   border-radius: 28px;
-  background: rgba(243, 231, 215, 0.88);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  background: var(--fc-bg);
 }
 
 .created-room-qr {
@@ -228,9 +224,9 @@ async function copyShareUrl() {
 
 .created-room-name {
   margin-top: 18px;
-  font-family: var(--fc-font);
-  font-size: 24px;
-  font-weight: 700;
+  font-family: var(--fc-font-display);
+  font-size: 18px;
+  font-weight: 600;
   color: var(--fc-text);
   word-break: break-word;
 }
@@ -248,9 +244,9 @@ async function copyShareUrl() {
   width: 100%;
   margin-top: 18px;
   padding: 13px 14px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 18px;
-  background: rgba(243, 231, 215, 0.92);
+  background: var(--fc-bg);
   color: var(--fc-text-sec);
   font-family: 'SF Mono', 'Fira Code', monospace;
   font-size: 12px;
@@ -265,7 +261,7 @@ async function copyShareUrl() {
 
 .created-room-btn {
   padding: 14px 16px;
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 18px;
   font-family: var(--fc-font);
   font-size: 14px;
@@ -274,14 +270,13 @@ async function copyShareUrl() {
 }
 
 .created-room-btn-ghost {
-  background: rgba(255, 250, 243, 0.86);
+  background: var(--fc-surface);
   color: var(--fc-text-sec);
 }
 
 .created-room-btn-primary {
-  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
+  background: var(--fc-accent);
   color: #fffaf3;
-  box-shadow: 0 16px 28px rgba(140, 90, 43, 0.22);
 }
 
 .created-room-tip {

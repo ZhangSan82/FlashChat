@@ -1,7 +1,5 @@
 <template>
   <div class="invites-page">
-    <div class="invites-orb invites-orb-a"></div>
-    <div class="invites-orb invites-orb-b"></div>
 
     <header class="invites-top">
       <button class="invites-back" type="button" @click="goRoomList">返回房间列表</button>
@@ -169,41 +167,10 @@ function formatDateTime(value) {
 <style scoped>
 .invites-page {
   min-height: 100vh;
-  padding: 32px;
-  position: relative;
-  overflow-x: hidden;
-  background: var(--fc-app-gradient);
-}
-
-.invites-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  pointer-events: none;
-}
-
-.invites-orb-a {
-  width: 260px;
-  height: 260px;
-  top: -110px;
-  right: -80px;
-  background: rgba(182, 118, 57, 0.14);
-}
-
-.invites-orb-b {
-  width: 240px;
-  height: 240px;
-  bottom: -110px;
-  left: -80px;
-  background: rgba(224, 194, 161, 0.22);
-}
-
-.invites-top,
-.invites-hero,
-.invites-list-card,
-.invites-notice {
-  position: relative;
-  z-index: 1;
+  padding: 40px;
+  background: var(--fc-bg);
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .invites-top {
@@ -213,117 +180,94 @@ function formatDateTime(value) {
   align-items: start;
 }
 
-.invites-hero,
-.invites-list-card,
-.invites-main-card,
-.invites-stat-card,
-.invites-item,
-.invites-state,
-.invites-notice {
-  position: relative;
-  overflow: hidden;
-}
-
-.invites-hero::before,
-.invites-list-card::before,
-.invites-main-card::before,
-.invites-stat-card::before,
-.invites-item::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(135deg, rgba(255,255,255,0.14), transparent 44%),
-    radial-gradient(circle at top right, rgba(182,118,57,0.08), transparent 32%);
-  pointer-events: none;
-}
-
 .invites-back,
 .invites-copy-main,
 .invites-copy-btn,
 .invites-refresh {
   border: 1px solid var(--fc-border);
-  border-radius: 18px;
-  font-family: var(--fc-font);
+  border-radius: 999px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: transform .2s ease, filter .2s ease, box-shadow .2s ease;
+  transition: all .2s ease;
 }
 
 .invites-back,
 .invites-refresh,
 .invites-copy-btn {
-  padding: 12px 16px;
-  background: rgba(255, 250, 243, 0.88);
-  color: var(--fc-text-sec);
-}
-
-.invites-copy-main {
-  padding: 12px 18px;
-  background: linear-gradient(135deg, #bd7b3c 0%, #8a4e22 100%);
-  color: #fffaf3;
-  box-shadow: 0 18px 30px rgba(138, 78, 34, 0.22);
+  padding: 10px 16px;
+  background: var(--fc-surface);
+  color: var(--fc-text);
 }
 
 .invites-back:hover,
-.invites-copy-main:hover,
-.invites-copy-btn:hover,
-.invites-refresh:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.03);
+.invites-refresh:hover,
+.invites-copy-btn:hover {
+  border-color: var(--fc-border-strong);
+}
+
+.invites-copy-main {
+  padding: 10px 18px;
+  background: var(--fc-accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+.invites-copy-main:hover {
+  background: var(--fc-accent-strong);
 }
 
 .invites-kicker {
-  font-family: var(--fc-font);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--fc-text-muted);
+  color: var(--fc-accent);
 }
 
-.invites-top-copy h1,
-.invites-list-head h2 {
-  margin: 10px 0 10px;
+.invites-top-copy h1 {
+  margin: 12px 0 10px;
   font-family: var(--fc-font-display);
-  font-size: clamp(40px, 5vw, 58px);
-  line-height: 0.94;
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.015em;
   color: var(--fc-text);
 }
 
 .invites-list-head h2 {
-  font-size: 34px;
+  margin: 10px 0 10px;
+  font-family: var(--fc-font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--fc-text);
 }
 
 .invites-top-copy p,
 .invites-state p {
   max-width: 640px;
   margin: 0;
-  font-family: var(--fc-font);
-  font-size: 15px;
-  line-height: 1.7;
-  color: var(--fc-text-sec);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--fc-text-muted);
 }
 
 .invites-notice {
   margin-top: 20px;
   padding: 12px 18px;
   width: fit-content;
-  border-radius: 18px;
-  background: rgba(255, 250, 243, 0.92);
+  border-radius: 12px;
+  background: var(--fc-surface);
   border: 1px solid var(--fc-border);
-  font-family: var(--fc-font);
   font-size: 14px;
   color: var(--fc-text);
-  box-shadow: var(--fc-shadow-soft);
 }
 
 .invites-hero {
-  margin-top: 24px;
+  margin-top: 32px;
   display: grid;
   grid-template-columns: 1.2fr 1fr;
-  gap: 18px;
+  gap: 16px;
 }
 
 .invites-main-card,
@@ -332,20 +276,18 @@ function formatDateTime(value) {
 .invites-item,
 .invites-state {
   border: 1px solid var(--fc-border);
-  border-radius: 28px;
-  background: var(--fc-panel);
-  box-shadow: var(--fc-shadow-soft);
+  border-radius: var(--fc-radius-lg);
+  background: var(--fc-surface);
 }
 
 .invites-main-card {
-  padding: 26px;
+  padding: 28px;
 }
 
 .invites-main-label {
-  font-family: var(--fc-font);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
+  font-weight: 500;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--fc-text-muted);
 }
@@ -353,8 +295,8 @@ function formatDateTime(value) {
 .invites-main-code {
   margin-top: 18px;
   font-family: var(--fc-font-mono);
-  font-size: clamp(32px, 6vw, 52px);
-  line-height: 0.96;
+  font-size: clamp(24px, 5vw, 38px);
+  line-height: 1.02;
   color: var(--fc-text);
   word-break: break-all;
 }
@@ -365,7 +307,7 @@ function formatDateTime(value) {
 
 .invites-stats {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .invites-stat-card {
@@ -374,10 +316,9 @@ function formatDateTime(value) {
 
 .invites-stat-card span {
   display: block;
-  font-family: var(--fc-font);
   font-size: 12px;
   color: var(--fc-text-muted);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -385,13 +326,14 @@ function formatDateTime(value) {
   display: block;
   margin-top: 12px;
   font-family: var(--fc-font-display);
-  font-size: 30px;
-  line-height: 0.96;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.05;
   color: var(--fc-text);
 }
 
 .invites-list-card {
-  margin-top: 22px;
+  margin-top: 24px;
   padding: 24px;
 }
 
@@ -409,10 +351,10 @@ function formatDateTime(value) {
 }
 
 .invites-spinner {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   margin: 0 auto 16px;
-  border: 3px solid rgba(77, 52, 31, 0.10);
+  border: 2px solid var(--fc-border);
   border-top-color: var(--fc-accent);
   border-radius: 50%;
   animation: invites-spin .7s linear infinite;
@@ -444,7 +386,7 @@ function formatDateTime(value) {
 
 .invites-item-code {
   font-family: var(--fc-font-mono);
-  font-size: 26px;
+  font-size: 16px;
   color: var(--fc-text);
 }
 
@@ -453,9 +395,8 @@ function formatDateTime(value) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
-  font-family: var(--fc-font);
   font-size: 13px;
-  color: var(--fc-text-sec);
+  color: var(--fc-text-muted);
 }
 
 .invites-item-side {
@@ -468,34 +409,28 @@ function formatDateTime(value) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 12px;
+  padding: 4px 10px;
   border-radius: 999px;
-  font-family: var(--fc-font);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .invites-badge.idle {
-  background: rgba(235, 245, 230, 0.96);
-  color: #42673f;
+  background: rgba(82, 122, 77, 0.10);
+  color: var(--fc-success);
 }
 
 .invites-badge.used {
-  background: rgba(233, 225, 217, 0.96);
-  color: #7d6c5c;
+  background: var(--fc-bg-dark);
+  color: var(--fc-text-muted);
 }
 
 @media (max-width: 960px) {
-  .invites-hero {
-    grid-template-columns: 1fr;
-  }
+  .invites-hero { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
-  .invites-page {
-    padding: 20px 16px 28px;
-  }
-
+  .invites-page { padding: 24px 16px 32px; }
   .invites-top,
   .invites-list-head,
   .invites-item {
@@ -503,7 +438,6 @@ function formatDateTime(value) {
     flex-direction: column;
     align-items: flex-start;
   }
-
   .invites-item-side {
     width: 100%;
     justify-content: space-between;

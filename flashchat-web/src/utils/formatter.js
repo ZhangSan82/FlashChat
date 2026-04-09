@@ -47,6 +47,6 @@ export function getCountdownColor(ms) {
 
 export function generateAvatarUrl(name, color) {
   const ch = (name || '?').charAt(0).toUpperCase()
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" rx="40" fill="${color || '#C8956C'}"/><text x="40" y="40" dy=".35em" text-anchor="middle" font-family="Poppins,sans-serif" font-size="32" font-weight="600" fill="white">${ch}</text></svg>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" rx="40" fill="${color || '#C8956C'}"/><text x="40" y="40" dy=".35em" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="32" font-weight="600" fill="white">${ch}</text></svg>`
   return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
 }

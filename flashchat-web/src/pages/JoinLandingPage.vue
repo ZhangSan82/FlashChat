@@ -1,8 +1,5 @@
 <template>
   <div class="lp">
-    <div class="lp-bg-orb lp-orb-1"></div>
-    <div class="lp-bg-orb lp-orb-2"></div>
-
     <div class="lp-card" :class="{ 'is-visible': cardVisible }">
       <button class="lp-close" type="button" aria-label="close preview" @click="closePreview">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -249,63 +246,25 @@ function closePreview() {
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  background: var(--fc-app-gradient);
+  background: var(--fc-bg);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  position: relative;
-  overflow-x: hidden;
-}
-
-.lp-bg-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.34;
-  pointer-events: none;
-}
-
-.lp-orb-1 {
-  width: 300px;
-  height: 300px;
-  background: rgba(182, 118, 57, 0.72);
-  top: -80px;
-  right: -60px;
-}
-
-.lp-orb-2 {
-  width: 250px;
-  height: 250px;
-  background: rgba(224, 194, 161, 0.82);
-  bottom: -60px;
-  left: -40px;
 }
 
 .lp-card {
   width: 100%;
-  max-width: 430px;
-  background: var(--fc-panel-elevated);
+  max-width: 400px;
+  background: var(--fc-surface);
   border: 1px solid var(--fc-border);
-  border-radius: var(--fc-radius-xl);
+  border-radius: var(--fc-radius-lg);
   box-shadow: var(--fc-shadow-panel);
-  padding: 36px 28px 24px;
+  padding: 36px 32px 28px;
   position: relative;
-  z-index: 1;
-  overflow: hidden;
   opacity: 0;
   transform: translateY(20px) scale(0.97);
   transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.lp-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(135deg, rgba(255,255,255,0.18), transparent 42%),
-    radial-gradient(circle at top right, rgba(182,118,57,0.08), transparent 36%);
-  pointer-events: none;
 }
 
 .lp-card.is-visible {
@@ -317,25 +276,23 @@ function closePreview() {
   position: absolute;
   top: 16px;
   right: 16px;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: 1px solid var(--fc-border);
   border-radius: 50%;
-  background: rgba(255, 250, 243, 0.88);
+  background: var(--fc-surface);
   color: var(--fc-text-sec);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: var(--fc-shadow-soft);
-  transition: transform 0.22s ease, background 0.22s ease, color 0.22s ease;
+  transition: all 0.22s ease;
   z-index: 2;
 }
 
 .lp-close:hover {
-  background: #FFFFFF;
+  border-color: var(--fc-border-strong);
   color: var(--fc-text);
-  transform: rotate(90deg);
 }
 
 .lp-section {
@@ -364,9 +321,6 @@ function closePreview() {
 .lp-brand {
   text-align: center;
   margin-bottom: 28px;
-  font-family: var(--fc-font);
-  position: relative;
-  z-index: 1;
 }
 
 .lp-brand-icon {
@@ -376,52 +330,48 @@ function closePreview() {
 
 .lp-brand-name {
   font-family: var(--fc-font-display);
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 0.98;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.1;
   color: var(--fc-text);
 }
 
 .lp-loading {
   text-align: center;
   padding: 40px 0 20px;
-  position: relative;
-  z-index: 1;
 }
 
 .lp-pulse {
-  width: 56px;
-  height: 56px;
-  border-radius: 20px;
-  border: 1px solid rgba(72, 49, 28, 0.12);
-  background: rgba(255, 250, 243, 0.84);
-  box-shadow: var(--fc-shadow-soft);
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  border: 1px solid var(--fc-border);
+  background: var(--fc-surface);
   margin: 0 auto 20px;
   animation: lp-pulse-anim 1.5s ease-in-out infinite;
   position: relative;
 }
 
 .lp-pulse::after {
-  content: '⚡';
+  content: '\26A1';
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--fc-accent-strong);
-  font-size: 24px;
+  color: var(--fc-accent);
+  font-size: 18px;
 }
 
 @keyframes lp-pulse-anim {
-  0%, 100% { transform: translateY(0); box-shadow: 0 14px 26px rgba(61, 40, 22, 0.1); }
-  50% { transform: translateY(-2px); box-shadow: 0 18px 30px rgba(61, 40, 22, 0.14); }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
 }
 
 .lp-hint,
 .lp-error-hint,
 .lp-join-hint-label,
 .lp-join-hint-id {
-  font-family: var(--fc-font);
   font-size: 13px;
   color: var(--fc-text-sec);
 }
@@ -429,8 +379,6 @@ function closePreview() {
 .lp-error {
   text-align: center;
   padding: 24px 0 12px;
-  position: relative;
-  z-index: 1;
 }
 
 .lp-error-icon {
@@ -438,7 +386,6 @@ function closePreview() {
 }
 
 .lp-error-title {
-  font-family: var(--fc-font);
   font-size: 16px;
   font-weight: 600;
   color: var(--fc-text);
@@ -453,62 +400,56 @@ function closePreview() {
 
 .lp-room-hero {
   text-align: center;
-  position: relative;
-  z-index: 1;
 }
 
 .lp-room-cover {
-  width: 108px;
-  height: 108px;
-  border-radius: 32px;
+  width: 88px;
+  height: 88px;
+  border-radius: 24px;
   object-fit: cover;
-  margin: 0 auto 18px;
-  box-shadow: 0 20px 36px rgba(61, 40, 22, 0.16);
-  background: rgba(243, 231, 215, 0.92);
+  margin: 0 auto 16px;
+  background: linear-gradient(135deg, #E8D5BF, #C9A87C);
 }
 
 .lp-room-label {
-  font-family: var(--fc-font);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--fc-text-muted);
   text-align: center;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
 }
 
 .lp-room-label-soft {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .lp-room-hero-title {
   font-family: var(--fc-font-display);
-  font-size: 38px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 600;
   color: var(--fc-text);
-  line-height: 0.96;
+  line-height: 1.15;
   word-break: break-word;
 }
 
 .lp-room-hero-id {
-  margin-top: 8px;
+  margin-top: 6px;
   font-family: var(--fc-font-mono);
   font-size: 12px;
   color: var(--fc-text-muted);
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
 }
 
 .lp-divider {
   height: 1px;
-  margin: 20px 24px;
-  background: linear-gradient(90deg, transparent 0%, rgba(72, 49, 28, 0.16) 30%, rgba(72, 49, 28, 0.16) 70%, transparent 100%);
+  margin: 20px 0;
+  background: var(--fc-border);
 }
 
 .lp-room {
   margin-bottom: 4px;
-  position: relative;
-  z-index: 1;
 }
 
 .lp-room-stats {
@@ -522,7 +463,6 @@ function closePreview() {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--fc-font);
   font-size: 13px;
   color: var(--fc-text-sec);
 }
@@ -538,9 +478,9 @@ function closePreview() {
 .lp-join-hint {
   margin-top: 18px;
   padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(72, 49, 28, 0.08);
-  background: rgba(255, 250, 243, 0.76);
+  border-radius: 14px;
+  border: 1px solid var(--fc-border);
+  background: var(--fc-bg);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -553,28 +493,23 @@ function closePreview() {
   justify-content: center;
   gap: 6px;
   width: 100%;
-  padding: 16px;
+  padding: 14px;
   border: 1px solid transparent;
-  border-radius: 18px;
-  font-family: var(--fc-font);
-  font-size: 16px;
+  border-radius: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.25s ease;
-  position: relative;
-  z-index: 1;
+  transition: background 0.2s ease;
 }
 
 .lp-btn-cta {
   margin-top: 24px;
-  background: linear-gradient(135deg, #bd7b3c 0%, #8a4e22 100%);
-  color: #FFFFFF;
-  box-shadow: 0 18px 30px rgba(138, 78, 34, 0.22);
+  background: var(--fc-accent);
+  color: #fff;
 }
 
 .lp-btn-cta:hover:not(:disabled) {
-  box-shadow: 0 22px 34px rgba(138, 78, 34, 0.24);
-  transform: translateY(-1px);
+  background: var(--fc-accent-strong);
 }
 
 .lp-btn-cta:disabled {
@@ -584,15 +519,16 @@ function closePreview() {
 
 .lp-btn-outline {
   border-color: var(--fc-border);
-  background: rgba(255, 250, 243, 0.82);
-  color: var(--fc-text-sec);
+  background: var(--fc-surface);
+  color: var(--fc-text);
   padding: 10px 20px;
   width: auto;
   font-size: 14px;
+  font-weight: 500;
 }
 
 .lp-btn-outline:hover {
-  box-shadow: var(--fc-shadow-soft);
+  border-color: var(--fc-border-strong);
 }
 
 .lp-btn-loading {
@@ -615,16 +551,13 @@ function closePreview() {
 .lp-join-error {
   text-align: center;
   margin-top: 12px;
-  font-family: var(--fc-font);
   font-size: 13px;
   font-weight: 500;
   color: var(--fc-danger);
-  background: rgba(253, 236, 234, 0.86);
-  border: 1px solid rgba(184, 96, 75, 0.14);
-  border-radius: 14px;
+  background: rgba(184, 96, 75, 0.06);
+  border: 1px solid rgba(184, 96, 75, 0.12);
+  border-radius: 12px;
   padding: 10px 16px;
-  position: relative;
-  z-index: 1;
 }
 
 .lp-err-fade-enter-active { transition: all 0.3s ease; }
@@ -635,18 +568,15 @@ function closePreview() {
 .lp-footer {
   text-align: center;
   margin-top: 28px;
-  font-family: var(--fc-font);
   font-size: 11px;
   color: var(--fc-text-muted);
   letter-spacing: 0.12em;
-  position: relative;
-  z-index: 1;
 }
 
 @media (max-width: 440px) {
   .lp { padding: 16px 12px; }
-  .lp-card { padding: 28px 20px 20px; border-radius: 24px; }
-  .lp-room-cover { width: 88px; height: 88px; border-radius: 26px; }
-  .lp-room-hero-title { font-size: 30px; }
+  .lp-card { padding: 28px 20px 20px; }
+  .lp-room-cover { width: 72px; height: 72px; border-radius: 20px; }
+  .lp-room-hero-title { font-size: 20px; }
 }
 </style>

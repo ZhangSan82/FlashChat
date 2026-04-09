@@ -348,7 +348,6 @@ function formatDate(dt) {
   position: fixed;
   inset: 0;
   background: var(--fc-backdrop);
-  backdrop-filter: blur(18px);
   z-index: 9500;
   display: flex;
   justify-content: flex-end;
@@ -368,19 +367,13 @@ function formatDate(dt) {
 }
 
 .pp-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 20%),
-    radial-gradient(circle at top right, rgba(224, 194, 161, 0.16), transparent 28%);
-  pointer-events: none;
+  display: none;
 }
 
 .pp-hdr {
   height: 72px;
   padding: 0 22px;
-  border-bottom: 1px solid rgba(72, 49, 28, 0.08);
+  border-bottom: 1px solid var(--fc-border);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -410,7 +403,7 @@ function formatDate(dt) {
   height: 40px;
   border-radius: 50%;
   border: 1px solid var(--fc-border);
-  background: rgba(255, 250, 243, 0.82);
+  background: var(--fc-surface);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -425,9 +418,9 @@ function formatDate(dt) {
 
 .pp-title {
   font-family: var(--fc-font-display);
-  font-size: 28px;
-  line-height: 0.98;
-  font-weight: 700;
+  font-size: 20px;
+  line-height: 1.1;
+  font-weight: 600;
   color: var(--fc-text);
 }
 
@@ -448,7 +441,7 @@ function formatDate(dt) {
 .pp-spinner {
   width: 38px;
   height: 38px;
-  border: 3px solid rgba(72, 49, 28, 0.12);
+  border: 3px solid var(--fc-border);
   border-top-color: var(--fc-accent);
   border-radius: 50%;
   animation: pp-spin 0.7s linear infinite;
@@ -470,9 +463,9 @@ function formatDate(dt) {
   margin: 0 auto 14px;
   color: #fff;
   font-family: var(--fc-font);
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 600;
-  box-shadow: 0 18px 30px rgba(61, 40, 22, 0.14);
+  box-shadow: none;
 }
 
 .pp-avatar-img {
@@ -549,10 +542,9 @@ function formatDate(dt) {
   gap: 14px;
   padding: 18px 20px;
   text-align: left;
-  border: 1px solid rgba(72, 49, 28, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 26px;
-  background: rgba(255, 250, 243, 0.76);
-  box-shadow: var(--fc-shadow-soft);
+  background: var(--fc-surface);
   margin-bottom: 18px;
   position: relative;
   overflow: hidden;
@@ -561,13 +553,7 @@ function formatDate(dt) {
 .pp-profile-top::before,
 .pp-info-card::before,
 .pp-act-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.14), transparent 48%),
-    radial-gradient(circle at top right, rgba(182, 118, 57, 0.08), transparent 34%);
+  display: none;
 }
 
 .pp-avatar-shell {
@@ -575,7 +561,7 @@ function formatDate(dt) {
   height: 68px;
   padding: 4px;
   border-radius: 50%;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(221, 193, 163, 0.52));
+  background: var(--fc-bg);
 }
 
 .pp-profile-top .pp-avatar-lg {
@@ -583,8 +569,8 @@ function formatDate(dt) {
   height: 100%;
   margin: 0;
   border-radius: 50%;
-  font-size: 24px;
-  box-shadow: 0 12px 24px rgba(61, 40, 22, 0.14);
+  font-size: 20px;
+  box-shadow: none;
 }
 
 .pp-profile-top .pp-avatar-img {
@@ -598,8 +584,8 @@ function formatDate(dt) {
 .pp-name {
   margin: 0;
   font-family: var(--fc-font-display);
-  font-size: 26px;
-  line-height: 0.98;
+  font-size: 20px;
+  line-height: 1.1;
   color: var(--fc-text);
   word-break: break-word;
 }
@@ -616,9 +602,9 @@ function formatDate(dt) {
   width: 42px;
   height: 42px;
   padding: 0;
-  border: 1px solid rgba(72, 49, 28, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 50%;
-  background: rgba(243, 231, 215, 0.9);
+  background: var(--fc-bg);
   box-shadow: none;
   color: var(--fc-accent-strong);
   justify-content: center;
@@ -626,15 +612,14 @@ function formatDate(dt) {
 }
 
 .pp-edit-btn:hover {
-  background: #fffaf3;
-  box-shadow: var(--fc-shadow-soft);
+  background: var(--fc-surface);
+  border-color: var(--fc-border-strong);
 }
 
 .pp-info-card {
-  background: rgba(255, 250, 243, 0.76);
-  border: 1px solid rgba(72, 49, 28, 0.08);
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
   border-radius: 24px;
-  box-shadow: var(--fc-shadow-soft);
   padding: 6px 0;
   margin-bottom: 18px;
   position: relative;
@@ -646,7 +631,7 @@ function formatDate(dt) {
   justify-content: space-between;
   align-items: center;
   padding: 14px 18px;
-  border-bottom: 1px solid rgba(72, 49, 28, 0.06);
+  border-bottom: 1px solid var(--fc-border);
 }
 
 .pp-info-row:last-child {
@@ -663,7 +648,7 @@ function formatDate(dt) {
 
 .pp-credits {
   color: var(--fc-accent-strong);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 15px;
 }
 
@@ -676,7 +661,7 @@ function formatDate(dt) {
   padding: 4px 10px;
   border-radius: var(--fc-radius-pill);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pp-badge-ok {
@@ -701,10 +686,9 @@ function formatDate(dt) {
   align-items: center;
   gap: 12px;
   padding: 15px 16px;
-  border: 1px solid rgba(72, 49, 28, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 22px;
-  background: rgba(255, 250, 243, 0.76);
-  box-shadow: var(--fc-shadow-soft);
+  background: var(--fc-surface);
   color: var(--fc-text);
   cursor: pointer;
   text-align: left;
@@ -712,9 +696,8 @@ function formatDate(dt) {
 }
 
 .pp-act-btn:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 252, 248, 0.92);
-  box-shadow: 0 18px 32px rgba(61, 40, 22, 0.12);
+  background: var(--fc-bg);
+  border-color: var(--fc-border-strong);
 }
 
 .pp-act-btn:disabled {
@@ -731,7 +714,7 @@ function formatDate(dt) {
   align-items: center;
   justify-content: center;
   border-radius: 14px;
-  background: rgba(243, 231, 215, 0.96);
+  background: var(--fc-bg);
   font-size: 17px;
 }
 
@@ -746,19 +729,19 @@ function formatDate(dt) {
   background: var(--fc-accent-strong);
   color: #fff;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   padding: 4px 8px;
   border-radius: var(--fc-radius-pill);
 }
 
 .pp-act-highlight {
   border-left: none;
-  background: linear-gradient(180deg, rgba(248, 232, 211, 0.95), rgba(239, 218, 191, 0.95));
+  background: var(--fc-bg);
 }
 
 .pp-act-divider {
   margin: 8px 0;
-  background: linear-gradient(90deg, transparent, rgba(72, 49, 28, 0.14), transparent);
+  background: var(--fc-border);
   height: 1px;
 }
 
@@ -771,8 +754,8 @@ function formatDate(dt) {
 }
 
 .pp-input {
-  background: rgba(243, 231, 215, 0.92);
-  border: 1px solid rgba(72, 49, 28, 0.08);
+  background: var(--fc-bg);
+  border: 1px solid var(--fc-border);
   border-radius: 16px;
   box-shadow: none;
   width: 100%;
@@ -784,8 +767,8 @@ function formatDate(dt) {
 }
 
 .pp-input:focus {
-  border-color: rgba(138, 78, 34, 0.26);
-  box-shadow: 0 0 0 4px rgba(182, 118, 57, 0.08);
+  border-color: var(--fc-border-strong);
+  box-shadow: none;
 }
 
 .pp-edit {
@@ -819,7 +802,7 @@ function formatDate(dt) {
   border: 3px solid transparent;
   cursor: pointer;
   transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-  box-shadow: 0 10px 18px rgba(61, 40, 22, 0.10);
+  box-shadow: none;
 }
 
 .pp-color-btn.active {
@@ -857,28 +840,26 @@ function formatDate(dt) {
 }
 
 .pp-btn-ghost {
-  border: 1px solid rgba(72, 49, 28, 0.10);
-  background: rgba(255, 250, 243, 0.78);
+  border: 1px solid var(--fc-border);
+  background: var(--fc-surface);
   box-shadow: none;
   color: var(--fc-text-sec);
 }
 
 .pp-btn-ghost:hover {
-  transform: translateY(-1px);
-  background: #fffaf3;
-  box-shadow: var(--fc-shadow-soft);
+  background: var(--fc-bg);
+  border-color: var(--fc-border-strong);
 }
 
 .pp-btn-primary {
   border: 1px solid transparent;
-  background: linear-gradient(135deg, #bd7b3c 0%, #8a4e22 100%);
+  background: var(--fc-accent);
   color: #fffaf3;
-  box-shadow: 0 16px 28px rgba(138, 78, 34, 0.22);
+  box-shadow: none;
 }
 
 .pp-btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: brightness(1.03);
+  background: var(--fc-accent-strong);
 }
 
 .pp-btn:disabled {
@@ -892,9 +873,9 @@ function formatDate(dt) {
   left: 50%;
   transform: translateX(-50%);
   padding: 10px 20px;
-  background: rgba(255, 250, 243, 0.94);
-  border: 1px solid rgba(72, 49, 28, 0.08);
-  box-shadow: 0 14px 24px rgba(61, 40, 22, 0.12);
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  box-shadow: none;
   border-radius: var(--fc-radius-pill);
   font-family: var(--fc-font);
   font-size: 13px;
@@ -933,7 +914,7 @@ function formatDate(dt) {
   }
 
   .pp-title {
-    font-size: 24px;
+    font-size: 18px;
   }
 
   .pp-edit-acts {

@@ -231,23 +231,22 @@ function emitAction(name) {
   color: var(--fc-text);
   font-family: var(--fc-font);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
-  box-shadow: 0 12px 24px rgba(61, 40, 22, 0.06);
 }
 
 .mrs-action-soft {
-  background: linear-gradient(180deg, #f4e7d5 0%, #eddcc4 100%);
+  background: #eddcc4;
   color: #8c5a2b;
 }
 
 .mrs-action-warn {
-  background: linear-gradient(180deg, #f6e2c4 0%, #efd1a8 100%);
+  background: #efd1a8;
   color: #9a6328;
 }
 
 .mrs-action-danger {
-  background: linear-gradient(180deg, #f5ddda 0%, #edc7c2 100%);
+  background: #edc7c2;
   color: #a0554c;
 }
 
@@ -260,19 +259,15 @@ function emitAction(name) {
   min-height: 104px;
   padding: 16px;
   border-radius: 28px;
-  background: linear-gradient(180deg, rgba(255, 252, 247, 0.995), rgba(248, 239, 227, 0.985));
-  border: 1px solid rgba(77, 52, 31, 0.08);
-  box-shadow: 0 18px 34px rgba(61, 40, 22, 0.09);
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  box-shadow: var(--fc-shadow-soft);
   overflow: hidden;
 }
 
+/* .mrs-card-sheen overlay removed for fusion design */
 .mrs-card-sheen {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.42), transparent 42%),
-    radial-gradient(circle at top right, rgba(221, 193, 163, 0.18), transparent 34%);
-  pointer-events: none;
+  display: none;
 }
 
 .mrs-avatar-shell {
@@ -282,8 +277,8 @@ function emitAction(name) {
   height: 58px;
   padding: 4px;
   border-radius: 999px;
-  background: rgba(255, 250, 243, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.56), 0 10px 22px rgba(125, 86, 45, 0.14);
+  background: var(--fc-surface);
+  box-shadow: inset 0 0 0 1px var(--fc-border);
 }
 
 .mrs-avatar {
@@ -292,7 +287,7 @@ function emitAction(name) {
   border-radius: 999px;
   object-fit: cover;
   display: block;
-  background: linear-gradient(180deg, #d7b382 0%, #b9864d 100%);
+  background: var(--fc-accent);
 }
 
 .mrs-body {
@@ -335,8 +330,8 @@ function emitAction(name) {
   flex: 1;
   margin-top: 10px;
   font-family: var(--fc-font-display);
-  font-size: 28px;
-  line-height: 1;
+  font-size: 18px;
+  line-height: 1.15;
   font-weight: 600;
   color: var(--fc-text);
   white-space: nowrap;
@@ -358,14 +353,13 @@ function emitAction(name) {
   border-radius: 999px;
   font-family: var(--fc-font);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .mrs-badge {
   min-width: 24px;
   background: #c96c59;
   color: #fffaf3;
-  box-shadow: 0 8px 16px rgba(201, 108, 89, 0.22);
 }
 
 .mrs-members {

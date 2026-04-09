@@ -4,6 +4,7 @@ import * as roomApi from '@/api/room'
 import { uploadFile } from '@/api/file'
 import { formatTime, formatDate, formatCountdownShort } from '@/utils/formatter'
 import { resolveAvatar, resolveBackendAvatar } from '@/utils/avatar'
+import { appendRoomPreviewMessage, setRoomPreviewMessages, updateRoomPreviewTopContent } from '@/utils/roomPreviewCache'
 
 /**
  * @param {Function} getMemberId    - () => t_account.id（数字）
@@ -135,6 +136,8 @@ export function useChat(getMemberId, getCurrentUser) {
 
     function transformRoom(room) {
         const memberId = getMemberId()
+        const roomName = room.title || room.roomName || room.roomId
+        const roomAvatar = (room.avatarUrl || room.roomAvatarUrl || '').trim()
 
         let users = mergeCurrentUserIntoUsers(roomUsersMap[room.roomId] || [])
 
@@ -174,8 +177,8 @@ export function useChat(getMemberId, getCurrentUser) {
 
         return {
             roomId: room.roomId,
-            roomName: room.title || room.roomName || room.roomId,
-            avatar: resolveAvatar(null, '#C8956C', room.title || room.roomName || '?'),
+            roomName,
+            avatar: roomAvatar || resolveAvatar(null, '#C8956C', roomName || '?'),
             unreadCount: unreadMap[room.roomId] || 0,
             index: room.createTime ? new Date(room.createTime).getTime() : 0,
             users,
@@ -243,12 +246,20 @@ export function useChat(getMemberId, getCurrentUser) {
 
     function rememberLastMessage(roomId, message) {
         if (!roomId || !message || message.system) return
+        const previewContent = getMessagePreviewContent(message)
         lastRealMsgMap[roomId] = {
             indexId: getMessageIndexId(message),
-            content: getMessagePreviewContent(message),
+            content: previewContent,
             username: message.username,
             senderId: message.senderId
         }
+        appendRoomPreviewMessage(roomId, {
+            indexId: getMessageIndexId(message),
+            content: previewContent,
+            username: message.username,
+            senderId: message.senderId,
+            timestamp: message?._raw?.timestamp || Date.now()
+        })
     }
 
     function rebuildRoomPreview(roomId, fallbackContent = '') {
@@ -258,11 +269,25 @@ export function useChat(getMemberId, getCurrentUser) {
             const lastMessage = [...messages.value].reverse().find(message => !message.system) || null
             if (lastMessage) rememberLastMessage(roomId, lastMessage)
             else delete lastRealMsgMap[roomId]
+
+            const recentMessages = [...messages.value]
+                .filter(message => message && !message.system)
+                .slice(-5)
+                .reverse()
+                .map(message => ({
+                    indexId: getMessageIndexId(message),
+                    content: getMessagePreviewContent(message),
+                    username: message.username,
+                    senderId: message.senderId,
+                    timestamp: message?._raw?.timestamp || Date.now()
+                }))
+            setRoomPreviewMessages(roomId, recentMessages, 5)
         } else if (fallbackContent && lastRealMsgMap[roomId]) {
             lastRealMsgMap[roomId] = {
                 ...lastRealMsgMap[roomId],
                 content: fallbackContent
             }
+            updateRoomPreviewTopContent(roomId, fallbackContent)
         }
 
         refreshRoomCountdowns()
@@ -608,7 +633,11 @@ export function useChat(getMemberId, getCurrentUser) {
             let uploaded = null
             if (files?.length) {
                 uploaded = await Promise.all(files.map(async f => {
-                    const dto = await uploadFile(f.blob)
+                    const fallbackName = f?.extension
+                        ? `file.${String(f.extension).replace(/^\./, '')}`
+                        : 'file'
+                    const uploadName = f?.name || f?.filename || fallbackName
+                    const dto = await uploadFile(f.blob, uploadName)
                     if (f.audio) dto.audio = true
                     if (f.duration) dto.duration = f.duration
                     return dto
@@ -853,7 +882,11 @@ export function useChat(getMemberId, getCurrentUser) {
             let uploaded = null
             if (files?.length) {
                 uploaded = await Promise.all(files.map(async f => {
-                    const dto = await uploadFile(f.blob)
+                    const fallbackName = f?.extension
+                        ? `file.${String(f.extension).replace(/^\./, '')}`
+                        : 'file'
+                    const uploadName = f?.name || f?.filename || fallbackName
+                    const dto = await uploadFile(f.blob, uploadName)
                     if (f.audio) dto.audio = true
                     if (f.duration) dto.duration = f.duration
                     return dto

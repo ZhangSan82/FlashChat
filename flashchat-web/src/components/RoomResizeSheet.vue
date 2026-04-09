@@ -123,7 +123,6 @@ function submit() {
   justify-content: center;
   padding: 20px;
   background: var(--fc-backdrop);
-  backdrop-filter: blur(18px);
   z-index: 9700;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -133,10 +132,10 @@ function submit() {
 .resize-card {
   width: min(560px, 100%);
   max-height: min(820px, calc(100dvh - 40px));
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 28px;
-  background: linear-gradient(180deg, rgba(255, 250, 243, 0.98), rgba(247, 239, 228, 0.98));
-  box-shadow: 0 30px 60px rgba(61, 40, 22, 0.22);
+  background: var(--fc-surface);
+  box-shadow: var(--fc-shadow-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -167,8 +166,8 @@ function submit() {
 
 .resize-title {
   margin: 8px 0 0;
-  font-family: var(--fc-font);
-  font-size: 26px;
+  font-family: var(--fc-font-display);
+  font-size: 20px;
   color: var(--fc-text);
 }
 
@@ -177,9 +176,9 @@ function submit() {
   height: 40px;
   border: 1px solid var(--fc-border);
   border-radius: 50%;
-  background: rgba(255, 250, 243, 0.82);
+  background: var(--fc-surface);
   color: var(--fc-text);
-  font-size: 24px;
+  font-size: 20px;
   cursor: pointer;
 }
 
@@ -200,20 +199,20 @@ function submit() {
 
 .resize-stat {
   padding: 16px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 22px;
-  background: rgba(255, 250, 243, 0.78);
+  background: var(--fc-surface);
 }
 
 .resize-stat.accent {
-  background: linear-gradient(180deg, rgba(251, 245, 236, 0.96), rgba(241, 225, 203, 0.96));
+  background: var(--fc-bg);
 }
 
 .resize-stat strong {
   display: block;
   margin-top: 10px;
   font-family: var(--fc-font);
-  font-size: 30px;
+  font-size: 22px;
   color: var(--fc-text);
 }
 
@@ -226,20 +225,22 @@ function submit() {
 
 .resize-preset {
   padding: 11px 16px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 999px;
-  background: rgba(255, 250, 243, 0.78);
+  background: var(--fc-surface);
   font-family: var(--fc-font);
   font-size: 13px;
   font-weight: 600;
   color: var(--fc-text-sec);
   cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease, color .18s ease;
 }
 
 .resize-preset.active {
-  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
-  border-color: transparent;
-  color: #fffaf3;
+  background: var(--fc-selected-bg);
+  border-color: var(--fc-selected-border);
+  color: var(--fc-selected-text);
+  box-shadow: var(--fc-selected-shadow);
 }
 
 .resize-label {
@@ -250,9 +251,9 @@ function submit() {
 .resize-input {
   width: 100%;
   padding: 14px 16px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 18px;
-  background: rgba(243, 231, 215, 0.9);
+  background: var(--fc-bg);
   color: var(--fc-text);
   font-family: var(--fc-font);
   font-size: 16px;
@@ -275,7 +276,7 @@ function submit() {
 .resize-btn {
   min-width: 132px;
   padding: 14px 18px;
-  border: 1px solid rgba(77, 52, 31, 0.10);
+  border: 1px solid var(--fc-border);
   border-radius: 18px;
   font-family: var(--fc-font);
   font-size: 14px;
@@ -284,14 +285,13 @@ function submit() {
 }
 
 .resize-btn-ghost {
-  background: rgba(255, 250, 243, 0.78);
+  background: var(--fc-surface);
   color: var(--fc-text-sec);
 }
 
 .resize-btn-primary {
-  background: linear-gradient(135deg, #b68450 0%, #8c5a2b 100%);
+  background: var(--fc-accent);
   color: #fffaf3;
-  box-shadow: 0 16px 28px rgba(140, 90, 43, 0.22);
 }
 
 .resize-btn:disabled {

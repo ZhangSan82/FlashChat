@@ -14,6 +14,7 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -251,6 +252,37 @@ public class MessageWindowServiceImpl implements MessageWindowService {
 
         } catch (Exception e) {
             log.warn("[窗口拉新失败] room={}, lastAck={}, 降级到 DB", roomId, lastAckMsgId, e);
+            degradedRooms.put(roomId, System.currentTimeMillis());
+            return null;
+        }
+    }
+
+    @Override
+    public List<ChatBroadcastMsgRespDTO> getLatestFromWindow(String roomId, int limit) {
+        if (isDegraded(roomId)) {
+            return null;
+        }
+
+        String key = buildKey(roomId);
+        int safeLimit = Math.max(1, Math.min(limit, 50));
+
+        try {
+            Set<String> members = stringRedisTemplate.opsForZSet()
+                    .reverseRange(key, 0, safeLimit - 1L);
+
+            if (members == null || members.isEmpty()) {
+                return List.of();
+            }
+
+            List<ChatBroadcastMsgRespDTO> list = members.stream()
+                    .map(json -> JSON.parseObject(json, ChatBroadcastMsgRespDTO.class))
+                    .collect(Collectors.toList());
+
+            // reverseRange returns newest-first; preview UI needs oldest->newest.
+            Collections.reverse(list);
+            return list;
+        } catch (Exception e) {
+            log.warn("[窗口取最新失败] room={}, limit={}, 降级到 DB", roomId, limit, e);
             degradedRooms.put(roomId, System.currentTimeMillis());
             return null;
         }
