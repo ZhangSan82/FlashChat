@@ -4,10 +4,10 @@ import com.flashchat.chatservice.config.MsgIdGenerator;
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.resp.ChatBroadcastMsgRespDTO;
-import com.flashchat.chatservice.dto.resp.WsRespDTO;
-import com.flashchat.chatservice.service.MessageWindowService;
+import com.flashchat.chatservice.service.MessageSideEffectService;
 import com.flashchat.chatservice.service.SystemMessageService;
-import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
+import com.flashchat.chatservice.service.dispatch.RoomSerialLock;
+import com.flashchat.chatservice.service.persist.PersistResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,16 +24,21 @@ public class SystemMessageServiceImpl implements SystemMessageService {
 
     private final MsgIdGenerator msgIdGenerator;
     private final MessagePersistServiceImpl messagePersistService;
-    private final MessageWindowService messageWindowService;
-    private final RoomChannelManager roomChannelManager;
+    private final MessageSideEffectService messageSideEffectService;
+    private final RoomSerialLock roomSerialLock;
 
     @Override
     public void sendToRoom(String roomId, String content) {
-        try {
+        PersistResult persistResult;
+        // 房间级串行临界区:与 ChatServiceImpl.sendMsg 共享同一把锁,
+        // 保证系统消息与用户消息在同一房间内的 msgSeqId 分配顺序
+        // 与 mailbox 提交顺序严格一致。
+        synchronized (roomSerialLock.lockFor(roomId)) {
             // 1. 生成消息 ID
             String msgId = UUID.randomUUID().toString().replace("-", "");
             Long msgSeqId = msgIdGenerator.tryNextId();
-            if (msgSeqId == null) {
+            boolean redisIdAllocated = msgSeqId != null;
+            if (!redisIdAllocated) {
                 msgSeqId = msgIdGenerator.fallbackNextId();
             }
             // 2. 构建消息实体
@@ -50,8 +55,10 @@ public class SystemMessageServiceImpl implements SystemMessageService {
                     .isHost(0)
                     .build();
             messageDO.setId(msgSeqId);
-            // 3. 异步持久化
-            messagePersistService.saveAsync(messageDO);
+            // 3. 建立 durable handoff
+            persistResult = redisIdAllocated
+                    ? messagePersistService.saveAsync(messageDO)
+                    : messagePersistService.saveSync(messageDO);
             // 4. 构建广播 DTO
             ChatBroadcastMsgRespDTO broadcastMsg = ChatBroadcastMsgRespDTO.builder()
                     ._id(msgId)
@@ -66,14 +73,11 @@ public class SystemMessageServiceImpl implements SystemMessageService {
                     .system(true)
                     .deleted(false)
                     .build();
-            // 5. 写入消息滑动窗口
-            messageWindowService.addToWindow(roomId, msgSeqId, broadcastMsg);
-            // 6. 广播给聊天房间全员
-            roomChannelManager.broadcastToRoom(roomId,
-                    WsRespDTO.of(roomId, WsRespDTOTypeEnum.CHAT_BROADCAST, broadcastMsg));
-            log.info("[系统消息] room={}, content={}", roomId, content);
-        } catch (Exception e) {
-            log.error("[系统消息发送失败] room={}, content={}", roomId, content, e);
+            // 5. 提交 side effect mailbox(写窗口 + 广播)
+            messageSideEffectService.dispatchSystemMessageAccepted(roomId, msgSeqId, broadcastMsg);
         }
+
+        log.info("[系统消息] room={}, acceptedBy={}, content={}",
+                roomId, persistResult.acceptedBy(), content);
     }
 }

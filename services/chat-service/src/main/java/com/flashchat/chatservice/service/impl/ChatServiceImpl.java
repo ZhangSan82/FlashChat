@@ -19,10 +19,11 @@ import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.*;
 import com.flashchat.chatservice.ratelimit.MessageRateLimiter;
 import com.flashchat.chatservice.service.*;
+import com.flashchat.chatservice.service.dispatch.RoomSerialLock;
+import com.flashchat.chatservice.service.persist.PersistResult;
 import com.flashchat.chatservice.service.strategy.msg.AbstractMsgHandler;
 import com.flashchat.chatservice.service.strategy.msg.MsgHandlerFactory;
 import com.flashchat.chatservice.toolkit.CursorUtils;
-import com.flashchat.chatservice.toolkit.JsonUtil;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
 import com.flashchat.convention.exception.ClientException;
@@ -49,7 +50,9 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private final UnreadService unreadService;
     private final MsgIdGenerator msgIdGenerator;
     private final MessageWindowService messageWindowService;
+    private final MessageSideEffectService messageSideEffectService;
     private final MessageAuditChain  messageAuditChain;
+    private final RoomSerialLock roomSerialLock;
     /** 撤回时间窗口：2 分钟（秒级精度） */
     private static final long RECALL_TIME_LIMIT_SECONDS = 2 * 60;
     /** 消息状态：正常 */
@@ -129,72 +132,73 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 throw new ClientException("只能引用同一房间的消息");
             }
         }
-        // ===== 6. 生成消息 ID =====
-        String msgId = UUID.randomUUID().toString().replace("-", "");
-        Integer isHost = memberInfo != null && memberInfo.isHost() ? 1 : 0;
-        Long msgSeqId = msgIdGenerator.tryNextId();
-        // ===== 7. 构建消息实体 =====
-        MessageDO messageDO = MessageDO.builder()
-                .msgId(msgId)
-                .roomId(roomId)
-                .content(contentSummary)
-                .body(bodyJson)
-                .replyMsgId(request.getReplyMsgId())
-                .avatarColor(memberInfo != null ? memberInfo.getAvatar() : "")
-                .msgType(msgType)
-                .nickname(memberInfo != null ? memberInfo.getNickname() : "匿名")
-                .senderId(accountId)
-                .status(0)
-                .isHost(isHost)
-                .build();
-        // ===== 8. 根据 ID 生成结果选择持久化路径 =====
-        if (msgSeqId != null) {
-            // ------ 正常路径：Redis 预分配 ID，异步写 DB ------
-            messageDO.setId(msgSeqId);
-            messagePersistServiceImpl.saveAsync(messageDO);
-        } else {
-            // ------ 降级路径：本地递增 ID，同步写 DB ------
-            // lastKnownId 保证 ID 一定大于所有已通过 Redis 分配的 ID
-            Long fallbackId = msgIdGenerator.fallbackNextId();
-            messageDO.setId(fallbackId);
-            messagePersistServiceImpl.saveSync(messageDO);
-            msgSeqId = fallbackId;
-
-            log.warn("[发消息-降级] Redis不可用，使用本地ID={}, room={}, memberId={}",
-                    fallbackId, roomId, accountId);
+        // ===== 6-11 房间级串行临界区 =====
+        // 目的:保证同一 roomId 的 "msgSeqId 分配 → durable handoff → mailbox submit"
+        // 三步在全局线程池中串行执行,避免 msgSeqId 顺序与 mailbox 提交顺序倒置,
+        // 从而保证房间内广播/窗口顺序正确。
+        // 临界区内包含一次 XADD(约 1ms),同房间吞吐 ~1000 msg/s,单机场景足够。
+        ChatBroadcastMsgRespDTO broadcastMsg;
+        Long finalMsgSeqId;
+        PersistResult persistResult;
+        synchronized (roomSerialLock.lockFor(roomId)) {
+            // ===== 6. 生成消息 ID =====
+            String msgId = UUID.randomUUID().toString().replace("-", "");
+            Integer isHost = memberInfo != null && memberInfo.isHost() ? 1 : 0;
+            Long msgSeqId = msgIdGenerator.tryNextId();
+            // ===== 7. 构建消息实体 =====
+            MessageDO messageDO = MessageDO.builder()
+                    .msgId(msgId)
+                    .roomId(roomId)
+                    .content(contentSummary)
+                    .body(bodyJson)
+                    .replyMsgId(request.getReplyMsgId())
+                    .avatarColor(memberInfo != null ? memberInfo.getAvatar() : "")
+                    .msgType(msgType)
+                    .nickname(memberInfo != null ? memberInfo.getNickname() : "匿名")
+                    .senderId(accountId)
+                    .status(0)
+                    .isHost(isHost)
+                    .build();
+            // ===== 8. 根据 ID 生成结果选择持久化路径 =====
+            if (msgSeqId != null) {
+                // ------ 正常路径:Redis 预分配 ID,异步写 DB ------
+                messageDO.setId(msgSeqId);
+                persistResult = messagePersistServiceImpl.saveAsync(messageDO);
+            } else {
+                // ------ 降级路径:本地递增 ID,同步写 DB ------
+                // lastKnownId 保证 ID 一定大于所有已通过 Redis 分配的 ID
+                Long fallbackId = msgIdGenerator.fallbackNextId();
+                messageDO.setId(fallbackId);
+                persistResult = messagePersistServiceImpl.saveSync(messageDO);
+                msgSeqId = fallbackId;
+                log.warn("[发消息-降级] Redis不可用,使用本地ID={}, room={}, memberId={}",
+                        fallbackId, roomId, accountId);
+            }
+            finalMsgSeqId = msgSeqId;
+            // ===== 9. 构建回复消息 DTO =====
+            ReplyMessageDTO replyMessageDTO = buildReplyMessageDTO(replyMsg);
+            // ===== 10. 构建广播消息 DTO =====
+            broadcastMsg = ChatBroadcastMsgRespDTO.builder()
+                    ._id(msgId)
+                    .indexId(msgSeqId)
+                    .content(contentSummary)
+                    .senderId(accountId.toString())
+                    .username(memberInfo != null ? memberInfo.getNickname() : "匿名")
+                    .avatar(memberInfo != null ? memberInfo.getAvatar() : "")
+                    .timestamp(System.currentTimeMillis())
+                    .isHost(memberInfo != null && memberInfo.isHost())
+                    .msgType(msgType)
+                    .files(files)
+                    .replyMessage(replyMessageDTO)
+                    .deleted(false)
+                    .system(false)
+                    .build();
+            // ===== 11. 提交 side effect mailbox(仍在临界区内,保证同房间 submit 顺序) =====
+            messageSideEffectService.dispatchUserMessageAccepted(roomId, accountId, msgSeqId, broadcastMsg);
         }
-        // ===== 9. 构建回复消息 DTO =====
-        ReplyMessageDTO replyMessageDTO = buildReplyMessageDTO(replyMsg);
 
-        // ===== 10. 构建广播消息 DTO =====
-        ChatBroadcastMsgRespDTO broadcastMsg = ChatBroadcastMsgRespDTO.builder()
-                ._id(msgId)
-                .indexId(msgSeqId)
-                .content(contentSummary)
-                .senderId(accountId.toString())
-                .username(memberInfo != null ? memberInfo.getNickname() : "匿名")
-                .avatar(memberInfo != null ? memberInfo.getAvatar() : "")
-                .timestamp(System.currentTimeMillis())
-                .isHost(memberInfo != null && memberInfo.isHost())
-                .msgType(msgType)
-                .files(files)
-                .replyMessage(replyMessageDTO)
-                .deleted(false)
-                .system(false)
-                .build();
-
-        // ===== 写入滑动窗口 =====
-        messageWindowService.addToWindow(roomId,msgSeqId,broadcastMsg);
-        // ===== 11. WebSocket 广播 =====
-        roomChannelManager.broadcastToRoom(roomId,
-                WsRespDTO.of(roomId, WsRespDTOTypeEnum.CHAT_BROADCAST, broadcastMsg));
-
-        log.info("[发消息] room={}, memberId={}, dbId={}, content={}",
-                roomId, accountId, msgSeqId, request.getContent());
-        // ===== 12. 更新发送者活跃时间 =====
-        roomChannelManager.touchMember(roomId, accountId);
-        // ===== 13. 未读计数 +1 =====
-        unreadService.incrementUnread(roomId, accountId);
+        log.info("[发消息] room={}, memberId={}, dbId={}, acceptedBy={}, content={}",
+                roomId, accountId, finalMsgSeqId, persistResult.acceptedBy(), request.getContent());
 
         return broadcastMsg;
     }
@@ -555,17 +559,17 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             throw new ClientException("操作冲突，请重试");
         }
         // ===== 8. 更新滑动窗口 =====
-        updateWindowReactions(msg, newReactionsMap);
-        // ===== 9. WS 广播 =====
         Map<String, List<String>> broadcastReactions = newReactionsMap.isEmpty()
                 ? null : newReactionsMap;
-        MsgReactionRespDTO respDTO = MsgReactionRespDTO.builder()
-                .msgId(msg.getMsgId())
-                .indexId(msg.getId())
-                .reactions(broadcastReactions)
-                .build();
-        roomChannelManager.broadcastToRoom(roomId,
-                WsRespDTO.of(roomId, WsRespDTOTypeEnum.MSG_REACTION_UPDATE, respDTO));
+        ChatBroadcastMsgRespDTO reactionWindowMsg = updateWindowReactions(msg, newReactionsMap);
+        // ===== 9. WS 广播 =====
+        messageSideEffectService.dispatchReactionUpdated(
+                roomId,
+                msg.getId(),
+                msg.getMsgId(),
+                broadcastReactions,
+                reactionWindowMsg
+        );
         log.info("[表情回应] room={}, msgId={}, emoji={}, operator={}, reactions={}",
                 roomId, msgId, emoji, accountId, broadcastReactions);
     }
@@ -573,16 +577,15 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     /**
      * 更新滑动窗口中消息的 reactions
      */
-    private void updateWindowReactions(MessageDO msg, Map<String, List<String>> newReactions) {
+    private ChatBroadcastMsgRespDTO updateWindowReactions(MessageDO msg, Map<String, List<String>> newReactions) {
         try {
             // 更新内存对象的 reactions，让 convertSingleToRespDTO 直接用新值
             msg.setReactions(newReactions.isEmpty() ? "{}" : JSON.toJSONString(newReactions));
-            ChatBroadcastMsgRespDTO dto = convertSingleToRespDTO(msg, Map.of());
-            messageWindowService.updateMemberByScore(
-                    msg.getRoomId(), msg.getId(), JsonUtil.toJson(dto));
+            return convertSingleToRespDTO(msg, Map.of());
         } catch (Exception e) {
             log.error("[reaction 窗口更新失败] msgId={}", msg.getId(), e);
         }
+        return null;
     }
 
     /**
@@ -659,24 +662,22 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         if (isRecall) {
             // 撤回：替换为 deleted 占位 JSON（保留在窗口中）
             ChatBroadcastMsgRespDTO recalledMsg = buildRecalledMsgForWindow(msg);
-            messageWindowService.updateMemberByScore(
-                    roomId, msg.getId(), JsonUtil.toJson(recalledMsg));
+            messageSideEffectService.dispatchMessageRecalled(
+                    roomId,
+                    msg.getId(),
+                    msg.getMsgId(),
+                    getSenderId(msg),
+                    recalledMsg
+            );
         } else {
             // 删除：直接从窗口移除（不占位）
-            messageWindowService.removeMemberByScore(roomId, msg.getId());
+            messageSideEffectService.dispatchMessageDeleted(
+                    roomId,
+                    msg.getId(),
+                    msg.getMsgId(),
+                    getSenderId(msg)
+            );
         }
-
-        // ===== 8. WS 广播（撤回/删除共用构建逻辑）=====
-        MsgRecallRespDTO broadcastData = MsgRecallRespDTO.builder()
-                .msgId(msg.getMsgId())
-                .indexId(msg.getId())
-                .senderId(getSenderId(msg))
-                .build();
-        WsRespDTOTypeEnum eventType = isRecall
-                ? WsRespDTOTypeEnum.MSG_RECALLED
-                : WsRespDTOTypeEnum.MSG_DELETED;
-        roomChannelManager.broadcastToRoom(roomId,
-                WsRespDTO.of(roomId, eventType, broadcastData));
         log.info("[{}成功] room={}, msgId={}, operator={}", opName, roomId, msgId, operatorId);
     }
 

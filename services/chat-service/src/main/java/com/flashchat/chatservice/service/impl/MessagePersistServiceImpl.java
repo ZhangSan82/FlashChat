@@ -2,22 +2,29 @@ package com.flashchat.chatservice.service.impl;
 
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
+import com.flashchat.chatservice.service.persist.PersistResult;
 import com.flashchat.chatservice.toolkit.JsonUtil;
-import lombok.RequiredArgsConstructor;
+import com.flashchat.convention.errorcode.BaseErrorCode;
+import com.flashchat.convention.exception.ServiceException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.RedisStreamCommands;
 import org.springframework.data.redis.connection.stream.ByteRecord;
+import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Collections;
 
-import static com.flashchat.chatservice.config.MessageStreamConfig.*;
+import static com.flashchat.chatservice.config.MessageStreamConfig.FIELD_PAYLOAD;
+import static com.flashchat.chatservice.config.MessageStreamConfig.STREAM_KEY;
+import static com.flashchat.chatservice.config.MessageStreamConfig.STREAM_MAX_LEN;
 
 /**
  * 消息持久化服务
@@ -36,11 +43,30 @@ import static com.flashchat.chatservice.config.MessageStreamConfig.*;
  */
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class MessagePersistServiceImpl {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final MessageMapper messageMapper;
+
+    private final Timer xaddTimer;
+    private final Counter xaddFailCounter;
+    private final Counter fallbackCounter;
+
+    public MessagePersistServiceImpl(StringRedisTemplate stringRedisTemplate,
+                                     MessageMapper messageMapper,
+                                     MeterRegistry meterRegistry) {
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.messageMapper = messageMapper;
+        this.xaddTimer = Timer.builder("chat.msg.xadd.duration")
+                .description("XADD 持久化握手耗时")
+                .register(meterRegistry);
+        this.xaddFailCounter = Counter.builder("chat.msg.xadd.fail")
+                .description("XADD 失败次数(触发降级 saveSync)")
+                .register(meterRegistry);
+        this.fallbackCounter = Counter.builder("chat.msg.persist.fallback")
+                .description("saveSync 降级路径调用次数")
+                .register(meterRegistry);
+    }
 
     /**
      * 异步持久化 — 写入 Redis Stream
@@ -52,7 +78,9 @@ public class MessagePersistServiceImpl {
      *   所以在入 Stream 之前补上 createTime = 消息发送时间（而非入库时间）
      * @param messageDO 消息实体（id 已由 MsgIdGenerator 预分配）
      */
-    public void saveAsync(MessageDO messageDO) {
+    public PersistResult saveAsync(MessageDO messageDO) {
+        // Timer.Sample 覆盖包括降级路径的完整延迟,便于监控 XADD 抖动
+        Timer.Sample sample = Timer.start();
         try {
             // 补充 createTime（自定义 SQL 不走 MyBatis-Plus 自动填充）
             if (messageDO.getCreateTime() == null) {
@@ -66,27 +94,33 @@ public class MessagePersistServiceImpl {
 
             // 使用 RedisCallback 访问底层 API，支持 MAXLEN 参数
             // Spring Data Redis 的 StreamOperations.add() 不支持 MAXLEN
-            stringRedisTemplate.execute((RedisCallback<Object>) connection -> {
+            RecordId recordId = stringRedisTemplate.execute((RedisCallback<RecordId>) connection -> {
                 ByteRecord record = StreamRecords.rawBytes(
                                 Collections.singletonMap(fieldKeyBytes, fieldValueBytes))
                         .withStreamKey(streamKeyBytes);
 
-                connection.streamCommands().xAdd(
+                return connection.streamCommands().xAdd(
                         record,
                         RedisStreamCommands.XAddOptions
                                 .maxlen(STREAM_MAX_LEN)
                                 .approximateTrimming(true)
                 );
-                return null;
             });
 
-            log.debug("[消息入 Stream] msgId={}, dbId={}",
-                    messageDO.getMsgId(), messageDO.getId());
+            if (recordId == null) {
+                throw new IllegalStateException("stream record id is null");
+            }
 
+            log.debug("[消息入 Stream] msgId={}, dbId={}, streamId={}",
+                    messageDO.getMsgId(), messageDO.getId(), recordId.getValue());
+            sample.stop(xaddTimer);
+            return PersistResult.acceptedByStream(messageDO.getMsgId(), messageDO.getId());
         } catch (Exception e) {
+            sample.stop(xaddTimer);
+            xaddFailCounter.increment();
             log.warn("[XADD 失败，降级同步写 DB] msgId={}, dbId={}, error={}",
                     messageDO.getMsgId(), messageDO.getId(), e.getMessage());
-            saveSync(messageDO);
+            return saveSync(messageDO);
         }
     }
 
@@ -100,17 +134,20 @@ public class MessagePersistServiceImpl {
      * 使用 MyBatis-Plus 的 insert()，createTime 由 MetaObjectHandler 自动填充
      * @param messageDO 消息实体（id 已分配，不会浪费）
      */
-    public void saveSync(MessageDO messageDO) {
+    public PersistResult saveSync(MessageDO messageDO) {
+        fallbackCounter.increment();
         try {
             messageMapper.insert(messageDO);
             log.info("[同步持久化成功-降级] msgId={}, dbId={}",
                     messageDO.getMsgId(), messageDO.getId());
+            return PersistResult.acceptedByDb(messageDO.getMsgId(), messageDO.getId());
         } catch (Exception e) {
             // 最后兜底：同步写也失败，记录完整消息到日志
-            // 运维可从日志中提取 JSON 手动恢复
+            // 但这里不再静默吞掉，而是继续向上抛异常阻断副作用
             log.error("[同步写 DB 失败] 消息可能丢失! msgId={}, dbId={}, payload={}",
                     messageDO.getMsgId(), messageDO.getId(),
                     JsonUtil.toJson(messageDO), e);
+            throw new ServiceException("消息持久化失败，请稍后重试", e, BaseErrorCode.SERVICE_ERROR);
         }
     }
 }
