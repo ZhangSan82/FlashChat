@@ -8,7 +8,11 @@
               <div class="info-kicker">Room Salon</div>
               <div class="info-title">房间名片</div>
             </div>
-            <button class="info-close" type="button" @click="emit('close')">×</button>
+            <button class="info-close" type="button" @click="emit('close')" aria-label="关闭房间信息">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
           </header>
 
           <div class="info-body">
@@ -316,7 +320,7 @@ watch(
 const roomName = computed(() => getRoomDisplayName(props.room))
 const roomVisualUrl = computed(() => getRoomVisualUrl(props.room))
 const heroCoverStyle = computed(() => ({
-  backgroundImage: `linear-gradient(180deg, rgba(33, 23, 13, 0.14), rgba(33, 23, 13, 0.62)), url("${roomVisualUrl.value}")`
+  backgroundImage: `linear-gradient(180deg, rgba(33, 23, 13, 0.08), rgba(33, 23, 13, 0.48)), url("${roomVisualUrl.value}")`
 }))
 const memberCount = computed(() => props.room?.memberCount || props.members.length || 0)
 const publicText = computed(() => (props.room?.isPublic === 1 ? '公开房间' : '私密房间'))
@@ -564,7 +568,8 @@ function formatDateTime(value) {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  background: linear-gradient(180deg, var(--fc-surface), transparent);
+  background: linear-gradient(180deg, rgba(255, 253, 249, 0.98) 0%, rgba(255, 253, 249, 0.9) 78%, rgba(255, 253, 249, 0) 100%);
+  backdrop-filter: blur(10px);
 }
 
 .info-kicker,
@@ -594,23 +599,29 @@ function formatDateTime(value) {
   height: 38px;
   border: 1px solid var(--fc-border);
   border-radius: 50%;
-  background: linear-gradient(180deg, #fffdf9 0%, #f8f1e7 100%);
+  background: rgba(255, 255, 255, 0.84);
   color: var(--fc-text);
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 4px 10px rgba(73, 52, 31, 0.08);
-  transition: border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+  box-shadow: none;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out), color var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out);
+}
+
+.info-close svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
 }
 
 .info-close:hover {
-  border-color: var(--fc-accent-weak);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 16px rgba(73, 52, 31, 0.14);
-}
-
-.info-close:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 4px 10px rgba(73, 52, 31, 0.1);
+  border-color: var(--fc-border-strong);
+  background: var(--fc-bg-light);
+  color: var(--fc-accent-strong);
+  box-shadow: 0 0 0 3px rgba(182, 118, 57, 0.08);
 }
 
 .info-body {
@@ -626,8 +637,8 @@ function formatDateTime(value) {
 .info-action {
   border: 1px solid var(--fc-border);
   border-radius: 28px;
-  background: var(--fc-panel);
-  box-shadow: var(--fc-shadow-soft);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 34px rgba(33, 26, 20, 0.06);
 }
 
 .info-hero {
@@ -682,10 +693,9 @@ function formatDateTime(value) {
 
 .info-status-pill.active,
 .info-badge.active {
-  background: linear-gradient(180deg, #F4FAF2 0%, #E4F3DF 100%);
-  border-color: rgba(82, 122, 77, 0.34);
+  background: rgba(84, 120, 76, 0.12);
+  border-color: rgba(84, 120, 76, 0.22);
   color: #42673f;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 8px rgba(82, 122, 77, 0.14);
 }
 
 .info-status-pill.warning,
@@ -725,8 +735,8 @@ function formatDateTime(value) {
   height: 96px;
   padding: 6px;
   border-radius: 999px;
-  background: rgba(255, 250, 243, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(255, 250, 243, 0.34);
+  background: rgba(255, 250, 243, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 250, 243, 0.26);
 }
 
 .info-avatar {
@@ -772,7 +782,7 @@ function formatDateTime(value) {
   gap: 14px;
   align-items: center;
   padding: 18px 24px 20px;
-  background: var(--fc-surface);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(252, 247, 239, 0.84) 100%);
 }
 
 .info-summary-item strong {
@@ -968,35 +978,30 @@ function formatDateTime(value) {
 
 .info-copy {
   padding: 8px 14px;
-  border: 1px solid rgba(95, 68, 43, 0.16);
+  border: 1px solid var(--fc-border);
   border-radius: 999px;
-  background: linear-gradient(180deg, #fffdf9 0%, #f7f0e5 100%);
+  background: rgba(255, 255, 255, 0.82);
   color: var(--fc-accent-strong);
   font-family: var(--fc-font);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 4px 10px rgba(82, 58, 35, 0.08);
-  transition: border-color 0.22s ease, background 0.22s ease, color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+  box-shadow: none;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out), color var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .info-copy:hover {
-  border-color: rgba(160, 122, 71, 0.42);
-  background: linear-gradient(180deg, #fffefb 0%, #f3e8d8 100%);
+  border-color: var(--fc-border-strong);
+  background: var(--fc-bg-light);
   color: var(--fc-accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 8px 16px rgba(82, 58, 35, 0.14);
-}
-
-.info-copy:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 4px 10px rgba(82, 58, 35, 0.1);
+  box-shadow: 0 0 0 3px rgba(182, 118, 57, 0.08);
 }
 
 .info-copy.copied {
-  background: linear-gradient(180deg, #f4faf2 0%, #e7f3e1 100%);
-  border-color: rgba(90, 140, 78, 0.35);
+  background: rgba(84, 120, 76, 0.12);
+  border-color: rgba(84, 120, 76, 0.24);
   color: #42673f;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 6px 14px rgba(82, 122, 77, 0.14);
+  box-shadow: none;
 }
 
 .info-share-grid {
@@ -1011,12 +1016,20 @@ function formatDateTime(value) {
   width: 100%;
   margin-top: 10px;
   padding: 12px 14px;
-  border: 1px solid rgba(72, 49, 28, 0.08);
+  border: 1px solid var(--fc-border);
   border-radius: 16px;
-  background: rgba(243, 231, 215, 0.92);
+  background: var(--fc-bg-light);
   color: var(--fc-text-sec);
   font-family: var(--fc-font-mono);
   font-size: 12px;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out);
+}
+
+.info-share-input:focus-visible {
+  outline: none;
+  border-color: var(--fc-border-strong);
+  background: #fffdf8;
+  box-shadow: 0 0 0 3px var(--fc-focus-ring);
 }
 
 .info-share-hint {
@@ -1053,7 +1066,7 @@ function formatDateTime(value) {
   padding: 14px;
   border: 1px solid var(--fc-border);
   border-radius: 20px;
-  background: var(--fc-surface);
+  background: #fffdfa;
 }
 
 .info-member-avatar-wrap {
@@ -1126,27 +1139,22 @@ function formatDateTime(value) {
 .info-mini-btn {
   min-height: 34px;
   padding: 8px 14px;
-  border: 1px solid rgba(90, 64, 38, 0.16);
+  border: 1px solid var(--fc-border);
   border-radius: 999px;
-  background: linear-gradient(180deg, #fffdf9 0%, #f8f1e7 100%);
+  background: rgba(255, 255, 255, 0.82);
   color: var(--fc-text);
   font-family: var(--fc-font);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 3px 8px rgba(73, 52, 31, 0.06);
-  transition: border-color 0.22s ease, background 0.22s ease, color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+  box-shadow: none;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out), color var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .info-mini-btn:hover {
-  border-color: rgba(160, 122, 71, 0.42);
-  background: linear-gradient(180deg, #fffefb 0%, #f4eadb 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 16px rgba(73, 52, 31, 0.12);
-}
-
-.info-mini-btn:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 4px 10px rgba(73, 52, 31, 0.09);
+  border-color: var(--fc-border-strong);
+  background: var(--fc-bg-light);
+  box-shadow: 0 0 0 3px rgba(182, 118, 57, 0.08);
 }
 
 .info-mini-btn:disabled {
@@ -1157,16 +1165,14 @@ function formatDateTime(value) {
 }
 
 .info-mini-btn.danger {
-  background: linear-gradient(180deg, #cc7558 0%, #b75b42 100%);
-  border-color: #b65a41;
-  color: #fffaf3;
-  box-shadow: 0 6px 14px rgba(158, 68, 53, 0.24);
+  background: rgba(184, 96, 75, 0.14);
+  border-color: rgba(184, 96, 75, 0.24);
+  color: var(--fc-danger);
 }
 
 .info-mini-btn.danger:hover {
-  border-color: #a74f3a;
-  background: linear-gradient(180deg, #d27d60 0%, #bd6247 100%);
-  box-shadow: 0 8px 18px rgba(158, 68, 53, 0.3);
+  border-color: rgba(184, 96, 75, 0.36);
+  background: rgba(184, 96, 75, 0.18);
 }
 
 .info-member-footnote {
@@ -1193,21 +1199,16 @@ function formatDateTime(value) {
   padding: 16px 18px;
   text-align: left;
   cursor: pointer;
-  background: linear-gradient(180deg, #fffdf9 0%, #f8f1e7 100%);
-  border-color: rgba(95, 67, 41, 0.15);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 7px 16px rgba(73, 52, 31, 0.08);
-  transition: border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+  background: rgba(255, 255, 255, 0.82);
+  border-color: var(--fc-border);
+  box-shadow: none;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .info-action:hover {
-  border-color: rgba(160, 122, 71, 0.44);
-  background: linear-gradient(180deg, #fffefb 0%, #f4eadb 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 12px 24px rgba(73, 52, 31, 0.12);
-}
-
-.info-action:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 6px 14px rgba(73, 52, 31, 0.1);
+  border-color: var(--fc-border-strong);
+  background: #fffdf8;
+  box-shadow: 0 14px 28px rgba(33, 26, 20, 0.06);
 }
 
 .info-action strong {
@@ -1229,13 +1230,13 @@ function formatDateTime(value) {
 }
 
 .info-action.danger {
-  background: linear-gradient(180deg, rgba(255, 246, 243, 0.98) 0%, rgba(255, 236, 231, 0.9) 100%);
+  background: rgba(255, 244, 241, 0.94);
   border-color: rgba(186, 91, 64, 0.28);
 }
 
 .info-action.danger:hover {
   border-color: rgba(176, 73, 46, 0.42);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 12px 24px rgba(176, 73, 46, 0.16);
+  box-shadow: 0 14px 28px rgba(176, 73, 46, 0.12);
 }
 
 .info-game-card {
@@ -1268,14 +1269,14 @@ function formatDateTime(value) {
 .info-game-btn {
   min-height: 44px;
   padding: 11px 20px;
-  border: 1px solid transparent;
+  border: 1px solid var(--fc-border);
   border-radius: 999px;
   font-family: var(--fc-font);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
-  transition: border-color 0.22s ease, background 0.22s ease, color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out), color var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .info-game-btn:hover {
@@ -1283,46 +1284,35 @@ function formatDateTime(value) {
 }
 
 .info-game-btn.primary {
-  border-color: rgba(175, 128, 40, 0.32);
-  background: linear-gradient(180deg, #dcb537 0%, #c79b23 100%);
+  border-color: transparent;
+  background: var(--fc-accent);
   color: #fffaf3;
-  box-shadow: inset 0 1px 0 rgba(255, 246, 212, 0.62), 0 10px 18px rgba(164, 118, 34, 0.28);
+  box-shadow: 0 10px 18px rgba(151, 90, 38, 0.18);
 }
 
 .info-game-btn.primary:hover {
-  border-color: rgba(162, 116, 29, 0.42);
-  background: linear-gradient(180deg, #e1be48 0%, #cd9f29 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 248, 222, 0.64), 0 13px 22px rgba(164, 118, 34, 0.34);
-}
-
-.info-game-btn.primary:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 0 rgba(255, 246, 212, 0.56), 0 7px 14px rgba(164, 118, 34, 0.26);
+  background: var(--fc-accent-strong);
+  box-shadow: 0 14px 24px rgba(151, 90, 38, 0.22);
 }
 
 .info-game-btn.ghost {
-  border-color: rgba(95, 67, 41, 0.18);
-  background: linear-gradient(180deg, #fffdf9 0%, #f7f0e5 100%);
+  border-color: var(--fc-border);
+  background: rgba(255, 255, 255, 0.82);
   color: var(--fc-text);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 6px 14px rgba(73, 52, 31, 0.08);
+  box-shadow: none;
 }
 
 .info-game-btn.ghost:hover {
-  border-color: rgba(160, 122, 71, 0.42);
-  background: linear-gradient(180deg, #fffefb 0%, #f3e8d8 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 18px rgba(73, 52, 31, 0.14);
+  border-color: var(--fc-border-strong);
+  background: var(--fc-bg-light);
+  box-shadow: 0 0 0 3px rgba(182, 118, 57, 0.08);
 }
 
 .info-game-btn.ghost.active {
-  border-color: rgba(185, 144, 53, 0.38);
-  background: linear-gradient(180deg, #f8f1de 0%, #efe2c5 100%);
+  border-color: var(--fc-selected-border);
+  background: var(--fc-selected-bg);
   color: var(--fc-accent-strong);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74), 0 9px 18px rgba(169, 131, 52, 0.18);
-}
-
-.info-game-btn.ghost:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 5px 12px rgba(73, 52, 31, 0.1);
+  box-shadow: var(--fc-selected-shadow);
 }
 
 .info-game-btn:disabled {
@@ -1338,8 +1328,8 @@ function formatDateTime(value) {
 .info-action:focus-visible,
 .info-game-btn:focus-visible {
   outline: none;
-  border-color: rgba(183, 142, 52, 0.62);
-  box-shadow: 0 0 0 3px rgba(213, 175, 90, 0.24);
+  border-color: var(--fc-border-strong);
+  box-shadow: 0 0 0 3px var(--fc-focus-ring);
 }
 
 .info-game-settings {
@@ -1366,16 +1356,24 @@ function formatDateTime(value) {
   color: var(--fc-text);
   font: inherit;
   font-size: 14px;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out);
+}
+
+.info-game-settings input:focus-visible {
+  outline: none;
+  border-color: var(--fc-border-strong);
+  background: #fffdf8;
+  box-shadow: 0 0 0 3px var(--fc-focus-ring);
 }
 
 .info-enter-active,
 .info-leave-active {
-  transition: opacity 0.24s ease;
+  transition: opacity var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .info-enter-active .info-panel,
 .info-leave-active .info-panel {
-  transition: transform 0.24s ease, opacity 0.24s ease;
+  transition: transform var(--fc-duration-normal) var(--fc-ease-in-out), opacity var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .info-enter-from,

@@ -8,7 +8,7 @@
 
           <div class="dr-head">
             <div>
-              <div class="dr-kicker">FlashChat</div>
+              <div class="fc-kicker">FlashChat</div>
               <div class="dr-sub">Salon Deck</div>
             </div>
             <button class="dr-close" type="button" aria-label="关闭" @click="$emit('close')">
@@ -41,7 +41,7 @@
             <span>{{ accountId ? '身份已同步' : '游客模式' }}</span>
           </div>
 
-          <div class="dr-section">快捷入口</div>
+          <div class="fc-section-label">快捷入口</div>
           <nav class="dr-nav">
             <button class="dr-item" type="button" @click="$emit('action', 'create')">
               <span class="dr-item-icon">
@@ -54,7 +54,11 @@
                 <strong>创建房间</strong>
                 <small>发起一场新的短时对话</small>
               </span>
-              <span class="dr-item-arrow">↗</span>
+              <span class="dr-item-arrow" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </span>
             </button>
 
             <button class="dr-item" type="button" @click="$emit('action', 'join')">
@@ -69,7 +73,11 @@
                 <strong>加入房间</strong>
                 <small>通过邀请码或房间 ID 进入</small>
               </span>
-              <span class="dr-item-arrow">↗</span>
+              <span class="dr-item-arrow" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </span>
             </button>
 
             <button class="dr-item" type="button" @click="$emit('action', 'public')">
@@ -85,7 +93,11 @@
                 <strong>公开大厅</strong>
                 <small>浏览正在开放中的公开房间</small>
               </span>
-              <span class="dr-item-arrow">→</span>
+              <span class="dr-item-arrow" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </span>
             </button>
 
             <button class="dr-item" type="button" @click="$emit('action', 'credits')">
@@ -99,7 +111,11 @@
                 <strong>积分中心</strong>
                 <small>查看余额、签到和积分流水</small>
               </span>
-              <span class="dr-item-arrow">→</span>
+              <span class="dr-item-arrow" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </span>
             </button>
 
             <button class="dr-item" type="button" @click="$emit('action', 'invites')">
@@ -114,7 +130,11 @@
                 <strong>邀请码</strong>
                 <small>查看和复制你的邀请码库存</small>
               </span>
-              <span class="dr-item-arrow">→</span>
+              <span class="dr-item-arrow" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </span>
             </button>
 
             <button class="dr-item" type="button" @click="$emit('action', 'profile')">
@@ -128,7 +148,11 @@
                 <strong>我的资料</strong>
                 <small>头像、昵称和账号设置</small>
               </span>
-              <span class="dr-item-arrow">↗</span>
+              <span class="dr-item-arrow" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </span>
             </button>
           </nav>
 
@@ -146,7 +170,11 @@
               <strong>退出登录</strong>
               <small>结束当前会话并返回入口</small>
             </span>
-            <span class="dr-item-arrow">↗</span>
+            <span class="dr-item-arrow" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </span>
           </button>
 
           <div class="dr-foot">Private rooms · quiet conversations</div>
@@ -184,7 +212,7 @@ defineEmits(['close', 'action'])
   max-width: 92vw;
   height: 100%;
   padding: 26px 22px 18px;
-  background: var(--fc-panel-elevated);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(252, 247, 239, 0.96) 100%);
   border-left: 1px solid var(--fc-border-strong);
   box-shadow: var(--fc-shadow-panel);
   display: flex;
@@ -226,13 +254,7 @@ defineEmits(['close', 'action'])
   margin-bottom: 18px;
 }
 
-.dr-kicker {
-  font-family: var(--fc-font);
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--fc-text-muted);
-}
+/* .dr-kicker → replaced by global .fc-kicker */
 
 .dr-sub {
   margin-top: 6px;
@@ -254,24 +276,27 @@ defineEmits(['close', 'action'])
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform .2s ease, background .2s ease;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out), color var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .dr-close:hover {
-  background: #fffaf3;
-  transform: rotate(90deg);
+  border-color: var(--fc-border-strong);
+  background: var(--fc-bg-light);
+  color: var(--fc-accent-strong);
+  box-shadow: 0 0 0 3px rgba(182, 118, 57, 0.08);
 }
 
 .dr-profile {
   padding: 18px;
   border: 1px solid var(--fc-border);
   border-radius: 24px;
-  background: var(--fc-surface);
+  background: linear-gradient(180deg, #fffefb 0%, #fcf7f0 100%);
   margin-bottom: 12px;
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
 .dr-avatar-shell {
@@ -341,21 +366,17 @@ defineEmits(['close', 'action'])
   padding: 7px 12px;
   border-radius: var(--fc-radius-pill);
   border: 1px solid var(--fc-border);
-  background: var(--fc-surface);
+  background: rgba(255, 255, 255, 0.76);
   font-family: var(--fc-font);
   font-size: 11px;
   font-weight: 600;
   color: var(--fc-accent-strong);
 }
 
-.dr-section {
+/* .dr-section → replaced by global .fc-section-label */
+.dr-nav + .fc-section-label,
+.dr-panel .fc-section-label {
   margin-bottom: 10px;
-  font-family: var(--fc-font);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--fc-text-muted);
 }
 
 .dr-nav {
@@ -366,17 +387,17 @@ defineEmits(['close', 'action'])
 
 .dr-item {
   width: 100%;
-  min-height: 94px;
+  min-height: 88px;
   display: flex;
   align-items: flex-start;
   gap: 14px;
   padding: 16px;
   border: 1px solid var(--fc-border);
   border-radius: 24px;
-  background: var(--fc-surface);
+  background: rgba(255, 255, 255, 0.82);
   cursor: pointer;
   text-align: left;
-  transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out), color var(--fc-duration-normal) var(--fc-ease-in-out);
   position: relative;
   overflow: hidden;
 }
@@ -387,7 +408,8 @@ defineEmits(['close', 'action'])
 
 .dr-item:hover {
   border-color: var(--fc-border-strong);
-  background: var(--fc-bg);
+  background: #fffdf8;
+  box-shadow: 0 12px 24px rgba(33, 26, 20, 0.06);
 }
 
 .dr-item-icon {
@@ -399,7 +421,7 @@ defineEmits(['close', 'action'])
   align-items: center;
   justify-content: center;
   color: var(--fc-accent-strong);
-  background: var(--fc-bg);
+  background: var(--fc-bg-light);
   flex-shrink: 0;
 }
 
@@ -427,9 +449,16 @@ defineEmits(['close', 'action'])
 }
 
 .dr-item-arrow {
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--fc-text-muted);
   padding-top: 4px;
+  flex-shrink: 0;
+}
+
+.dr-item-arrow svg {
+  display: block;
 }
 
 .dr-divider {
@@ -449,13 +478,19 @@ defineEmits(['close', 'action'])
   font-family: var(--fc-font);
   font-size: 12px;
   color: var(--fc-text-muted);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
 }
 
-.dr-enter-active { transition: opacity .28s ease; }
-.dr-leave-active { transition: opacity .22s ease; }
-.dr-enter-active .dr-panel { transition: transform .28s cubic-bezier(.2,.8,.2,1); }
-.dr-leave-active .dr-panel { transition: transform .2s ease; }
+.dr-close:focus-visible,
+.dr-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--fc-focus-ring);
+}
+
+.dr-enter-active { transition: opacity var(--fc-duration-normal) var(--fc-ease-in-out); }
+.dr-leave-active { transition: opacity var(--fc-duration-fast) var(--fc-ease-in-out); }
+.dr-enter-active .dr-panel { transition: transform var(--fc-duration-normal) var(--fc-ease-out); }
+.dr-leave-active .dr-panel { transition: transform var(--fc-duration-fast) var(--fc-ease-in-out); }
 .dr-enter-from, .dr-leave-to { opacity: 0; }
 .dr-enter-from .dr-panel, .dr-leave-to .dr-panel { transform: translateX(100%); }
 

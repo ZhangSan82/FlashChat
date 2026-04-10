@@ -5,7 +5,7 @@
         <div class="sheet-card">
           <div class="sheet-head">
             <div>
-              <div class="sheet-kicker">Room Setup</div>
+              <div class="fc-kicker">Room Setup</div>
               <h3 class="sheet-title">创建房间</h3>
             </div>
             <button class="sheet-close" type="button" @click="$emit('close')">×</button>
@@ -283,7 +283,7 @@ function clearAvatar() {
   padding: 26px 28px 18px;
 }
 
-.sheet-kicker,
+/* .sheet-kicker → replaced by global .fc-kicker */
 .sheet-label,
 .sheet-summary-label {
   font-family: var(--fc-font);
@@ -448,7 +448,7 @@ function clearAvatar() {
   border-radius: 22px;
   background: var(--fc-surface);
   cursor: pointer;
-  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+  transition: border-color var(--fc-duration-fast) var(--fc-ease-in-out), background-color var(--fc-duration-fast) var(--fc-ease-in-out), box-shadow var(--fc-duration-fast) var(--fc-ease-in-out);
 }
 
 .sheet-price:hover {
@@ -533,7 +533,7 @@ function clearAvatar() {
   font-weight: 600;
   color: var(--fc-text-sec);
   cursor: pointer;
-  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease, color .18s ease;
+  transition: border-color var(--fc-duration-fast) var(--fc-ease-in-out), background-color var(--fc-duration-fast) var(--fc-ease-in-out), box-shadow var(--fc-duration-fast) var(--fc-ease-in-out), color var(--fc-duration-fast) var(--fc-ease-in-out);
 }
 
 .sheet-toggle-btn.active {

@@ -408,7 +408,7 @@ function formatDate(dt) {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform .2s ease, background .2s ease;
+  transition: transform var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .pp-back:hover {
@@ -494,7 +494,7 @@ function formatDate(dt) {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity .2s ease;
+  transition: opacity var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .pp-avatar-edit-wrap:hover .pp-avatar-overlay {
@@ -692,7 +692,7 @@ function formatDate(dt) {
   color: var(--fc-text);
   cursor: pointer;
   text-align: left;
-  transition: background .2s ease, box-shadow .2s ease, transform .2s ease;
+  transition: background var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out), transform var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .pp-act-btn:hover {
@@ -801,7 +801,7 @@ function formatDate(dt) {
   border-radius: 50%;
   border: 3px solid transparent;
   cursor: pointer;
-  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  transition: transform var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out), border-color var(--fc-duration-normal) var(--fc-ease-in-out);
   box-shadow: none;
 }
 
@@ -836,7 +836,7 @@ function formatDate(dt) {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform .2s ease, box-shadow .2s ease, filter .2s ease, opacity .2s ease;
+  transition: transform var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out), filter var(--fc-duration-normal) var(--fc-ease-in-out), opacity var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .pp-btn-ghost {
@@ -888,18 +888,18 @@ function formatDate(dt) {
 .pp-toast-success { background: rgba(235, 245, 230, 0.96); color: #42673f; }
 .pp-toast-error { background: rgba(253, 236, 234, 0.96); color: #8b3a35; }
 
-.pp-toast-enter-active { transition: all .3s ease; }
-.pp-toast-leave-active { transition: all .2s ease; }
+.pp-toast-enter-active { transition: all var(--fc-duration-normal) var(--fc-ease-in-out); }
+.pp-toast-leave-active { transition: all var(--fc-duration-normal) var(--fc-ease-in-out); }
 .pp-toast-enter-from,
 .pp-toast-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(8px);
 }
 
-.pp-enter-active { transition: opacity .28s ease; }
-.pp-leave-active { transition: opacity .22s ease; }
-.pp-enter-active .pp-card { transition: transform .28s cubic-bezier(.2,.8,.2,1); }
-.pp-leave-active .pp-card { transition: transform .2s ease; }
+.pp-enter-active { transition: opacity var(--fc-duration-normal) var(--fc-ease-in-out); }
+.pp-leave-active { transition: opacity var(--fc-duration-fast) var(--fc-ease-in-out); }
+.pp-enter-active .pp-card { transition: transform var(--fc-duration-normal) var(--fc-ease-out); }
+.pp-leave-active .pp-card { transition: transform var(--fc-duration-fast) var(--fc-ease-in-out); }
 .pp-enter-from, .pp-leave-to { opacity: 0; }
 .pp-enter-from .pp-card, .pp-leave-to .pp-card { transform: translateX(100%); }
 

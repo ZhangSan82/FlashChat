@@ -9,7 +9,11 @@
       </button>
 
       <div class="lp-brand">
-        <span class="lp-brand-icon">⚡</span>
+        <span class="lp-brand-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 2L5 14h5l-1 8 8-12h-5l1-8z" />
+          </svg>
+        </span>
         <span class="lp-brand-name">FlashChat</span>
       </div>
 
@@ -41,7 +45,7 @@
       <template v-else>
         <div class="lp-section lp-room-hero" style="--delay: 0.08s">
           <img class="lp-room-cover" :src="roomVisualUrl" :alt="roomTitle" />
-          <div class="lp-room-label">房间预览</div>
+          <div class="fc-section-label">房间预览</div>
           <div class="lp-room-hero-title">{{ roomTitle }}</div>
           <div class="lp-room-hero-id">{{ roomId }}</div>
         </div>
@@ -49,7 +53,7 @@
         <div class="lp-divider" style="--delay: 0.14s"></div>
 
         <div class="lp-section lp-room" style="--delay: 0.2s">
-          <div class="lp-room-label lp-room-label-soft">房间信息</div>
+          <div class="fc-section-label">房间信息</div>
 
           <div class="lp-room-stats">
             <div class="lp-stat">
@@ -264,7 +268,7 @@ function closePreview() {
   position: relative;
   opacity: 0;
   transform: translateY(20px) scale(0.97);
-  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity var(--fc-duration-slow) var(--fc-ease-in-out), transform var(--fc-duration-slow) var(--fc-ease-bounce);
 }
 
 .lp-card.is-visible {
@@ -286,7 +290,7 @@ function closePreview() {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.22s ease;
+  transition: all var(--fc-duration-normal) var(--fc-ease-in-out);
   z-index: 2;
 }
 
@@ -319,13 +323,26 @@ function closePreview() {
 }
 
 .lp-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
   text-align: center;
   margin-bottom: 28px;
 }
 
 .lp-brand-icon {
-  font-size: 20px;
-  margin-right: 6px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid var(--fc-border);
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--fc-accent-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
 .lp-brand-name {
@@ -411,18 +428,11 @@ function closePreview() {
   background: linear-gradient(135deg, #E8D5BF, #C9A87C);
 }
 
-.lp-room-label {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--fc-text-muted);
+/* .lp-room-label → replaced by global .fc-section-label */
+.lp-section .fc-section-label,
+.lp-room-hero .fc-section-label {
   text-align: center;
   margin-bottom: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.lp-room-label-soft {
-  margin-bottom: 14px;
 }
 
 .lp-room-hero-title {
@@ -499,7 +509,7 @@ function closePreview() {
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .lp-btn-cta {
@@ -560,8 +570,8 @@ function closePreview() {
   padding: 10px 16px;
 }
 
-.lp-err-fade-enter-active { transition: all 0.3s ease; }
-.lp-err-fade-leave-active { transition: all 0.25s ease; }
+.lp-err-fade-enter-active { transition: all var(--fc-duration-normal) var(--fc-ease-in-out); }
+.lp-err-fade-leave-active { transition: all var(--fc-duration-normal) var(--fc-ease-in-out); }
 .lp-err-fade-enter-from { opacity: 0; transform: translateY(-6px); }
 .lp-err-fade-leave-to { opacity: 0; transform: translateY(-6px); }
 

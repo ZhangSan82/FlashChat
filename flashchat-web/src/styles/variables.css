@@ -1,47 +1,50 @@
 :root {
   /* ── surfaces ── */
-  --fc-bg: #F8F5F0;
-  --fc-bg-light: #FAF8F4;
-  --fc-bg-dark: #F3EEE8;
+  --fc-bg: #F7F2EB;
+  --fc-bg-light: #FCF8F2;
+  --fc-bg-dark: #EFE7DC;
   --fc-surface: #FFFFFF;
-  --fc-surface-soft: rgba(255, 255, 255, 0.82);
-  --fc-surface-strong: rgba(255, 255, 255, 0.94);
-  --fc-surface-muted: #F3EEE8;
+  --fc-surface-soft: rgba(255, 255, 255, 0.84);
+  --fc-surface-strong: rgba(255, 255, 255, 0.96);
+  --fc-surface-muted: #F4EDE3;
   --fc-panel: #FFFFFF;
-  --fc-panel-elevated: #FFFFFF;
+  --fc-panel-elevated: #FFFDF9;
 
   /* ── text ── */
-  --fc-text: #1C1714;
-  --fc-text-sec: #5C4F42;
-  --fc-text-muted: #9E9083;
+  --fc-text: #211A14;
+  --fc-text-sec: #5E4F42;
+  --fc-text-muted: #948474;
 
   /* ── accent ── */
-  --fc-accent: #D4AF37;
-  --fc-accent-strong: #A88310;
-  --fc-accent-soft: #E8D89B;
-  --fc-accent-veil: rgba(212, 175, 55, 0.12);
-  --fc-selected-bg: linear-gradient(180deg, #FFF8E7 0%, #F4E4BF 100%);
-  --fc-selected-bg-soft: rgba(212, 175, 55, 0.18);
-  --fc-selected-border: rgba(168, 131, 16, 0.50);
-  --fc-selected-ring: rgba(212, 175, 55, 0.28);
-  --fc-selected-text: #3F3429;
-  --fc-selected-shadow: 0 0 0 2px var(--fc-selected-ring), 0 8px 16px rgba(168, 131, 16, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  --fc-accent: #B67639;
+  --fc-accent-strong: #975A26;
+  --fc-accent-soft: #D6B084;
+  --fc-accent-weak: rgba(182, 118, 57, 0.24);
+  --fc-accent-veil: rgba(182, 118, 57, 0.12);
+  --fc-selected-bg: #FFF8F0;
+  --fc-selected-bg-soft: rgba(182, 118, 57, 0.14);
+  --fc-selected-border: rgba(151, 90, 38, 0.22);
+  --fc-selected-ring: rgba(182, 118, 57, 0.16);
+  --fc-selected-text: #3A2C21;
+  --fc-selected-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 2px var(--fc-selected-ring);
+  --fc-focus-ring: rgba(182, 118, 57, 0.22);
 
   /* ── semantic ── */
   --fc-danger: #B8604B;
-  --fc-success: #527A4D;
-  --fc-warn: #9E6E1F;
-  --fc-info: #4A7080;
+  --fc-success: #54784C;
+  --fc-warn: #9A6A24;
+  --fc-info: #4F7080;
 
   /* ── borders ── */
-  --fc-border: rgba(28, 23, 20, 0.08);
-  --fc-border-strong: rgba(28, 23, 20, 0.14);
-  --fc-line: rgba(28, 23, 20, 0.06);
+  --fc-border: rgba(33, 26, 20, 0.08);
+  --fc-border-strong: rgba(33, 26, 20, 0.14);
+  --fc-line: rgba(33, 26, 20, 0.05);
 
-  /* ── shadows — reduced, no heavy panel shadows ── */
-  --fc-shadow-out: 0 12px 32px rgba(28, 23, 20, 0.08);
-  --fc-shadow-soft: 0 4px 16px rgba(28, 23, 20, 0.06);
-  --fc-shadow-panel: 0 24px 64px rgba(28, 23, 20, 0.12);
+  /* ── shadows ── */
+  --fc-shadow-soft: 0 10px 24px rgba(33, 26, 20, 0.06);
+  --fc-shadow-out: 0 18px 44px rgba(33, 26, 20, 0.08);
+  --fc-shadow-elevated: 0 14px 32px rgba(33, 26, 20, 0.08), 0 2px 8px rgba(33, 26, 20, 0.04);
+  --fc-shadow-panel: 0 28px 72px rgba(33, 26, 20, 0.14);
   --fc-shadow-in: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 
   /* ── radii — slightly smaller ── */
@@ -52,14 +55,22 @@
   --fc-radius-pill: 999px;
 
   /* ── overlay ── */
-  --fc-backdrop: rgba(28, 23, 20, 0.32);
+  --fc-backdrop: rgba(27, 21, 17, 0.36);
 
-  /* ── app background — clean, no multi-layer gradient ── */
-  --fc-app-gradient: #F8F5F0;
+  /* ── app background ── */
+  --fc-app-gradient: linear-gradient(180deg, #FCF8F2 0%, #F7F2EB 46%, #F2EADF 100%);
 
-  /* ── fonts — Lora serif for display ── */
+  /* ── motion ── */
+  --fc-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --fc-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --fc-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --fc-duration-fast: 150ms;
+  --fc-duration-normal: 250ms;
+  --fc-duration-slow: 400ms;
+
+  /* ── fonts ── */
   --fc-font: 'Karla', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
-  --fc-font-display: 'Playfair Display SC', 'Noto Serif SC', 'PingFang SC', Georgia, serif;
+  --fc-font-display: 'Lora', 'Noto Serif SC', 'PingFang SC', Georgia, serif;
   --fc-font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
 
   /* ── typography scale ── */

@@ -317,7 +317,7 @@ function formatDateTime(value) {
   background: var(--fc-surface);
   text-align: left;
   cursor: pointer;
-  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+  transition: border-color var(--fc-duration-fast) var(--fc-ease-in-out), background-color var(--fc-duration-fast) var(--fc-ease-in-out), box-shadow var(--fc-duration-fast) var(--fc-ease-in-out);
 }
 
 .extend-option.active {

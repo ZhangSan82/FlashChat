@@ -287,12 +287,12 @@ async function copyShareUrl() {
 
 .created-room-enter-active,
 .created-room-leave-active {
-  transition: opacity .24s ease;
+  transition: opacity var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .created-room-enter-active .created-room-card,
 .created-room-leave-active .created-room-card {
-  transition: transform .24s ease, opacity .24s ease;
+  transition: transform var(--fc-duration-normal) var(--fc-ease-in-out), opacity var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .created-room-enter-from,

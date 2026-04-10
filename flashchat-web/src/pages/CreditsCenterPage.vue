@@ -1,85 +1,117 @@
 <template>
   <div class="credits-page">
+    <div class="credits-shell">
+      <header class="credits-top">
+        <div class="credits-toolbar">
+          <button class="credits-back" type="button" @click="goRoomList">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+            <span>返回房间列表</span>
+          </button>
 
-    <header class="credits-top">
-      <button class="credits-back" type="button" @click="goRoomList">返回房间列表</button>
-      <div class="credits-top-copy">
-        <div class="credits-kicker">Credits Center</div>
-        <h1>积分中心</h1>
-        <p>查看余额、每日签到以及最近的积分流水。</p>
-      </div>
-      <button class="credits-sign" type="button" :disabled="checkingIn || checkedIn" @click="handleCheckIn">
-        {{ checkedIn ? '今日已签到' : (checkingIn ? '签到中...' : '每日签到 +10') }}
-      </button>
-    </header>
-
-    <div v-if="notice" class="credits-notice" :class="`is-${notice.type}`">{{ notice.text }}</div>
-
-    <section class="credits-hero">
-      <div class="credits-balance-card">
-        <div class="credits-balance-label">当前余额</div>
-        <div class="credits-balance-value">{{ balanceDisplay }}</div>
-        <div class="credits-balance-meta">
-          <span>{{ account?.nickname || '游客' }}</span>
-          <span v-if="account?.inviteCode">邀请码 {{ account.inviteCode }}</span>
+          <transition name="credits-notice-fade">
+            <div v-if="notice" class="credits-notice" :class="`is-${notice.type}`">{{ notice.text }}</div>
+          </transition>
         </div>
-      </div>
 
-      <div class="credits-summary-grid">
-        <div class="credits-summary-card">
-          <span>今日签到状态</span>
-          <strong>{{ checkedIn ? '已完成' : '待签到' }}</strong>
+        <div class="credits-overview">
+          <section class="credits-main-card">
+            <div class="fc-kicker">Credits</div>
+            <h1>积分中心</h1>
+            <p>当前余额与积分流水</p>
+
+            <div class="credits-balance-panel">
+              <div>
+                <div class="fc-section-label">当前余额</div>
+                <div class="credits-balance-value">{{ balanceDisplay }}</div>
+              </div>
+              <span class="credits-status" :class="{ ready: checkedIn }">
+                {{ checkedIn ? '今日已签到' : '待签到' }}
+              </span>
+            </div>
+
+            <div class="credits-meta">
+              <span>{{ account?.nickname || '游客' }}</span>
+              <span>{{ account?.isRegistered ? '注册用户' : '匿名成员' }}</span>
+            </div>
+
+            <div class="credits-actions">
+              <button class="credits-sign" type="button" :disabled="checkingIn || checkedIn" @click="handleCheckIn">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3l2.7 5.47 6.03.88-4.36 4.25 1.03 6-5.4-2.84-5.4 2.84 1.03-6L3.27 9.35l6.03-.88L12 3z" />
+                </svg>
+                <span>{{ checkedIn ? '今日已签到' : (checkingIn ? '签到中...' : '签到 +10') }}</span>
+              </button>
+
+              <button class="credits-refresh" type="button" :disabled="loading" @click="loadAll(true)">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 5v6h-6M4 19v-6h6M6.8 9A7 7 0 0 1 18 7l2 2M17.2 15A7 7 0 0 1 6 17l-2-2" />
+                </svg>
+                <span>{{ loading ? '刷新中...' : '刷新' }}</span>
+              </button>
+            </div>
+          </section>
+
+          <aside class="credits-stats">
+            <article class="credits-stat-card">
+              <span>签到状态</span>
+              <strong>{{ checkedIn ? '已完成' : '待签到' }}</strong>
+            </article>
+
+            <article class="credits-stat-card">
+              <span>流水条数</span>
+              <strong>{{ transactions.length }}</strong>
+            </article>
+
+            <article class="credits-stat-card">
+              <span>账户身份</span>
+              <strong>{{ account?.isRegistered ? '注册用户' : '匿名成员' }}</strong>
+            </article>
+          </aside>
         </div>
-        <div class="credits-summary-card">
-          <span>流水条数</span>
-          <strong>{{ transactions.length }}</strong>
-        </div>
-        <div class="credits-summary-card">
-          <span>账号身份</span>
-          <strong>{{ account?.isRegistered ? '注册用户' : '匿名成员' }}</strong>
-        </div>
-      </div>
-    </section>
+      </header>
 
-    <section class="credits-ledger">
-      <div class="credits-ledger-head">
-        <div>
-          <div class="credits-kicker">Ledger</div>
-          <h2>积分流水</h2>
-        </div>
-        <button class="credits-refresh" type="button" :disabled="loading" @click="loadAll(true)">刷新</button>
-      </div>
-
-      <div v-if="loading && transactions.length === 0" class="credits-state">
-        <div class="credits-spinner"></div>
-        <p>正在加载积分流水...</p>
-      </div>
-
-      <div v-else-if="transactions.length === 0" class="credits-state">
-        <p>还没有积分流水记录。</p>
-      </div>
-
-      <div v-else class="credits-list">
-        <article v-for="item in transactions" :key="item.id" class="credits-item">
-          <div class="credits-item-main">
-            <div class="credits-item-title">{{ item.typeDesc || '积分变动' }}</div>
-            <div class="credits-item-remark">{{ item.remark || '系统记录' }}</div>
+      <section class="credits-ledger">
+        <div class="credits-ledger-head">
+          <div>
+            <div class="fc-kicker">Ledger</div>
+            <h2>积分流水</h2>
           </div>
-          <div class="credits-item-side">
+        </div>
+
+        <div v-if="loading && transactions.length === 0" class="credits-state">
+          <div class="credits-spinner"></div>
+          <p>正在加载...</p>
+        </div>
+
+        <div v-else-if="transactions.length === 0" class="credits-state">
+          <p>暂无积分记录</p>
+        </div>
+
+        <div v-else class="credits-list">
+          <article v-for="item in transactions" :key="item.id" class="credits-item">
+            <div class="credits-item-main">
+              <div class="credits-item-title">{{ item.typeDesc || '积分变动' }}</div>
+              <div class="credits-item-meta">
+                <span>{{ item.remark || '系统记录' }}</span>
+                <span>{{ formatDateTime(item.createTime) }}</span>
+              </div>
+            </div>
+
             <div class="credits-item-amount" :class="{ positive: Number(item.amount) > 0, negative: Number(item.amount) < 0 }">
               {{ Number(item.amount) > 0 ? `+${item.amount}` : `${item.amount}` }}
             </div>
-            <div class="credits-item-time">{{ formatDateTime(item.createTime) }}</div>
-          </div>
-        </article>
-      </div>
+          </article>
+        </div>
 
-      <div class="credits-more" v-if="transactions.length > 0">
-        <button class="credits-refresh" type="button" :disabled="loading || !hasMore" @click="loadTransactions(false)">
-          {{ hasMore ? (loading ? '加载中...' : '加载更多') : '已经到底了' }}
-        </button>
-      </div>
-    </section>
+        <div v-if="transactions.length > 0" class="credits-more">
+          <button class="credits-refresh" type="button" :disabled="loading || !hasMore" @click="loadTransactions(false)">
+            <span>{{ hasMore ? (loading ? '加载中...' : '加载更多') : '已经到底了' }}</span>
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -160,7 +192,7 @@ async function handleCheckIn() {
     const result = await dailyCheckIn()
     if (result === true) {
       markCheckedIn()
-      showNotice('签到成功，已获得 10 积分', 'success')
+      showNotice('签到成功', 'success')
       await loadAll(true)
     } else {
       markCheckedIn()
@@ -202,7 +234,7 @@ function showNotice(text, type = 'info') {
   window.clearTimeout(showNotice.timer)
   showNotice.timer = window.setTimeout(() => {
     notice.value = null
-  }, 2600)
+  }, 2200)
 }
 showNotice.timer = null
 
@@ -223,216 +255,275 @@ function formatDateTime(value) {
 <style scoped>
 .credits-page {
   min-height: 100vh;
-  padding: 40px;
-  background: var(--fc-bg);
-  max-width: 1200px;
-  margin: 0 auto;
+  padding: 20px 18px 28px;
+  background: var(--fc-app-gradient);
 }
 
-.credits-top {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 18px;
-  align-items: start;
+.credits-shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid rgba(77, 52, 31, 0.08);
+  border-radius: 28px;
+  background: rgba(255, 253, 249, 0.9);
+  box-shadow: 0 18px 40px rgba(33, 26, 20, 0.08);
+}
+
+.credits-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .credits-back,
 .credits-sign,
 .credits-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 10px 14px;
   border: 1px solid var(--fc-border);
   border-radius: 999px;
-  font-size: 14px;
-  font-weight: 500;
+  font-family: var(--fc-font);
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all .2s ease;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out), color var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .credits-back,
 .credits-refresh {
-  padding: 10px 16px;
-  background: var(--fc-surface);
+  background: rgba(255, 255, 255, 0.84);
   color: var(--fc-text);
+}
+
+.credits-back svg,
+.credits-sign svg,
+.credits-refresh svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .credits-back:hover,
 .credits-refresh:hover {
   border-color: var(--fc-border-strong);
+  background: var(--fc-bg-light);
+  box-shadow: 0 0 0 3px rgba(182, 118, 57, 0.08);
 }
 
 .credits-sign {
-  padding: 10px 18px;
   background: var(--fc-accent);
   border-color: transparent;
-  color: #fff;
+  color: #fffaf3;
+  box-shadow: 0 10px 20px rgba(151, 90, 38, 0.16);
 }
 
-.credits-sign:hover {
+.credits-sign:hover:not(:disabled) {
   background: var(--fc-accent-strong);
 }
 
+.credits-back:disabled,
 .credits-sign:disabled,
 .credits-refresh:disabled {
-  opacity: .55;
+  opacity: 0.55;
   cursor: not-allowed;
-}
-
-.credits-kicker {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fc-accent);
-}
-
-.credits-top-copy h1 {
-  margin: 12px 0 10px;
-  font-family: var(--fc-font-display);
-  font-size: clamp(32px, 4vw, 48px);
-  line-height: 1.1;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--fc-text);
-}
-
-.credits-ledger-head h2 {
-  margin: 10px 0 10px;
-  font-family: var(--fc-font-display);
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--fc-text);
-}
-
-.credits-top-copy p,
-.credits-state p {
-  max-width: 640px;
-  margin: 0;
-  font-size: 16px;
-  line-height: 1.6;
-  color: var(--fc-text-muted);
+  box-shadow: none;
 }
 
 .credits-notice {
-  margin-top: 20px;
-  padding: 12px 18px;
-  border-radius: 12px;
-  width: fit-content;
-  border: 1px solid var(--fc-border);
-  font-size: 14px;
-  font-weight: 500;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(77, 52, 31, 0.08);
+  background: rgba(255, 255, 255, 0.84);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fc-text);
 }
 
-.credits-notice.is-success { background: var(--fc-surface); color: var(--fc-success); }
-.credits-notice.is-error { background: var(--fc-surface); color: var(--fc-danger); }
-.credits-notice.is-info { background: var(--fc-surface); color: var(--fc-text); }
+.credits-notice.is-success { color: var(--fc-success); }
+.credits-notice.is-error { color: var(--fc-danger); }
+.credits-notice.is-info { color: var(--fc-text); }
 
-.credits-hero {
-  margin-top: 32px;
+.credits-notice-fade-enter-active,
+.credits-notice-fade-leave-active {
+  transition: opacity var(--fc-duration-normal) var(--fc-ease-in-out), transform var(--fc-duration-normal) var(--fc-ease-in-out);
+}
+
+.credits-notice-fade-enter-from,
+.credits-notice-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.credits-overview {
+  margin-top: 18px;
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 14px;
 }
 
-.credits-balance-card,
-.credits-summary-card,
+.credits-main-card,
+.credits-stat-card,
 .credits-ledger,
 .credits-state,
 .credits-item {
-  border: 1px solid var(--fc-border);
-  border-radius: var(--fc-radius-lg);
-  background: var(--fc-surface);
+  border: 1px solid rgba(77, 52, 31, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.82);
 }
 
-.credits-balance-card {
-  padding: 28px;
+.credits-main-card {
+  padding: 22px;
 }
 
-.credits-balance-label {
+.credits-main-card h1 {
+  margin: 10px 0 6px;
+  font-family: var(--fc-font-display);
+  font-size: clamp(28px, 4vw, 38px);
+  line-height: 1.08;
+  font-weight: 600;
+  color: var(--fc-text);
+}
+
+.credits-main-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fc-text-sec);
+}
+
+.credits-balance-panel {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid rgba(77, 52, 31, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 253, 249, 0.92);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.credits-balance-value {
+  margin-top: 10px;
+  font-family: var(--fc-font-display);
+  font-size: clamp(42px, 8vw, 58px);
+  line-height: 0.96;
+  font-weight: 600;
+  color: var(--fc-text);
+}
+
+.credits-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(186, 91, 64, 0.16);
+  background: rgba(255, 244, 241, 0.88);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 700;
+  color: var(--fc-danger);
+  white-space: nowrap;
+}
+
+.credits-status.ready {
+  border-color: rgba(84, 120, 76, 0.18);
+  background: rgba(84, 120, 76, 0.12);
+  color: #42673f;
+}
+
+.credits-meta {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.credits-meta span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(77, 52, 31, 0.08);
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  color: var(--fc-text-sec);
+}
+
+.credits-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+}
+
+.credits-stats {
+  display: grid;
+  gap: 12px;
+}
+
+.credits-stat-card {
+  padding: 18px;
+}
+
+.credits-stat-card span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--fc-text-muted);
 }
 
-.credits-balance-value {
-  margin-top: 18px;
-  font-family: var(--fc-font-display);
-  font-size: clamp(42px, 8vw, 64px);
-  font-weight: 600;
-  line-height: 0.95;
-  color: var(--fc-text);
-}
-
-.credits-balance-meta {
-  margin-top: 18px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--fc-text-sec);
-}
-
-.credits-balance-meta span {
-  padding: 6px 12px;
-  border-radius: var(--fc-radius-pill);
-  border: 1px solid var(--fc-border);
-  background: var(--fc-bg);
-  color: var(--fc-accent);
-}
-
-.credits-summary-grid {
-  display: grid;
-  gap: 16px;
-}
-
-.credits-summary-card {
-  padding: 20px;
-}
-
-.credits-summary-card span {
+.credits-stat-card strong {
   display: block;
-  font-size: 12px;
-  color: var(--fc-text-muted);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.credits-summary-card strong {
-  display: block;
-  margin-top: 12px;
+  margin-top: 10px;
   font-family: var(--fc-font-display);
-  font-size: 22px;
+  font-size: 28px;
+  line-height: 1.04;
   font-weight: 600;
-  line-height: 1.05;
   color: var(--fc-text);
 }
 
 .credits-ledger {
-  margin-top: 24px;
-  padding: 24px;
+  margin-top: 16px;
+  padding: 20px;
 }
 
-.credits-ledger-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
+.credits-ledger-head h2 {
+  margin: 8px 0 0;
+  font-family: var(--fc-font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--fc-text);
 }
 
 .credits-state {
-  margin-top: 18px;
-  padding: 30px;
+  margin-top: 14px;
+  padding: 30px 20px;
   text-align: center;
 }
 
+.credits-state p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fc-text-sec);
+}
+
 .credits-spinner {
-  width: 32px;
-  height: 32px;
-  margin: 0 auto 16px;
-  border: 2px solid var(--fc-border);
+  width: 28px;
+  height: 28px;
+  margin: 0 auto 12px;
+  border: 2px solid rgba(77, 52, 31, 0.12);
   border-top-color: var(--fc-accent);
   border-radius: 50%;
-  animation: credits-spin .7s linear infinite;
+  animation: credits-spin 0.7s linear infinite;
 }
 
 @keyframes credits-spin {
@@ -440,48 +531,50 @@ function formatDateTime(value) {
 }
 
 .credits-list {
-  margin-top: 18px;
+  margin-top: 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .credits-item {
-  padding: 18px;
-  display: flex;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), background var(--fc-duration-normal) var(--fc-ease-in-out);
+}
+
+.credits-item:hover {
+  border-color: rgba(182, 118, 57, 0.16);
+  background: rgba(255, 253, 249, 0.92);
 }
 
 .credits-item-main {
   min-width: 0;
-  flex: 1;
 }
 
 .credits-item-title {
-  font-family: var(--fc-font-display);
-  font-size: 16px;
-  line-height: 1.2;
+  font-family: var(--fc-font);
+  font-size: 14px;
   font-weight: 600;
   color: var(--fc-text);
 }
 
-.credits-item-remark,
-.credits-item-time {
+.credits-item-meta {
   margin-top: 6px;
-  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
   color: var(--fc-text-muted);
-}
-
-.credits-item-side {
-  text-align: right;
 }
 
 .credits-item-amount {
   font-family: var(--fc-font-display);
   font-size: 20px;
-  line-height: 1.05;
+  line-height: 1;
   font-weight: 600;
   color: var(--fc-text);
 }
@@ -490,23 +583,80 @@ function formatDateTime(value) {
 .credits-item-amount.negative { color: var(--fc-danger); }
 
 .credits-more {
-  margin-top: 18px;
+  margin-top: 14px;
   display: flex;
   justify-content: center;
 }
 
-@media (max-width: 960px) {
-  .credits-hero { grid-template-columns: 1fr; }
+.credits-back:focus-visible,
+.credits-sign:focus-visible,
+.credits-refresh:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--fc-focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credits-back,
+  .credits-sign,
+  .credits-refresh,
+  .credits-item,
+  .credits-notice-fade-enter-active,
+  .credits-notice-fade-leave-active,
+  .credits-spinner {
+    transition: none;
+    animation: none !important;
+  }
+}
+
+@media (max-width: 920px) {
+  .credits-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .credits-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
-  .credits-page { padding: 24px 16px 32px; }
-  .credits-top { grid-template-columns: 1fr; }
-  .credits-item,
-  .credits-ledger-head {
+  .credits-page {
+    padding: 14px 12px 22px;
+  }
+
+  .credits-shell {
+    padding: 16px;
+    border-radius: 22px;
+  }
+
+  .credits-toolbar,
+  .credits-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .credits-notice,
+  .credits-sign,
+  .credits-refresh {
+    width: 100%;
+  }
+
+  .credits-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .credits-item {
+    grid-template-columns: 1fr;
+  }
+
+  .credits-item-amount {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 520px) {
+  .credits-balance-panel {
     flex-direction: column;
     align-items: flex-start;
   }
-  .credits-item-side { text-align: left; }
 }
 </style>

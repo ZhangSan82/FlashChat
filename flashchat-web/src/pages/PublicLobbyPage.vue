@@ -9,7 +9,7 @@
           </button>
           <div class="hall-hero-body">
             <div class="hall-hero-left">
-              <span class="hall-label">Public Lobby</span>
+              <span class="fc-kicker">Public Lobby</span>
               <h1>发现公开房间</h1>
               <p>浏览正在进行中的对话，查看氛围与人数，随时加入。</p>
             </div>
@@ -65,7 +65,7 @@
       </section>
 
       <section v-else-if="rooms.length === 0" class="hall-state">
-        <span class="hall-label">Quiet Moment</span>
+        <span class="fc-kicker">Quiet Moment</span>
         <h3>大厅暂时没有房间</h3>
         <p>创建一个公开房间，等待其他人加入。</p>
         <button class="hall-create" type="button" @click="goCreateRoom">创建公开房间</button>
@@ -126,7 +126,7 @@
 
             <div class="hall-sheet-hero">
               <img class="hall-sheet-cover" :src="getRoomVisualUrl(previewRoom)" :alt="getRoomDisplayName(previewRoom)" />
-              <div class="hall-sheet-label">房间预览</div>
+              <div class="fc-section-label">房间预览</div>
               <div class="hall-sheet-title">{{ getRoomDisplayName(previewRoom) }}</div>
               <div class="hall-sheet-id">{{ previewRoom.roomId }}</div>
             </div>
@@ -134,7 +134,7 @@
             <div class="hall-sheet-divider"></div>
 
             <div class="hall-sheet-info">
-              <div class="hall-sheet-info-label">房间信息</div>
+              <div class="fc-section-label">房间信息</div>
               <div class="hall-sheet-stats">
                 <div class="hall-sheet-stat">
                   <span class="hall-sheet-dot" :style="{ background: previewStatusColor }"></span>
@@ -151,7 +151,7 @@
 
             <div class="hall-sheet-recent">
               <div class="hall-sheet-recent-header">
-                <div class="hall-sheet-info-label">最近消息</div>
+                <div class="fc-section-label">最近消息</div>
                 <span v-if="previewMessages.length > 0" class="hall-sheet-msg-count">{{ previewMessages.length }} 条</span>
               </div>
               <div v-if="previewMessages.length > 0" class="hall-sheet-msg-list">
@@ -577,7 +577,7 @@ function statusClass(status) {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: color var(--fc-duration-normal) var(--fc-ease-in-out);
   margin-bottom: 48px;
 }
 
@@ -600,15 +600,7 @@ function statusClass(status) {
   max-width: 520px;
 }
 
-.hall-label {
-  display: inline-block;
-  font-family: var(--fc-font);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fc-accent);
-}
+/* .hall-label → replaced by global .fc-kicker */
 
 .hall-hero h1 {
   margin: 16px 0 0;
@@ -690,7 +682,7 @@ function statusClass(status) {
   font-weight: 500;
   color: var(--fc-text-muted);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .hall-tab:hover {
@@ -718,7 +710,7 @@ function statusClass(status) {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .hall-create:hover {
@@ -743,7 +735,7 @@ function statusClass(status) {
   background: var(--fc-surface);
   padding: 24px;
   cursor: pointer;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  transition: border-color var(--fc-duration-normal) var(--fc-ease-in-out), box-shadow var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .hall-card:hover {
@@ -879,7 +871,7 @@ function statusClass(status) {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--fc-duration-normal) var(--fc-ease-in-out);
   text-align: center;
 }
 
@@ -942,7 +934,7 @@ function statusClass(status) {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .hall-action-btn:hover {
@@ -986,8 +978,8 @@ function statusClass(status) {
   background: var(--fc-backdrop);
 }
 
-.hall-overlay-enter-active { transition: opacity 0.3s ease; }
-.hall-overlay-leave-active { transition: opacity 0.22s ease; }
+.hall-overlay-enter-active { transition: opacity var(--fc-duration-normal) var(--fc-ease-in-out); }
+.hall-overlay-leave-active { transition: opacity var(--fc-duration-fast) var(--fc-ease-in-out); }
 .hall-overlay-enter-from,
 .hall-overlay-leave-to { opacity: 0; }
 
@@ -1003,10 +995,10 @@ function statusClass(status) {
 }
 
 .hall-sheet-enter-active {
-  transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity var(--fc-duration-slow) var(--fc-ease-in-out), transform var(--fc-duration-slow) var(--fc-ease-bounce);
 }
 .hall-sheet-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity var(--fc-duration-fast) var(--fc-ease-in-out), transform var(--fc-duration-fast) var(--fc-ease-in-out);
 }
 .hall-sheet-enter-from {
   opacity: 0;
@@ -1031,7 +1023,7 @@ function statusClass(status) {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.22s ease;
+  transition: all var(--fc-duration-normal) var(--fc-ease-in-out);
   z-index: 2;
 }
 
@@ -1053,14 +1045,7 @@ function statusClass(status) {
   background: linear-gradient(135deg, #E8D5BF, #C9A87C);
 }
 
-.hall-sheet-label {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--fc-text-muted);
-  margin-bottom: 10px;
-}
+/* .hall-sheet-label → replaced by global .fc-section-label */
 
 .hall-sheet-title {
   font-family: var(--fc-font-display);
@@ -1085,12 +1070,8 @@ function statusClass(status) {
   background: var(--fc-border);
 }
 
-.hall-sheet-info-label {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--fc-text-muted);
+.hall-sheet-info .fc-section-label,
+.hall-sheet-recent .fc-section-label {
   text-align: center;
   margin-bottom: 14px;
 }
@@ -1136,7 +1117,7 @@ function statusClass(status) {
   margin-bottom: 12px;
 }
 
-.hall-sheet-recent-header .hall-sheet-info-label {
+.hall-sheet-recent-header .fc-section-label {
   margin-bottom: 0;
 }
 
@@ -1197,7 +1178,7 @@ function statusClass(status) {
   gap: 8px;
   padding: 6px 8px;
   border-radius: 12px;
-  transition: background 0.18s ease;
+  transition: background var(--fc-duration-fast) var(--fc-ease-in-out);
 }
 
 .hall-sheet-msg-item:hover {
@@ -1335,7 +1316,7 @@ function statusClass(status) {
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background var(--fc-duration-normal) var(--fc-ease-in-out);
 }
 
 .hall-sheet-join:hover:not(:disabled) {
@@ -1375,8 +1356,8 @@ function statusClass(status) {
   padding: 10px 16px;
 }
 
-.hall-sheet-err-enter-active { transition: all 0.3s ease; }
-.hall-sheet-err-leave-active { transition: all 0.25s ease; }
+.hall-sheet-err-enter-active { transition: all var(--fc-duration-normal) var(--fc-ease-in-out); }
+.hall-sheet-err-leave-active { transition: all var(--fc-duration-normal) var(--fc-ease-in-out); }
 .hall-sheet-err-enter-from { opacity: 0; transform: translateY(-6px); }
 .hall-sheet-err-leave-to { opacity: 0; transform: translateY(-6px); }
 
