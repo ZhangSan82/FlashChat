@@ -54,7 +54,8 @@ class MessageSideEffectServiceImplTest {
                 mailbox,
                 messageWindowService,
                 roomChannelManager,
-                unreadService
+                unreadService,
+                null
         );
     }
 

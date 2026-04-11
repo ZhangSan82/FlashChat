@@ -28,6 +28,9 @@ import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.user.core.UserContext;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -53,6 +56,17 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private final MessageSideEffectService messageSideEffectService;
     private final MessageAuditChain  messageAuditChain;
     private final RoomSerialLock roomSerialLock;
+    private final MeterRegistry meterRegistry;
+
+    private Counter replyNotFoundCounter;
+
+    @PostConstruct
+    void initMetrics() {
+        this.replyNotFoundCounter = Counter.builder("chat.reply.not_found")
+                .tag("reason", "db_miss_within_stream_window")
+                .description("回复校验时 replyMsgId 在 DB 中查不到的次数 — 监控已知的 XADD→Consumer 入库时间窗口 race")
+                .register(meterRegistry);
+    }
     /** 撤回时间窗口：2 分钟（秒级精度） */
     private static final long RECALL_TIME_LIMIT_SECONDS = 2 * 60;
     /** 消息状态：正常 */
@@ -122,10 +136,16 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             contentSummary = auditCtx.getEffectiveContent();
         }
         // ===== 5. 回复消息校验 =====
+        // 已知 race:消息刚经 saveAsync(XADD) 被 durable accept 但 Stream Consumer 还未攒批
+        // 入库时,这里查 DB 会 miss,抛 "引用的消息不存在"。评估后刻意接受此 race:
+        //   - 时间窗口 <= 200ms(BLOCK 超时 + 批处理延迟),且要求用户在此期间恰好回复该条
+        //   - 失败语义是 clean ClientException,前端重试即可,不产生脏数据
+        //   - chat.reply.not_found 计数器兜底监控,若 QPS 显著升高再考虑加窗口 fallback
         MessageDO replyMsg = null;
         if (request.getReplyMsgId() != null) {
             replyMsg = this.getById(request.getReplyMsgId());
             if (replyMsg == null) {
+                replyNotFoundCounter.increment();
                 throw new ClientException("引用的消息不存在");
             }
             if (!replyMsg.getRoomId().equals(roomId)) {
@@ -137,13 +157,17 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         // 三步在全局线程池中串行执行,避免 msgSeqId 顺序与 mailbox 提交顺序倒置,
         // 从而保证房间内广播/窗口顺序正确。
         // 临界区内包含一次 XADD(约 1ms),同房间吞吐 ~1000 msg/s,单机场景足够。
+        // 锁外预计算(不依赖 msgSeqId):降低临界区内的无关工作量,避免 stripe 内竞争放大。
+        // createTime/timestamp 统一用一个时刻源,保证 DB/Stream/广播之间的时间一致性。
+        String msgId = UUID.randomUUID().toString().replace("-", "");
+        Integer isHost = memberInfo != null && memberInfo.isHost() ? 1 : 0;
+        long nowMillis = System.currentTimeMillis();
+        LocalDateTime createTime = LocalDateTime.now();
         ChatBroadcastMsgRespDTO broadcastMsg;
         Long finalMsgSeqId;
         PersistResult persistResult;
-        synchronized (roomSerialLock.lockFor(roomId)) {
+        try (RoomSerialLock.Handle ignored = acquireRoomLockOrBusy(roomId)) {
             // ===== 6. 生成消息 ID =====
-            String msgId = UUID.randomUUID().toString().replace("-", "");
-            Integer isHost = memberInfo != null && memberInfo.isHost() ? 1 : 0;
             Long msgSeqId = msgIdGenerator.tryNextId();
             // ===== 7. 构建消息实体 =====
             MessageDO messageDO = MessageDO.builder()
@@ -158,6 +182,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                     .senderId(accountId)
                     .status(0)
                     .isHost(isHost)
+                    .createTime(createTime)
                     .build();
             // ===== 8. 根据 ID 生成结果选择持久化路径 =====
             if (msgSeqId != null) {
@@ -185,7 +210,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                     .senderId(accountId.toString())
                     .username(memberInfo != null ? memberInfo.getNickname() : "匿名")
                     .avatar(memberInfo != null ? memberInfo.getAvatar() : "")
-                    .timestamp(System.currentTimeMillis())
+                    .timestamp(nowMillis)
                     .isHost(memberInfo != null && memberInfo.isHost())
                     .msgType(msgType)
                     .files(files)
@@ -197,8 +222,11 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             messageSideEffectService.dispatchUserMessageAccepted(roomId, accountId, msgSeqId, broadcastMsg);
         }
 
-        log.info("[发消息] room={}, memberId={}, dbId={}, acceptedBy={}, content={}",
-                roomId, accountId, finalMsgSeqId, persistResult.acceptedBy(), request.getContent());
+        log.info("[发消息] room={}, memberId={}, dbId={}, acceptedBy={}",
+                roomId, accountId, finalMsgSeqId, persistResult.acceptedBy());
+        // 原始内容含 PII,只在 DEBUG 级别输出
+        log.debug("[发消息-content] room={}, dbId={}, content={}",
+                roomId, finalMsgSeqId, request.getContent());
 
         return broadcastMsg;
     }
@@ -895,6 +923,22 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         if (status == null || !status.canSendMsg()) {
             throw new ClientException("房间当前不允许发送消息（状态：" +
                     (status != null ? status.getDesc() : "未知") + "）");
+        }
+    }
+
+    /**
+     * 获取房间 stripe 锁,把 dispatch 层的 RuntimeException 映射为客户端可理解的 ClientException。
+     * 超时/中断都意味着"当前房间临时繁忙",让客户端自行重试,不做服务端内部重试以免放大抖动。
+     */
+    private RoomSerialLock.Handle acquireRoomLockOrBusy(String roomId) {
+        try {
+            return roomSerialLock.acquire(roomId);
+        } catch (RoomSerialLock.StripeLockTimeoutException timeout) {
+            log.warn("[发消息-房间繁忙] room={}, cause={}", roomId, timeout.getMessage());
+            throw new ClientException("房间当前繁忙，请稍后再试");
+        } catch (RoomSerialLock.StripeLockInterruptedException interrupted) {
+            log.warn("[发消息-线程中断] room={}, cause={}", roomId, interrupted.getMessage());
+            throw new ClientException("系统繁忙，请稍后再试");
         }
     }
 

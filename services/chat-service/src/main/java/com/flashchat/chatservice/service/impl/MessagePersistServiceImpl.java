@@ -19,7 +19,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
 import java.util.Collections;
 
 import static com.flashchat.chatservice.config.MessageStreamConfig.FIELD_PAYLOAD;
@@ -72,21 +71,14 @@ public class MessagePersistServiceImpl {
      * 异步持久化 — 写入 Redis Stream
      * XADD flashchat:msg:persist:stream MAXLEN ~ 10000 * payload {json}
      * MAXLEN ~ 10000：每次写入时 Redis 自动做渐进式裁剪，控制 Stream 长度
-     * createTime 处理：
-     *   ChatServiceImpl 构建 MessageDO 时没有设 createTime（依赖 MyBatis-Plus 自动填充）
-     *   但 Consumer 端的 insertBatchIgnore 是自定义 SQL，不走 MetaObjectHandler
-     *   所以在入 Stream 之前补上 createTime = 消息发送时间（而非入库时间）
-     * @param messageDO 消息实体（id 已由 MsgIdGenerator 预分配）
+     * createTime 约定：调用方必须在入队前显式设置 createTime(= 消息发送时间),
+     *   保证 Stream/DB/广播三条路径使用同一个时刻源,避免时间漂移。
+     * @param messageDO 消息实体（id + createTime 已由调用方设置）
      */
     public PersistResult saveAsync(MessageDO messageDO) {
         // Timer.Sample 覆盖包括降级路径的完整延迟,便于监控 XADD 抖动
         Timer.Sample sample = Timer.start();
         try {
-            // 补充 createTime（自定义 SQL 不走 MyBatis-Plus 自动填充）
-            if (messageDO.getCreateTime() == null) {
-                messageDO.setCreateTime(LocalDateTime.now());
-            }
-
             String payload = JsonUtil.toJson(messageDO);
             byte[] streamKeyBytes = STREAM_KEY.getBytes(StandardCharsets.UTF_8);
             byte[] fieldKeyBytes = FIELD_PAYLOAD.getBytes(StandardCharsets.UTF_8);

@@ -11,7 +11,9 @@ import com.flashchat.chatservice.service.UnreadService;
 import com.flashchat.chatservice.service.dispatch.RoomSideEffectMailbox;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -28,13 +30,66 @@ import java.util.Map;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class MessageSideEffectServiceImpl implements MessageSideEffectService {
+
+    private static final String METRIC_FAIL = "chat.side_effect.fail";
+    private static final String METRIC_MAILBOX_REJECTED = "chat.side_effect.mailbox.rejected";
 
     private final RoomSideEffectMailbox roomSideEffectMailbox;
     private final MessageWindowService messageWindowService;
     private final RoomChannelManager roomChannelManager;
     private final UnreadService unreadService;
+    private final MeterRegistry meterRegistry;
+
+    private final Counter failWindowAddCounter;
+    private final Counter failWindowUpdateCounter;
+    private final Counter failWindowRemoveCounter;
+    private final Counter failBroadcastCounter;
+    private final Counter failBroadcastReactionCounter;
+    private final Counter failBroadcastStateCounter;
+    private final Counter failTouchCounter;
+    private final Counter failUnreadCounter;
+    private final Counter mailboxRejectedCounter;
+
+    public MessageSideEffectServiceImpl(RoomSideEffectMailbox roomSideEffectMailbox,
+                                        MessageWindowService messageWindowService,
+                                        RoomChannelManager roomChannelManager,
+                                        UnreadService unreadService,
+                                        MeterRegistry meterRegistry) {
+        this.roomSideEffectMailbox = roomSideEffectMailbox;
+        this.messageWindowService = messageWindowService;
+        this.roomChannelManager = roomChannelManager;
+        this.unreadService = unreadService;
+        this.meterRegistry = meterRegistry;
+        this.failWindowAddCounter = buildFailCounter("window_add");
+        this.failWindowUpdateCounter = buildFailCounter("window_update");
+        this.failWindowRemoveCounter = buildFailCounter("window_remove");
+        this.failBroadcastCounter = buildFailCounter("broadcast");
+        this.failBroadcastReactionCounter = buildFailCounter("broadcast_reaction");
+        this.failBroadcastStateCounter = buildFailCounter("broadcast_state");
+        this.failTouchCounter = buildFailCounter("touch");
+        this.failUnreadCounter = buildFailCounter("unread");
+        this.mailboxRejectedCounter = meterRegistry == null ? null
+                : Counter.builder(METRIC_MAILBOX_REJECTED)
+                        .description("副作用任务入 mailbox 被拒绝的次数")
+                        .register(meterRegistry);
+    }
+
+    private Counter buildFailCounter(String type) {
+        if (meterRegistry == null) {
+            return null;
+        }
+        return Counter.builder(METRIC_FAIL)
+                .tags(Tags.of("type", type))
+                .description("房间副作用单项执行失败次数")
+                .register(meterRegistry);
+    }
+
+    private static void safeIncrement(Counter counter) {
+        if (counter != null) {
+            counter.increment();
+        }
+    }
 
     @Override
     public void dispatchUserMessageAccepted(String roomId,
@@ -48,6 +103,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
             safeIncrementUnread(roomId, senderId);
         }).whenComplete((unused, throwable) -> {
             if (throwable != null) {
+                safeIncrement(mailboxRejectedCounter);
                 log.error("[消息副作用下沉失败] room={}, msgSeqId={}, senderId={}",
                         roomId, msgSeqId, senderId, throwable);
             }
@@ -63,6 +119,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
             safeBroadcastChat(roomId, broadcastMsg);
         }).whenComplete((unused, throwable) -> {
             if (throwable != null) {
+                safeIncrement(mailboxRejectedCounter);
                 log.error("[系统消息副作用下沉失败] room={}, msgSeqId={}",
                         roomId, msgSeqId, throwable);
             }
@@ -80,6 +137,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
             safeBroadcastReaction(roomId, msgId, msgSeqId, reactions);
         }).whenComplete((unused, throwable) -> {
             if (throwable != null) {
+                safeIncrement(mailboxRejectedCounter);
                 log.error("[reaction 副作用下沉失败] room={}, msgSeqId={}",
                         roomId, msgSeqId, throwable);
             }
@@ -101,6 +159,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
                     senderId);
         }).whenComplete((unused, throwable) -> {
             if (throwable != null) {
+                safeIncrement(mailboxRejectedCounter);
                 log.error("[撤回副作用下沉失败] room={}, msgSeqId={}",
                         roomId, msgSeqId, throwable);
             }
@@ -121,6 +180,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
                     senderId);
         }).whenComplete((unused, throwable) -> {
             if (throwable != null) {
+                safeIncrement(mailboxRejectedCounter);
                 log.error("[删除副作用下沉失败] room={}, msgSeqId={}",
                         roomId, msgSeqId, throwable);
             }
@@ -131,6 +191,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
         try {
             messageWindowService.addToWindow(roomId, msgSeqId, broadcastMsg);
         } catch (Exception e) {
+            safeIncrement(failWindowAddCounter);
             log.error("[副作用: 窗口写入失败] room={}, msgSeqId={}", roomId, msgSeqId, e);
         }
     }
@@ -142,6 +203,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
         try {
             messageWindowService.updateMemberByScore(roomId, msgSeqId, JsonUtil.toJson(windowMsg));
         } catch (Exception e) {
+            safeIncrement(failWindowUpdateCounter);
             log.error("[副作用: 窗口更新失败] room={}, msgSeqId={}", roomId, msgSeqId, e);
         }
     }
@@ -150,6 +212,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
         try {
             messageWindowService.removeMemberByScore(roomId, msgSeqId);
         } catch (Exception e) {
+            safeIncrement(failWindowRemoveCounter);
             log.error("[副作用: 窗口删除失败] room={}, msgSeqId={}", roomId, msgSeqId, e);
         }
     }
@@ -159,6 +222,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
             roomChannelManager.broadcastToRoom(roomId,
                     WsRespDTO.of(roomId, WsRespDTOTypeEnum.CHAT_BROADCAST, broadcastMsg));
         } catch (Exception e) {
+            safeIncrement(failBroadcastCounter);
             log.error("[副作用: 广播失败] room={}, msgSeqId={}", roomId, broadcastMsg.getIndexId(), e);
         }
     }
@@ -176,6 +240,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
             roomChannelManager.broadcastToRoom(roomId,
                     WsRespDTO.of(roomId, WsRespDTOTypeEnum.MSG_REACTION_UPDATE, respDTO));
         } catch (Exception e) {
+            safeIncrement(failBroadcastReactionCounter);
             log.error("[副作用: reaction 广播失败] room={}, msgSeqId={}", roomId, msgSeqId, e);
         }
     }
@@ -194,6 +259,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
             roomChannelManager.broadcastToRoom(roomId,
                     WsRespDTO.of(roomId, eventType, broadcastData));
         } catch (Exception e) {
+            safeIncrement(failBroadcastStateCounter);
             log.error("[副作用: 消息状态广播失败] room={}, msgSeqId={}, eventType={}",
                     roomId, msgSeqId, eventType, e);
         }
@@ -203,6 +269,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
         try {
             roomChannelManager.touchMember(roomId, senderId);
         } catch (Exception e) {
+            safeIncrement(failTouchCounter);
             log.error("[副作用: 活跃时间更新失败] room={}, senderId={}", roomId, senderId, e);
         }
     }
@@ -211,6 +278,7 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
         try {
             unreadService.incrementUnread(roomId, senderId);
         } catch (Exception e) {
+            safeIncrement(failUnreadCounter);
             log.error("[副作用: 未读数更新失败] room={}, senderId={}", roomId, senderId, e);
         }
     }
