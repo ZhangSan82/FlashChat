@@ -18,6 +18,7 @@ import com.flashchat.chatservice.dto.msg.FileDTO;
 import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.*;
 import com.flashchat.chatservice.ratelimit.MessageRateLimiter;
+import com.flashchat.chatservice.ratelimit.RateLimitResult;
 import com.flashchat.chatservice.service.*;
 import com.flashchat.chatservice.service.dispatch.RoomSerialLock;
 import com.flashchat.chatservice.service.persist.PersistResult;
@@ -56,15 +57,20 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private final MessageSideEffectService messageSideEffectService;
     private final MessageAuditChain  messageAuditChain;
     private final RoomSerialLock roomSerialLock;
+    private final MessageRateLimiter messageRateLimiter;
     private final MeterRegistry meterRegistry;
 
     private Counter replyNotFoundCounter;
+    private Counter rateLimitedCounter;
 
     @PostConstruct
     void initMetrics() {
         this.replyNotFoundCounter = Counter.builder("chat.reply.not_found")
                 .tag("reason", "db_miss_within_stream_window")
                 .description("回复校验时 replyMsgId 在 DB 中查不到的次数 — 监控已知的 XADD→Consumer 入库时间窗口 race")
+                .register(meterRegistry);
+        this.rateLimitedCounter = Counter.builder("chat.send.rate_limited")
+                .description("发送消息被限流器拦截的次数 — 按 result 枚举区分命中的维度")
                 .register(meterRegistry);
     }
     /** 撤回时间窗口：2 分钟（秒级精度） */
@@ -102,6 +108,17 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         RoomMemberInfo memberInfo = roomChannelManager.getRoomMemberInfo(roomId, accountId);
         if (memberInfo != null && memberInfo.isMuted()) {
             throw new ClientException("你已被禁言，无法发送消息");
+        }
+        // ===== 1.5 发送频率限流 =====
+        // 位置选在最早的廉价 Redis 调用:早于 audit chain / XADD / stripe lock,
+        // 被限流的请求不占用任何下游资源。即使是畸形请求(content/files 都空)
+        // 也会先消耗一次限流额度,防止攻击者用畸形包压 limiter 下游。
+        RateLimitResult rateLimitResult = messageRateLimiter.checkLimit(accountId, roomId);
+        if (!rateLimitResult.isPassed()) {
+            rateLimitedCounter.increment();
+            log.warn("[发消息-限流] room={}, memberId={}, reason={}",
+                    roomId, accountId, rateLimitResult.name());
+            throw new ClientException(rateLimitResult.getMessage());
         }
         // ===== 2. 跨字段校验：content 和 files 不能同时为空 =====
         String content = request.getContent();
