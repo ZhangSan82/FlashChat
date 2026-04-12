@@ -2,7 +2,7 @@ package com.flashchat.chatservice.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.MultistageCacheProxy;
-import com.flashchat.cache.toolkit.CacheUtil;
+import com.flashchat.chatservice.cache.RoomMemberCacheKeys;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
 import com.flashchat.chatservice.dao.mapper.RoomMemberMapper;
 import com.flashchat.chatservice.service.RoomMemberService;
@@ -109,7 +109,7 @@ public class RoomMemberServiceImpl extends ServiceImpl< RoomMemberMapper,RoomMem
 
 
     private String buildCacheKey(String roomId, Long accountId) {
-        return CacheUtil.buildKey("flashchat", "roomMember", roomId, String.valueOf(accountId));
+        return RoomMemberCacheKeys.member(roomId, accountId);
     }
 
 

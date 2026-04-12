@@ -4,7 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.MultistageCacheProxy;
-import com.flashchat.cache.toolkit.CacheUtil;
+import com.flashchat.chatservice.cache.RoomCacheGetFilter;
+import com.flashchat.chatservice.cache.RoomCacheIfAbsentHandler;
+import com.flashchat.chatservice.cache.RoomCacheKeys;
+import com.flashchat.chatservice.cache.RoomMemberCacheKeys;
 import com.flashchat.channel.GameStateQueryService;
 import com.flashchat.channel.event.MemberKickedFromRoomEvent;
 import com.flashchat.chatservice.dao.entity.MessageDO;
@@ -35,6 +38,9 @@ import org.redisson.api.RBloomFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.TypeReference;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,7 +71,12 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final MessageMapper messageMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final GameStateQueryService gameStateQueryService;
+    private final RoomCacheGetFilter roomCacheGetFilter;
+    private final RoomCacheIfAbsentHandler roomCacheIfAbsentHandler;
+    private final StringRedisTemplate stringRedisTemplate;
     private static final long CACHE_TIMEOUT = 60000L;
+    /** 公开房间列表缓存 TTL（秒） */
+    private static final long PUBLIC_LIST_TTL_SECONDS = 30L;
     /**单用户最多同时加入的房间数 */
     private static final int MAX_ROOMS_PER_USER = 50;
     /** 房主注销时的宽限期时长（分钟） */
@@ -141,18 +152,22 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             accountService.evictCacheByDbId(creatorId);
         }
         try {
-            flashChatRoomRegisterCachePenetrationBloomFilter.add(
-                    CacheUtil.buildKey("flashchat", "room", roomId));
-            multistageCacheProxy.put(CacheUtil.buildKey("flashchat","room",roomId),
+            multistageCacheProxy.safePut(
+                    RoomCacheKeys.room(roomId),
                     room,
-                    CACHE_TIMEOUT);
+                    CACHE_TIMEOUT,
+                    flashChatRoomRegisterCachePenetrationBloomFilter
+            );
             multistageCacheProxy.put(
-                    CacheUtil.buildKey("flashchat", "roomMember", roomId, String.valueOf(creatorId)),
+                    RoomMemberCacheKeys.member(roomId, creatorId),
                     hostMember,
                     CACHE_TIMEOUT
             );
         } catch (Exception e) {
             log.error("[创建房间-缓存写入失败] roomId={}, 不影响创建", roomId, e);
+        }
+        if (room.getIsPublic() != null && room.getIsPublic() == 1) {
+            evictPublicRoomListCache();
         }
         log.info("[创建房间] roomId={}, title={}, creator={},cost={}", roomId, room.getTitle(), room.getCreatorId(), cost);
 
@@ -752,7 +767,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             log.info("[关闭房间-跳过] room={}, CAS更新失败，已被其他操作关闭", roomId);
             return;
         }
-        evictRoomCache(roomId);
+        onRoomClosed(roomId);
         // 删除消息滑动窗口
         messageWindowService.deleteWindow(roomId);
         roomMemberService.evictAllMemberCacheInRoom(roomId);
@@ -788,18 +803,21 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     }
 
     /**
-     *用缓存查询房间
+     * Room 单体缓存唯一标准入口。
+     * 读链路：Caffeine → Redis → Filter(closed marker) → Bloom → 分布式锁 + DB 回源
      */
     @Override
     public RoomDO getRoomByRoomId(String roomId) {
-        return  multistageCacheProxy.safeGet(
-                CacheUtil.buildKey("flashchat","room",roomId),
+        return multistageCacheProxy.safeGet(
+                RoomCacheKeys.room(roomId),
                 RoomDO.class,
-                ()->this.lambdaQuery()
-                        .eq(RoomDO::getRoomId,roomId)
+                () -> this.lambdaQuery()
+                        .eq(RoomDO::getRoomId, roomId)
                         .one(),
-                60000L,
-                flashChatRoomRegisterCachePenetrationBloomFilter
+                CACHE_TIMEOUT,
+                flashChatRoomRegisterCachePenetrationBloomFilter,
+                roomCacheGetFilter,
+                roomCacheIfAbsentHandler
         );
     }
 
@@ -815,11 +833,40 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     }
 
     /**
-     * 查询公开房间列表
-     * // TODO 缓存：如果公开房间数量增长，考虑 Redis 缓存 + 30s TTL
+     * 查询公开房间列表（短 TTL 结果缓存）
+     * 与 RoomById 不是同一种缓存对象：列表缓存强调"足够新"和整体吞吐，不需要 Bloom 与 Filter。
      */
     @Override
     public List<RoomInfoRespDTO> listPublicRooms(PublicRoomListReqDTO request) {
+        int page = request.getPage() != null ? request.getPage() : 1;
+        int size = request.getSize() != null ? request.getSize() : 20;
+        String sort = request.getSort() != null ? request.getSort() : "hot";
+
+        String cacheKey = RoomCacheKeys.publicList(page, size, sort);
+        try {
+            String cached = stringRedisTemplate.opsForValue().get(cacheKey);
+            if (cached != null) {
+                return JSON.parseObject(cached, new TypeReference<List<RoomInfoRespDTO>>() {});
+            }
+        } catch (Exception e) {
+            log.warn("[公开房间列表-缓存读取异常] key={}", cacheKey, e);
+        }
+
+        List<RoomInfoRespDTO> result = queryPublicRoomsFromDb(page, size, sort);
+
+        try {
+            stringRedisTemplate.opsForValue().set(
+                    cacheKey,
+                    JSON.toJSONString(result),
+                    java.time.Duration.ofSeconds(PUBLIC_LIST_TTL_SECONDS)
+            );
+        } catch (Exception e) {
+            log.warn("[公开房间列表-缓存写入异常] key={}", cacheKey, e);
+        }
+        return result;
+    }
+
+    private List<RoomInfoRespDTO> queryPublicRoomsFromDb(int page, int size, String sort) {
         var wrapper = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<RoomDO>()
                 .eq(RoomDO::getIsPublic, 1)
                 .in(RoomDO::getStatus,
@@ -827,15 +874,13 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                         RoomStatusEnum.ACTIVE.getCode(),
                         RoomStatusEnum.EXPIRING.getCode());
 
-        switch (request.getSort() != null ? request.getSort() : "hot") {
+        switch (sort) {
             case "newest" -> wrapper.orderByDesc(RoomDO::getCreateTime);
             case "expiring" -> wrapper.orderByAsc(RoomDO::getExpireTime);
             default -> wrapper.orderByDesc(RoomDO::getCurrentMembers)
                     .orderByDesc(RoomDO::getCreateTime);
         }
 
-        int page = request.getPage() != null ? request.getPage() : 1;
-        int size = request.getSize() != null ? request.getSize() : 20;
         Page<RoomDO> pageParam = new Page<>(page, size, false);
         Page<RoomDO> result = this.page(pageParam, wrapper);
         List<RoomDO> rooms = result.getRecords();
@@ -1214,9 +1259,41 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
     private void evictRoomCache(String roomId) {
         try {
-            multistageCacheProxy.delete(CacheUtil.buildKey("flashchat", "room", roomId));
+            multistageCacheProxy.delete(RoomCacheKeys.room(roomId));
         } catch (Exception e) {
             log.error("[Room缓存失效异常] roomId={}", roomId, e);
+        }
+    }
+
+    /** 关闭房间时写 closed marker，让 CacheGetFilter 短路后续请求 */
+    private void markRoomClosed(String roomId) {
+        try {
+            stringRedisTemplate.opsForValue().set(
+                    RoomCacheKeys.closedMarker(roomId),
+                    "1",
+                    java.time.Duration.ofMinutes(30)
+            );
+        } catch (Exception e) {
+            log.error("[Room closed marker 写入异常] roomId={}", roomId, e);
+        }
+    }
+
+    /** 关闭房间统一动作：evict + closed marker + 列表缓存失效 */
+    private void onRoomClosed(String roomId) {
+        evictRoomCache(roomId);
+        markRoomClosed(roomId);
+        evictPublicRoomListCache();
+    }
+
+    /** 批量清除公开房间列表缓存（key 空间小，scan + delete 开销可控） */
+    private void evictPublicRoomListCache() {
+        try {
+            Set<String> keys = stringRedisTemplate.keys(RoomCacheKeys.publicListPrefix());
+            if (keys != null && !keys.isEmpty()) {
+                stringRedisTemplate.delete(keys);
+            }
+        } catch (Exception e) {
+            log.warn("[公开房间列表缓存失效异常]", e);
         }
     }
 
@@ -1234,7 +1311,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             }
             roomId = HashUtil.hashToBase62(SEED_PREFIX + UUID.randomUUID());
             if (!flashChatRoomRegisterCachePenetrationBloomFilter.contains(
-                    CacheUtil.buildKey("flashchat", "room", roomId)))
+                    RoomCacheKeys.room(roomId)))
             {
                 break;
             }

@@ -4,7 +4,7 @@ import cn.dev33.satoken.session.SaSession;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.cache.MultistageCacheProxy;
-import com.flashchat.cache.toolkit.CacheUtil;
+import com.flashchat.userservice.cache.AccountCacheKeys;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
 import com.flashchat.user.constant.UserTypeConstant;
@@ -159,7 +159,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
     @Override
     public AccountDO getByAccountId(String accountId) {
         AccountDO account = multistageCacheProxy.safeGet(
-                CacheUtil.buildKey("flashchat", "account", accountId),
+                AccountCacheKeys.byAccountId(accountId),
                 AccountDO.class,
                 () -> this.lambdaQuery().eq(AccountDO::getAccountId, accountId).one(),
                 CACHE_TIMEOUT,
@@ -180,7 +180,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
             return null;
         }
         return multistageCacheProxy.safeGet(
-                CacheUtil.buildKey("flashchat", "account", "id", String.valueOf(id)),
+                AccountCacheKeys.byDbId(id),
                 AccountDO.class,
                 () -> this.getById(id),
                 CACHE_TIMEOUT,
@@ -515,15 +515,20 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
      */
     private void postRegisterCache(AccountDO account) {
         try {
-            String cacheKeyByBizId = CacheUtil.buildKey("flashchat", "account",
-                    account.getAccountId());
-            String cacheKeyByDbId = CacheUtil.buildKey("flashchat", "account",
-                    "id", String.valueOf(account.getId()));
-
-            accountBloomFilter.add(cacheKeyByBizId);
-            accountBloomFilter.add(cacheKeyByDbId);
-            multistageCacheProxy.put(cacheKeyByBizId, account, CACHE_TIMEOUT);
-            multistageCacheProxy.put(cacheKeyByDbId, account, CACHE_TIMEOUT);
+            // accountId 维度：safePut 统一封装 bloom.add + Redis 写入 + 本地缓存回填
+            multistageCacheProxy.safePut(
+                    AccountCacheKeys.byAccountId(account.getAccountId()),
+                    account,
+                    CACHE_TIMEOUT,
+                    accountBloomFilter
+            );
+            // dbId 维度：普通 put（safePut 会把 dbId key 也加入 Bloom，保持双维度保护）
+            multistageCacheProxy.safePut(
+                    AccountCacheKeys.byDbId(account.getId()),
+                    account,
+                    CACHE_TIMEOUT,
+                    accountBloomFilter
+            );
         } catch (Exception e) {
             log.error("[注册缓存写入失败] accountId={}, 不影响注册，后续查询自动回填",
                     account.getAccountId(), e);
@@ -537,12 +542,8 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
      */
     private void evictAccountCache(AccountDO account) {
         try {
-            String keyByBizId = CacheUtil.buildKey("flashchat", "account",
-                    account.getAccountId());
-            String keyByDbId = CacheUtil.buildKey("flashchat", "account",
-                    "id", String.valueOf(account.getId()));
-            multistageCacheProxy.delete(keyByBizId);
-            multistageCacheProxy.delete(keyByDbId);
+            multistageCacheProxy.delete(AccountCacheKeys.byAccountId(account.getAccountId()));
+            multistageCacheProxy.delete(AccountCacheKeys.byDbId(account.getId()));
         } catch (Exception e) {
             log.error("[缓存失效异常] accountId={}", account.getAccountId(), e);
         }
@@ -619,7 +620,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                 throw new ServiceException("账号 ID 频繁生成，请稍后再试");
             }
             accountId = HashUtil.hashToBase62(SEED_PREFIX + UUID.randomUUID());
-            if (!accountBloomFilter.contains(CacheUtil.buildKey("flashchat", "account", accountId))) {
+            if (!accountBloomFilter.contains(AccountCacheKeys.byAccountId(accountId))) {
                 break;
             }
             retryCount++;

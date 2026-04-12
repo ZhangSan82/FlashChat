@@ -254,6 +254,23 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             String roomId, CursorPageBaseReq request) {
         // ===== 1. 校验房间存在 =====
         validateRoomExists(roomId);
+
+        // ===== 1.5 可见边界限制：首次加入的用户不开放更早历史 =====
+        Long acctId = UserContext.getRequiredLoginId();
+        RoomMemberDO member = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, acctId);
+        if (member == null) {
+            throw new ClientException("你不在该房间中");
+        }
+        if (member.getLastAckMsgId() == null || member.getLastAckMsgId() == 0L) {
+            log.info("[历史消息-首次加入限制] room={}, acctId={}, lastAck=0, 不开放更早历史",
+                    roomId, acctId);
+            return CursorPageBaseResp.<ChatBroadcastMsgRespDTO>builder()
+                    .list(List.of())
+                    .cursor(null)
+                    .isLast(true)
+                    .build();
+        }
+
         // ===== 2. 解析 cursor =====
         Long cursorValue = null;
         if (request.getCursor() != null && !request.getCursor().isBlank()) {
@@ -361,16 +378,9 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             return;
         }
 
-        // 4. 原子更新：加上 lt 条件防止并发覆盖
-        boolean updated = roomMemberService.lambdaUpdate()
-                .eq(RoomMemberDO::getId, roomMember.getId())
-                .lt(RoomMemberDO::getLastAckMsgId, request.getLastMsgId())
-                .set(RoomMemberDO::getLastAckMsgId, request.getLastMsgId())
-                .update();
-
+        // 4. 统一 ACK 动作：只增不减 + 清缓存 + 清未读
+        boolean updated = advanceAckAndClearUnread(roomMember.getId(), roomId, accountId, request.getLastMsgId());
         if (updated) {
-            roomMemberService.evictCache(roomId, accountId);
-            unreadService.clearUnread(accountId, roomId);
             log.info("[ACK 成功] room={}, memberId={}, {} → {}",
                     roomId, accountId, currentAckId, request.getLastMsgId());
         } else {
@@ -393,13 +403,16 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             throw new ClientException("你不在该房间中");
         }
         // last_ack_msg_id：用户最后确认看到的消息 ID
-        // 0 表示从未 ACK 过 → 拉取所有消息
+        // 0 表示从未 ACK 过 → 首次加入房间的用户
         Long lastAckMsgId = roomMember.getLastAckMsgId() != null
                 ? roomMember.getLastAckMsgId() : 0L;
-        // ===== 3. 尝试走窗口 =====
-        // TODO [后续优化] lastAckMsgId == 0 时也可尝试走窗口：
-        //   ZCARD < WINDOW_SIZE -> 窗口覆盖全量 -> 直接返回
-        //   ZCARD >= WINDOW_SIZE -> 窗口可能不够 -> 降级 DB
+
+        // ===== 3. 首次加入分支：lastAckMsgId == 0 → 只展示最近窗口消息 =====
+        if (lastAckMsgId == 0) {
+            return getNewMessagesForFirstJoin(roomId, roomMember, acctId);
+        }
+
+        // ===== 4. 正常增量分支：lastAckMsgId > 0 → 尝试走窗口 =====
         if (lastAckMsgId > 0) {
             List<ChatBroadcastMsgRespDTO> windowResult =
                     messageWindowService.getNewFromWindow(roomId, lastAckMsgId);
@@ -409,14 +422,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 if (!windowResult.isEmpty()) {
                     ChatBroadcastMsgRespDTO latest = windowResult.get(windowResult.size() - 1);
                     if (latest.getIndexId() != null && latest.getIndexId() > lastAckMsgId) {
-                        boolean updated = roomMemberService.lambdaUpdate()
-                                .eq(RoomMemberDO::getId, roomMember.getId())
-                                .lt(RoomMemberDO::getLastAckMsgId, latest.getIndexId())
-                                .set(RoomMemberDO::getLastAckMsgId, latest.getIndexId())
-                                .update();
-                        if (updated) {
-                            roomMemberService.evictCache(roomId, acctId);
-                            unreadService.clearUnread(acctId, roomId);
+                        if (advanceAckAndClearUnread(roomMember.getId(), roomId, acctId, latest.getIndexId())) {
                             log.info("[自动ACK-窗口] room={}, acctId={}, {} -> {}",
                                     roomId, acctId, lastAckMsgId, latest.getIndexId());
                         }
@@ -458,17 +464,10 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         // 拉到的最后一条消息就是最新的，直接更新已读位置
         MessageDO latestMsg = page.getList().get(page.getList().size() - 1);
         if (latestMsg.getId() > lastAckMsgId) {
-           boolean updated = roomMemberService.lambdaUpdate()
-                    .eq(RoomMemberDO::getId, roomMember.getId())
-                    .lt(RoomMemberDO::getLastAckMsgId, latestMsg.getId())
-                    .set(RoomMemberDO::getLastAckMsgId, latestMsg.getId())
-                    .update();
-           if (updated) {
-               roomMemberService.evictCache(roomId, acctId);
-               unreadService.clearUnread(acctId, roomId);
-               log.info("[自动ACK] room={}, acctId={}, {} → {}",
-                       roomId, acctId, lastAckMsgId, latestMsg.getId());
-           }
+            if (advanceAckAndClearUnread(roomMember.getId(), roomId, acctId, latestMsg.getId())) {
+                log.info("[自动ACK] room={}, acctId={}, {} → {}",
+                        roomId, acctId, lastAckMsgId, latestMsg.getId());
+            }
         }
 
         // ===== 5. DO → DTO（已经是正序，不需要翻转） =====
@@ -975,6 +974,78 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             log.warn("[解析 reactions] JSON 解析失败: {}", reactionsJson, e);
             return null;
         }
+    }
+
+    /**
+     * 首次加入房间的用户拉新消息：只展示最近窗口消息，不开放更早历史。
+     * <p>
+     * 优先走 Redis 窗口取最近 N 条；窗口不可用时 DB 兜底最近 N 条。
+     * 返回消息后自动将 lastAckMsgId 推进到最新，后续请求走正常增量路径。
+     */
+    private CursorPageBaseResp<ChatBroadcastMsgRespDTO> getNewMessagesForFirstJoin(
+            String roomId, RoomMemberDO roomMember, Long acctId) {
+        final int FIRST_JOIN_LIMIT = 100;
+
+        // 1. 优先走窗口
+        List<ChatBroadcastMsgRespDTO> latest = messageWindowService.getLatestFromWindow(roomId, FIRST_JOIN_LIMIT);
+
+        // 2. 窗口不可用 → DB 兜底最近 N 条
+        if (latest == null) {
+            log.debug("[首次加入-降级DB] room={}, acctId={}", roomId, acctId);
+            CursorPageBaseResp<MessageDO> page = CursorUtils.getAfterCursor(
+                    this, null, FIRST_JOIN_LIMIT,
+                    wrapper -> wrapper
+                            .eq(MessageDO::getRoomId, roomId)
+                            .in(MessageDO::getStatus, VISIBLE_MSG_STATUS),
+                    MessageDO::getId
+            );
+            latest = convertToRespDTOList(page.getList());
+        }
+
+        // 3. 自动 ACK：推进到最新一条，后续请求走正常增量路径
+        if (!latest.isEmpty()) {
+            ChatBroadcastMsgRespDTO lastMsg = latest.get(latest.size() - 1);
+            if (lastMsg.getIndexId() != null) {
+                if (advanceAckAndClearUnread(roomMember.getId(), roomId, acctId, lastMsg.getIndexId())) {
+                    log.info("[自动ACK-首次加入] room={}, acctId={}, 0 -> {}",
+                            roomId, acctId, lastMsg.getIndexId());
+                }
+            }
+        }
+
+        log.info("[拉新消息-首次加入] room={}, acctId={}, 返回 {} 条",
+                roomId, acctId, latest.size());
+
+        return CursorPageBaseResp.<ChatBroadcastMsgRespDTO>builder()
+                .list(latest)
+                .cursor(null)
+                .isLast(true)
+                .build();
+    }
+
+    /**
+     * 统一 ACK 动作：推进 lastAckMsgId + 清除缓存 + 清除未读
+     * <p>
+     * 只前进不回退（SQL 条件 WHERE last_ack_msg_id < latestSeenMsgId），
+     * 保证幂等 + 防并发回退。
+     *
+     * @param memberId        成员记录主键
+     * @param roomId          房间 ID
+     * @param accountId       用户 ID
+     * @param latestSeenMsgId 本次看到的最新消息 indexId
+     * @return true 表示实际更新了，false 表示已经是更新的值或被其他请求抢先
+     */
+    private boolean advanceAckAndClearUnread(Long memberId, String roomId, Long accountId, Long latestSeenMsgId) {
+        boolean updated = roomMemberService.lambdaUpdate()
+                .eq(RoomMemberDO::getId, memberId)
+                .lt(RoomMemberDO::getLastAckMsgId, latestSeenMsgId)
+                .set(RoomMemberDO::getLastAckMsgId, latestSeenMsgId)
+                .update();
+        if (updated) {
+            roomMemberService.evictCache(roomId, accountId);
+            unreadService.clearUnread(accountId, roomId);
+        }
+        return updated;
     }
 
     /**
