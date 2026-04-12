@@ -46,7 +46,9 @@ public class GameThreadPoolConfig {
      * AI 调用线程池。
      * <p>
      * AI 任务属于典型 IO 密集型任务，单独拆池可以避免和游戏主流程抢线程。
-     * 队列满时退化为调用方线程执行，保证任务不会被静默丢弃。
+     * 队列满时快速失败（DiscardPolicy + 日志），绝不反压调用方线程。
+     * AI 任务有超时定时器兜底（scheduleDescribeTimeout / scheduleVoteTimeout），
+     * 被丢弃的任务会由超时回调推进游戏流程，不会造成游戏卡死。
      */
     @Bean("aiPlayerExecutor")
     public ExecutorService aiPlayerExecutor() {
@@ -62,9 +64,10 @@ public class GameThreadPoolConfig {
                     thread.setDaemon(true);
                     return thread;
                 },
-                new ThreadPoolExecutor.CallerRunsPolicy()
+                (r, pool) -> log.warn("[AI 线程池-拒绝] 队列已满，任务丢弃，等待超时兜底。" +
+                        "active={}, queued={}", pool.getActiveCount(), pool.getQueue().size())
         );
-        log.info("[AI 线程池] 初始化完成 coreSize=4, maxSize=8, queueCapacity=32");
+        log.info("[AI 线程池] 初始化完成 coreSize=4, maxSize=8, queueCapacity=32, reject=DiscardWithLog");
         return executor;
     }
 }
