@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface MessageMapper extends BaseMapper<MessageDO> {
@@ -62,5 +63,26 @@ public interface MessageMapper extends BaseMapper<MessageDO> {
      */
     @Select("SELECT id FROM t_message WHERE room_id = #{roomId} AND id > #{ackId} AND status = 0 ORDER BY id ASC LIMIT 1000")
     List<Long> selectUnreadMsgIds(@Param("roomId") String roomId, @Param("ackId") long ackId);
+
+    /**
+     * 批量计算用户所有活跃房间的未读数（单条 SQL 替代 N+1）
+     * <p>
+     * JOIN t_room_member 和 t_message，按 room_id 分组 COUNT，
+     * 每组上限 1000 行（LIMIT 由外层 application code 截断为 999）。
+     * 索引依赖：t_message (room_id, id) + t_room_member (account_id, status)
+     *
+     * @return roomId → unreadCount 的映射列表
+     */
+    @Select("SELECT rm.room_id, COUNT(m.id) AS cnt " +
+            "FROM t_room_member rm " +
+            "INNER JOIN t_message m " +
+            "  ON m.room_id = rm.room_id " +
+            "  AND m.id > COALESCE(rm.last_ack_msg_id, 0) " +
+            "  AND m.status = 0 " +
+            "WHERE rm.account_id = #{accountId} " +
+            "  AND rm.status = 1 " +
+            "GROUP BY rm.room_id " +
+            "HAVING cnt > 0")
+    List<Map<String, Object>> selectBatchUnreadCounts(@Param("accountId") Long accountId);
 
 }

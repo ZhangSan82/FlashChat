@@ -32,8 +32,8 @@ public class UnreadServiceImpl implements UnreadService {
     private final MessageMapper messageMapper;
 
     private static final String UNREAD_KEY_PREFIX = "flashchat:unread:";
-    /** Key 过期时间（小时），防止僵尸数据 */
-    private static final long KEY_EXPIRE_HOURS = 72;
+    /** Key 过期时间（小时），防止僵尸数据；弱一致提醒不需要长期保留 */
+    private static final long KEY_EXPIRE_HOURS = 24;
 
     private String getKey(Long accountId) {
         return UNREAD_KEY_PREFIX + accountId;
@@ -55,7 +55,8 @@ public class UnreadServiceImpl implements UnreadService {
         if (memberIds.isEmpty()) return;
 
         try {
-            // Pipeline 批量执行
+            long expireSeconds = KEY_EXPIRE_HOURS * 3600;
+            // Pipeline 批量执行：HINCRBY + EXPIRE 续期，同一 RTT 内完成
             stringRedisTemplate.executePipelined((RedisCallback<Object>) connection -> {
                 for (Long uid : memberIds) {
                     if (uid.equals(excludeMemberId)) continue;
@@ -63,6 +64,7 @@ public class UnreadServiceImpl implements UnreadService {
                     byte[] key = getKey(uid).getBytes();
                     byte[] field = roomId.getBytes();
                     connection.hashCommands().hIncrBy(key, field, 1);
+                    connection.commands().expire(key, expireSeconds);
                 }
                 return null;
             });
@@ -268,24 +270,19 @@ public class UnreadServiceImpl implements UnreadService {
     // ================================================================
 
     /**
-     * 从 DB 计算所有房间的未读数
+     * 从 DB 计算所有房间的未读数（单条聚合 SQL，消除 N+1）
      */
     private Map<String, Integer> computeAllFromDB(Long accountId) {
-        List<RoomMemberDO> activeMembers = roomMemberService.lambdaQuery()
-                .eq(RoomMemberDO::getAccountId, accountId)
-                .eq(RoomMemberDO::getStatus, RoomMemberStatusEnum.ACTIVE.getCode())
-                .list();
-
-        if (activeMembers == null || activeMembers.isEmpty()) {
+        List<Map<String, Object>> rows = messageMapper.selectBatchUnreadCounts(accountId);
+        if (rows == null || rows.isEmpty()) {
             return Map.of();
         }
 
         Map<String, Integer> result = new HashMap<>();
-        for (RoomMemberDO rm : activeMembers) {
-            int count = doCount(rm.getRoomId(), rm.getLastAckMsgId());
-            if (count > 0) {
-                result.put(rm.getRoomId(), count);
-            }
+        for (Map<String, Object> row : rows) {
+            String roomId = row.get("room_id").toString();
+            int count = Math.min(((Number) row.get("cnt")).intValue(), MAX_UNREAD_DISPLAY);
+            result.put(roomId, count);
         }
         return result;
     }
