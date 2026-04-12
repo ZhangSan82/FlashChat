@@ -43,8 +43,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Component
 public class RoomSideEffectMailbox {
 
-    private static final int DEFAULT_SHARD_COUNT = 8;
-    private static final int DEFAULT_QUEUE_CAPACITY = 2048;
+    private static final int DEFAULT_SHARD_COUNT = 4;
+    private static final int DEFAULT_QUEUE_CAPACITY = 1024;
     private static final String DEFAULT_THREAD_NAME_PREFIX = "room-side-";
 
     private final ThreadPoolExecutor[] shardExecutors;

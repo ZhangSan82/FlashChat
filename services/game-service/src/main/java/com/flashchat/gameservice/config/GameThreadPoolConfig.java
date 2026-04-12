@@ -53,11 +53,11 @@ public class GameThreadPoolConfig {
     @Bean("aiPlayerExecutor")
     public ExecutorService aiPlayerExecutor() {
         ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                2,
                 4,
-                8,
                 60L,
                 TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>(32),
+                new LinkedBlockingQueue<>(16),
                 runnable -> {
                     Thread thread = new Thread(runnable);
                     thread.setName("game-ai-" + aiThreadCounter.getAndIncrement());
@@ -67,7 +67,7 @@ public class GameThreadPoolConfig {
                 (r, pool) -> log.warn("[AI 线程池-拒绝] 队列已满，任务丢弃，等待超时兜底。" +
                         "active={}, queued={}", pool.getActiveCount(), pool.getQueue().size())
         );
-        log.info("[AI 线程池] 初始化完成 coreSize=4, maxSize=8, queueCapacity=32, reject=DiscardWithLog");
+        log.info("[AI 线程池] 初始化完成 coreSize=2, maxSize=4, queueCapacity=16, reject=DiscardWithLog");
         return executor;
     }
 }

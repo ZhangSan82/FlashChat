@@ -24,9 +24,9 @@ public class WebSocketThreadPoolConfig {
     @Bean("wsBusinessExecutor")
     public ThreadPoolTaskExecutor wsBusinessExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(4);
-        executor.setMaxPoolSize(8);
-        executor.setQueueCapacity(512);
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(256);
         executor.setKeepAliveSeconds(60);
         executor.setThreadNamePrefix("ws-biz-");
 
@@ -41,7 +41,7 @@ public class WebSocketThreadPoolConfig {
 
         executor.initialize();
         log.info("[WS线程池] 初始化完成, core={}, max={}, queue={}",
-                executor.getCorePoolSize(), executor.getMaxPoolSize(), 1024);
+                executor.getCorePoolSize(), executor.getMaxPoolSize(), 256);
         return executor;
     }
 

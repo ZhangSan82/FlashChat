@@ -1,29 +1,43 @@
 server:
   port: 8081
+  # ==================== Tomcat（2核4G 调优） ====================
+  tomcat:
+    threads:
+      max: 50
+      min-spare: 5
+    max-connections: 2000
+    accept-count: 100
+    connection-timeout: 5000
 
 spring:
   application:
     name: flashchat-chat-service
 
-  # ==================== 数据源 ====================
+  # ==================== 数据源（2核4G 调优） ====================
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/flashchat?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: 123456
     hikari:
-      minimum-idle: 5
-      maximum-pool-size: 20
+      minimum-idle: 2
+      maximum-pool-size: 8
       idle-timeout: 30000
       max-lifetime: 1800000
       connection-timeout: 5000
       pool-name: FlashChatHikariPool
 
-  # ==================== Redis ====================
+  # ==================== Redis（2核4G 调优） ====================
   data:
     redis:
       host: 127.0.0.1
       port: 6379
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
+          max-wait: 2000ms
 
     # ====================文件上传 ====================
   servlet:
@@ -58,13 +72,13 @@ flashchat:
       enabled: true
       null-value-ttl-seconds: 15
       room:
-        max-size: 10000
+        max-size: 5000
         ttl-seconds: 30
       room-member:
-        max-size: 5000
+        max-size: 2000
         ttl-seconds: 15
       account:
-        max-size: 10000
+        max-size: 5000
         ttl-seconds: 45
   share:
     # 前端域名，用于拼接房间分享链接
