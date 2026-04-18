@@ -16,6 +16,7 @@ import com.flashchat.user.event.MemberLogoutEvent;
 import com.flashchat.user.toolkit.LoginIdUtil;
 import com.flashchat.userservice.contanst.CreditConstants;
 import com.flashchat.userservice.dao.entity.AccountDO;
+import com.flashchat.userservice.dao.enums.AccountRoleEnum;
 import com.flashchat.userservice.dao.enums.AccountStatusEnum;
 import com.flashchat.userservice.dao.enums.CreditTypeEnum;
 import com.flashchat.userservice.dao.mapper.AccountMapper;
@@ -119,6 +120,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                 .userType(userType)
                 .accountId(account.getAccountId())
                 .nickname(account.getNickname())
+                .systemRole(AccountRoleEnum.of(account.getSystemRole()).getCode())
                 .build();
         StpUtil.getSession().set(LoginUserInfoDTO.SESSION_KEY, userInfo);
         log.info("[登录成功] accountId={}, loginId={}", account.getAccountId(), loginId);
@@ -287,6 +289,8 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                 .isRegistered(account.registered())
                 .hasPassword(account.hasPassword())
                 .inviteCode(account.getInviteCode())
+                .systemRole(account.getSystemRole())
+                .isAdmin(account.isAdmin())
                 .createTime(account.getCreateTime())
                 .build();
     }
@@ -499,6 +503,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                     .credits(0)
                     .isRegistered(0)
                     .status(1)
+                    .systemRole(AccountRoleEnum.USER.getCode())
                     .build();
             this.save(account);
             log.info("[匿名注册] id={}, accountId={}, nickname={}",
@@ -567,6 +572,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                         .userType(userType)
                         .accountId(account.getAccountId())
                         .nickname(account.getNickname())
+                        .systemRole(AccountRoleEnum.of(account.getSystemRole()).getCode())
                         .build();
                 session.set(LoginUserInfoDTO.SESSION_KEY, userInfo);
                 log.debug("[Session 同步] accountId={}, nickname={}",

@@ -1,6 +1,7 @@
 package com.flashchat.userservice.dao.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.flashchat.userservice.dao.enums.AccountRoleEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -112,6 +113,13 @@ public class AccountDO {
     private Integer status;
 
     /**
+     * 系统级角色。
+     * 0 = 普通用户
+     * 1 = 系统管理员
+     */
+    private Integer systemRole;
+
+    /**
      * 最近活跃时间
      */
     private LocalDateTime lastActiveTime;
@@ -155,5 +163,12 @@ public class AccountDO {
      */
     public boolean isNormal() {
         return status != null && status == 1;
+    }
+
+    /**
+     * 是否是系统管理员。
+     */
+    public boolean isAdmin() {
+        return AccountRoleEnum.of(systemRole) == AccountRoleEnum.ADMIN;
     }
 }
