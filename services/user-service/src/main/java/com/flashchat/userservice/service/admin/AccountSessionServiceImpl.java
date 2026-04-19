@@ -22,7 +22,7 @@ public class AccountSessionServiceImpl implements AccountSessionService {
             StpUtil.kickout(LoginIdUtil.memberLoginId(account.getId()));
             StpUtil.kickout(LoginIdUtil.userLoginId(account.getId()));
         } catch (Exception ex) {
-            log.warn("[管理员强制下线] accountId={} 时踢出会话发生异常", account.getAccountId(), ex);
+            log.warn("[admin kickout sessions failed] accountId={}", account.getAccountId(), ex);
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.flashchat.userservice.service.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.flashchat.convention.exception.ClientException;
 import com.flashchat.user.event.AccountBannedEvent;
 import com.flashchat.user.event.MemberLogoutEvent;
 import com.flashchat.userservice.dao.entity.AccountDO;
@@ -28,6 +29,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -186,6 +188,78 @@ class AdminAccountServiceImplTest {
         assertEquals("FC-USER01", result.getAccountId());
         assertEquals("系统封禁", result.getStatusDesc());
         assertEquals("普通用户", result.getSystemRoleDesc());
+    }
+
+    @Test
+    void grantAdminShouldUpgradeTargetRoleAndRecordLog() {
+        AccountDO admin = buildAccount(1L, "FC-ADMIN01", "admin", AccountRoleEnum.ADMIN.getCode(), AccountStatusEnum.NORMAL.getCode(), 999);
+        AccountDO target = buildAccount(2L, "FC-USER01", "user", AccountRoleEnum.USER.getCode(), AccountStatusEnum.NORMAL.getCode(), 20);
+        when(adminAuthService.requireActiveAdmin(1L)).thenReturn(admin);
+        when(accountMapper.selectOne(any())).thenReturn(target);
+
+        AdminOperationReasonReqDTO request = new AdminOperationReasonReqDTO();
+        request.setReason("promote to admin");
+
+        adminAccountService.grantAdmin(1L, "FC-USER01", request);
+
+        ArgumentCaptor<AccountDO> accountCaptor = ArgumentCaptor.forClass(AccountDO.class);
+        verify(accountService).updateById(accountCaptor.capture());
+        assertEquals(AccountRoleEnum.ADMIN.getCode(), accountCaptor.getValue().getSystemRole());
+        verify(accountService).evictCacheByDbId(2L);
+        verify(adminOperationLogService).record(any(AdminOperationLogDO.class));
+    }
+
+    @Test
+    void revokeAdminShouldDowngradeTargetRoleAndKickoutSessions() {
+        AccountDO admin = buildAccount(1L, "FC-ADMIN01", "admin", AccountRoleEnum.ADMIN.getCode(), AccountStatusEnum.NORMAL.getCode(), 999);
+        AccountDO target = buildAccount(2L, "FC-ADMIN02", "other-admin", AccountRoleEnum.ADMIN.getCode(), AccountStatusEnum.NORMAL.getCode(), 20);
+        when(adminAuthService.requireActiveAdmin(1L)).thenReturn(admin);
+        when(accountMapper.selectOne(any())).thenReturn(target);
+        when(accountMapper.selectCount(any())).thenReturn(2L);
+
+        AdminOperationReasonReqDTO request = new AdminOperationReasonReqDTO();
+        request.setReason("rollback admin role");
+
+        adminAccountService.revokeAdmin(1L, "FC-ADMIN02", request);
+
+        ArgumentCaptor<AccountDO> accountCaptor = ArgumentCaptor.forClass(AccountDO.class);
+        verify(accountService).updateById(accountCaptor.capture());
+        assertEquals(AccountRoleEnum.USER.getCode(), accountCaptor.getValue().getSystemRole());
+        verify(accountSessionService).kickoutAllSessions(target);
+        verify(accountService).evictCacheByDbId(2L);
+        verify(adminOperationLogService).record(any(AdminOperationLogDO.class));
+    }
+
+    @Test
+    void revokeAdminShouldRejectSelfOperation() {
+        AccountDO admin = buildAccount(1L, "FC-ADMIN01", "admin", AccountRoleEnum.ADMIN.getCode(), AccountStatusEnum.NORMAL.getCode(), 999);
+        when(adminAuthService.requireActiveAdmin(1L)).thenReturn(admin);
+        when(accountMapper.selectOne(any())).thenReturn(admin);
+
+        AdminOperationReasonReqDTO request = new AdminOperationReasonReqDTO();
+        request.setReason("self revoke");
+
+        ClientException exception = assertThrows(ClientException.class,
+                () -> adminAccountService.revokeAdmin(1L, "FC-ADMIN01", request));
+
+        assertEquals("不能调整自己的管理员角色", exception.getMessage());
+    }
+
+    @Test
+    void revokeAdminShouldRejectLastAdmin() {
+        AccountDO admin = buildAccount(1L, "FC-ADMIN01", "admin", AccountRoleEnum.ADMIN.getCode(), AccountStatusEnum.NORMAL.getCode(), 999);
+        AccountDO target = buildAccount(2L, "FC-ADMIN02", "other-admin", AccountRoleEnum.ADMIN.getCode(), AccountStatusEnum.NORMAL.getCode(), 20);
+        when(adminAuthService.requireActiveAdmin(1L)).thenReturn(admin);
+        when(accountMapper.selectOne(any())).thenReturn(target);
+        when(accountMapper.selectCount(any())).thenReturn(1L);
+
+        AdminOperationReasonReqDTO request = new AdminOperationReasonReqDTO();
+        request.setReason("keep one admin");
+
+        ClientException exception = assertThrows(ClientException.class,
+                () -> adminAccountService.revokeAdmin(1L, "FC-ADMIN02", request));
+
+        assertEquals("至少保留一个系统管理员账号", exception.getMessage());
     }
 
     private AccountDO buildAccount(Long id, String accountId, String nickname, Integer role, Integer status, Integer credits) {

@@ -1,7 +1,5 @@
 package com.flashchat.chatservice.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.entity.RoomMemberDO;
 import com.flashchat.chatservice.dao.enums.RoomMemberStatusEnum;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
@@ -14,6 +12,7 @@ import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,44 +47,57 @@ public class UnreadServiceImpl implements UnreadService {
      *
      * 使用 Redis Pipeline：
      *   50 个 HINCRBY 命令 → 1 次网络往返 → <1ms
+     *
+     * <p>补充说明：为了把 unread 从发送链路上移走，当前这里已经停用真实写入，
+     * 改为在查询 unread 时基于 DB 实时统计。旧实现完整保留在注释中，便于回溯。
      */
     @Override
     public void incrementUnread(String roomId, Long excludeMemberId) {
-        Set<Long> memberIds = roomChannelManager.getRoomMemberIds(roomId);
-        if (memberIds.isEmpty()) return;
+        /*
+         * 旧逻辑（保留为注释，不删除）：
+         *
+         * Set<Long> memberIds = roomChannelManager.getRoomMemberIds(roomId);
+         * if (memberIds.isEmpty()) return;
+         *
+         * try {
+         *     long expireSeconds = KEY_EXPIRE_HOURS * 3600;
+         *     // Pipeline 批量执行：HINCRBY + EXPIRE 续期，同一 RTT 内完成
+         *     stringRedisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+         *         for (Long uid : memberIds) {
+         *             if (uid.equals(excludeMemberId)) continue;
+         *
+         *             byte[] key = getKey(uid).getBytes(StandardCharsets.UTF_8);
+         *             byte[] field = roomId.getBytes(StandardCharsets.UTF_8);
+         *             connection.hashCommands().hIncrBy(key, field, 1);
+         *             connection.commands().expire(key, expireSeconds);
+         *         }
+         *         return null;
+         *     });
+         *
+         *     log.debug("[未读+1] room={}, 影响 {} 人", roomId, memberIds.size() - 1);
+         * } catch (Exception e) {
+         *     // Redis 故障不影响发消息
+         *     log.error("[未读+1失败] room={}", roomId, e);
+         * }
+         */
 
-        try {
-            long expireSeconds = KEY_EXPIRE_HOURS * 3600;
-            // Pipeline 批量执行：HINCRBY + EXPIRE 续期，同一 RTT 内完成
-            stringRedisTemplate.executePipelined((RedisCallback<Object>) connection -> {
-                for (Long uid : memberIds) {
-                    if (uid.equals(excludeMemberId)) continue;
-
-                    byte[] key = getKey(uid).getBytes();
-                    byte[] field = roomId.getBytes();
-                    connection.hashCommands().hIncrBy(key, field, 1);
-                    connection.commands().expire(key, expireSeconds);
-                }
-                return null;
-            });
-
-            log.debug("[未读+1] room={}, 影响 {} 人", roomId, memberIds.size() - 1);
-        } catch (Exception e) {
-            // Redis 故障不影响发消息
-            log.error("[未读+1失败] room={}", roomId, e);
-        }
+        log.debug("[未读写时更新已停用] room={}, excludeMemberId={}, unread改为读时DB统计",
+                roomId, excludeMemberId);
     }
 
     /**
      * ACK 后清零
+     *
+     * <p>补充说明：当前 unread 的主来源已经改成 DB 读时统计，这里主要负责清理历史 Redis
+     * unread hash，避免迁移期间读到旧缓存。
      */
     @Override
     public void clearUnread(Long accountId, String roomId) {
         try {
             stringRedisTemplate.opsForHash().delete(getKey(accountId), roomId);
-            log.debug("[未读清零] memberId={}, room={}", accountId, roomId);
+            log.debug("[清理旧未读缓存] memberId={}, room={}", accountId, roomId);
         } catch (Exception e) {
-            log.error("[未读清零失败] memberId={}, room={}", accountId, roomId, e);
+            log.error("[清理旧未读缓存失败] memberId={}, room={}", accountId, roomId, e);
         }
     }
 
@@ -100,6 +112,8 @@ public class UnreadServiceImpl implements UnreadService {
     /**
      * 房间关闭，批量清除所有成员（从内存获取成员列表）
      * 新增 DB 兜底，防止内存已被 closeRoom 清空的情况
+     *
+     * <p>补充说明：这里仍然保留 Redis 清理逻辑，目的是把迁移前的历史 unread hash 清干净。
      */
     @Override
     public void clearRoomForAllMembers(String roomId) {
@@ -113,17 +127,19 @@ public class UnreadServiceImpl implements UnreadService {
     }
 
     /**
-     *接收调用方传入的成员 ID 快照，不依赖内存状态
+     * 接收调用方传入的成员 ID 快照，不依赖内存状态
      */
     @Override
     public void clearRoomForAllMembers(String roomId, Set<Long> memberIds) {
-        if (memberIds == null || memberIds.isEmpty()) return;
+        if (memberIds == null || memberIds.isEmpty()) {
+            return;
+        }
 
         try {
             stringRedisTemplate.executePipelined((RedisCallback<Object>) connection -> {
                 for (Long uid : memberIds) {
-                    byte[] key = getKey(uid).getBytes();
-                    byte[] field = roomId.getBytes();
+                    byte[] key = getKey(uid).getBytes(StandardCharsets.UTF_8);
+                    byte[] field = roomId.getBytes(StandardCharsets.UTF_8);
                     connection.hashCommands().hDel(key, field);
                 }
                 return null;
@@ -166,42 +182,60 @@ public class UnreadServiceImpl implements UnreadService {
      * 路径：
      *   正常：Redis HGETALL → <1ms
      *   兜底：Redis 无数据 → DB COUNT → 回写 Redis
+     *
+     * <p>补充说明：当前主路径已经改成“读时 DB 统计”。旧的 Redis-first 逻辑完整保留在注释里，
+     * 便于后续比较新旧方案的性能差异。
      */
     @Override
     public Map<String, Integer> getAllUnreadCounts(Long accountId) {
-        // 1. 先查 Redis
-        Map<String, Integer> redisResult = getFromRedis(accountId);
-        if (redisResult != null) {
-            redisResult.replaceAll((roomId,count)->
-                    Math.min(count,MAX_UNREAD_DISPLAY));
-            return redisResult;
-        }
+        /*
+         * 旧逻辑（保留为注释，不删除）：
+         *
+         * // 1. 先查 Redis
+         * Map<String, Integer> redisResult = getFromRedis(accountId);
+         * if (redisResult != null) {
+         *     redisResult.replaceAll((roomId,count)->
+         *             Math.min(count,MAX_UNREAD_DISPLAY));
+         *     return redisResult;
+         * }
+         *
+         * // 2. Redis 无数据 → DB 兜底
+         * log.info("[未读-DB兜底] memberId={}", accountId);
+         * Map<String, Integer> dbResult = computeAllFromDB(accountId);
+         *
+         * // 3. 回写 Redis
+         * writeBackToRedis(accountId, dbResult);
+         *
+         * return dbResult;
+         */
 
-        // 2. Redis 无数据 → DB 兜底
         log.info("[未读-DB兜底] memberId={}", accountId);
-        Map<String, Integer> dbResult = computeAllFromDB(accountId);
-
-        // 3. 回写 Redis
-        writeBackToRedis(accountId, dbResult);
-
-        return dbResult;
+        return computeAllFromDB(accountId);
     }
 
     /**
      * 获取单个房间的未读数
+     *
+     * <p>补充说明：当前主路径已经改成“读时 DB 统计”。
      */
     @Override
     public int getUnreadCount(Long accountId, String roomId) {
-        try {
-            Object val = stringRedisTemplate.opsForHash().get(getKey(accountId), roomId);
-            if (val != null) {
-                return Math.min(Math.max(0, Integer.parseInt(val.toString())), MAX_UNREAD_DISPLAY);
-            }
-        } catch (Exception e) {
-            log.error("[查单房间未读失败] memberId={}, room={}", accountId, roomId, e);
-        }
+        /*
+         * 旧逻辑（保留为注释，不删除）：
+         *
+         * try {
+         *     Object val = stringRedisTemplate.opsForHash().get(getKey(accountId), roomId);
+         *     if (val != null) {
+         *         return Math.min(Math.max(0, Integer.parseInt(val.toString())), MAX_UNREAD_DISPLAY);
+         *     }
+         * } catch (Exception e) {
+         *     log.error("[查单房间未读失败] memberId={}, room={}", accountId, roomId, e);
+         * }
+         *
+         * // Redis 没有 → DB 兜底
+         * return computeOneFromDB(accountId, roomId);
+         */
 
-        // Redis 没有 → DB 兜底
         return computeOneFromDB(accountId, roomId);
     }
 
@@ -211,7 +245,10 @@ public class UnreadServiceImpl implements UnreadService {
 
     /**
      * 从 Redis 读取所有未读数
+     *
      * @return null 表示 key 不存在（需要 DB 兜底）
+     *
+     * <p>补充说明：当前该方法只作为迁移参考保留，不再是主读取路径。
      */
     private Map<String, Integer> getFromRedis(Long accountId) {
         try {
@@ -226,7 +263,9 @@ public class UnreadServiceImpl implements UnreadService {
             raw.forEach((k, v) -> {
                 String field = k.toString();
                 // 跳过初始化标记
-                if ("__init__".equals(field)) return;
+                if ("__init__".equals(field)) {
+                    return;
+                }
 
                 int count = Integer.parseInt(v.toString());
                 if (count > 0) {
@@ -242,6 +281,8 @@ public class UnreadServiceImpl implements UnreadService {
 
     /**
      * 将 DB 计算结果回写 Redis
+     *
+     * <p>补充说明：当前该方法只作为迁移参考保留，不再是主路径的一部分。
      */
     private void writeBackToRedis(Long accountId, Map<String, Integer> unreadMap) {
         try {
@@ -271,6 +312,9 @@ public class UnreadServiceImpl implements UnreadService {
 
     /**
      * 从 DB 计算所有房间的未读数（单条聚合 SQL，消除 N+1）
+     *
+     * <p>补充说明：这里的准确性依赖 room_id + last_ack_msg_id + status 组合条件，
+     * 所以即使所有消息都在一张 t_message 表里，也不会把别的房间消息误算进来。
      */
     private Map<String, Integer> computeAllFromDB(Long accountId) {
         List<Map<String, Object>> rows = messageMapper.selectBatchUnreadCounts(accountId);
@@ -293,13 +337,17 @@ public class UnreadServiceImpl implements UnreadService {
     private int computeOneFromDB(Long accountId, String roomId) {
         RoomMemberDO rm = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
 
-        if (rm == null || rm.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) return 0;
+        if (rm == null || rm.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
+            return 0;
+        }
         return doCount(roomId, rm.getLastAckMsgId());
     }
 
     /**
      * 实际 COUNT 查询
      * 索引命中：idx_room_id (room_id, id)
+     *
+     * <p>补充说明：这里只统计 status = 0 的正常消息，因此 recall/delete 后不会继续计为 unread。
      */
     private int doCount(String roomId, Long lastAckMsgId) {
         long ackId = lastAckMsgId != null ? lastAckMsgId : 0L;

@@ -6,6 +6,7 @@ import com.flashchat.chatservice.dao.enums.RoomMemberStatusEnum;
 import com.flashchat.chatservice.service.RoomMemberService;
 import com.flashchat.chatservice.service.RoomService;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
+import com.flashchat.user.event.AccountBannedEvent;
 import com.flashchat.user.event.AccountDeletedEvent;
 import com.flashchat.user.event.MemberInfoChangedEvent;
 import com.flashchat.user.event.MemberLogoutEvent;
@@ -112,6 +113,25 @@ public class UserEventListener {
      * 处理注销用户作为房主的所有活跃房间
      * @return 进入宽限期的房间数量
      */
+    @EventListener
+    public void onAccountBanned(AccountBannedEvent event) {
+        Long accountId = event.getAccountId();
+
+        int graceCount = handleHostRoomsOnDelete(accountId);
+        Channel channel = roomChannelManager.getChannel(accountId);
+        if (channel != null && channel.isActive()) {
+            channel.close();
+        }
+
+        Set<String> rooms = roomChannelManager.getUserRooms(accountId);
+        for (String roomId : rooms) {
+            roomChannelManager.leaveRoom(roomId, accountId);
+        }
+
+        log.info("[account banned cleanup] accountId={}, clearedRooms={}, hostRoomsIntoGrace={}",
+                accountId, rooms.size(), graceCount);
+    }
+
     private int handleHostRoomsOnDelete(Long accountId) {
         List<RoomMemberDO> hostMembers = roomMemberService.lambdaQuery()
                 .eq(RoomMemberDO::getAccountId, accountId)

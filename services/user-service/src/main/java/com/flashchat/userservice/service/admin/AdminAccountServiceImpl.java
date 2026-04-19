@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 管理端账号服务实现。
+ * 管理员账号管理服务实现。
  */
 @Service
 @RequiredArgsConstructor
@@ -50,7 +50,7 @@ public class AdminAccountServiceImpl implements AdminAccountService {
         long size = request.getSize() == null || request.getSize() < 1 ? 20L : Math.min(request.getSize(), 100L);
 
         LambdaQueryWrapper<AccountDO> wrapper = new LambdaQueryWrapper<>();
-        if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
+        if (hasText(request.getKeyword())) {
             String keyword = request.getKeyword().trim();
             wrapper.and(q -> q.like(AccountDO::getAccountId, keyword)
                     .or().like(AccountDO::getNickname, keyword)
@@ -68,6 +68,7 @@ public class AdminAccountServiceImpl implements AdminAccountService {
         List<AdminAccountRespDTO> records = result.getRecords().stream()
                 .map(this::toAdminAccountResp)
                 .toList();
+
         return AdminPageRespDTO.<AdminAccountRespDTO>builder()
                 .page(pageNo)
                 .size(size)
@@ -195,6 +196,62 @@ public class AdminAccountServiceImpl implements AdminAccountService {
         accountService.evictCacheByDbId(target.getId());
     }
 
+    @Override
+    public void grantAdmin(Long operatorId, String accountId, AdminOperationReasonReqDTO request) {
+        AccountDO operator = adminAuthService.requireActiveAdmin(operatorId);
+        AccountDO target = getRoleManageTargetAccount(accountId, operatorId);
+        if (target.isAdmin()) {
+            return;
+        }
+        if (!target.registered()) {
+            throw new ClientException("游客账号不能授予管理员权限");
+        }
+        if (!target.isNormal()) {
+            throw new ClientException("已封禁账号不能授予管理员权限");
+        }
+
+        Integer beforeRole = target.getSystemRole();
+        target.setSystemRole(AccountRoleEnum.ADMIN.getCode());
+        accountService.updateById(target);
+        accountService.evictCacheByDbId(target.getId());
+        adminOperationLogService.record(buildLog(
+                operator,
+                AdminOperationTypeEnum.ACCOUNT_GRANT_ADMIN,
+                AdminOperationTargetTypeEnum.ACCOUNT,
+                target.getAccountId(),
+                target.getNickname(),
+                request.getReason(),
+                "{\"beforeRole\":" + beforeRole + ",\"afterRole\":" + target.getSystemRole() + "}"
+        ));
+    }
+
+    @Override
+    public void revokeAdmin(Long operatorId, String accountId, AdminOperationReasonReqDTO request) {
+        AccountDO operator = adminAuthService.requireActiveAdmin(operatorId);
+        AccountDO target = getRoleManageTargetAccount(accountId, operatorId);
+        if (!target.isAdmin()) {
+            return;
+        }
+        if (countAdminAccounts() <= 1) {
+            throw new ClientException("至少保留一个系统管理员账号");
+        }
+
+        Integer beforeRole = target.getSystemRole();
+        target.setSystemRole(AccountRoleEnum.USER.getCode());
+        accountService.updateById(target);
+        accountService.evictCacheByDbId(target.getId());
+        accountSessionService.kickoutAllSessions(target);
+        adminOperationLogService.record(buildLog(
+                operator,
+                AdminOperationTypeEnum.ACCOUNT_REVOKE_ADMIN,
+                AdminOperationTargetTypeEnum.ACCOUNT,
+                target.getAccountId(),
+                target.getNickname(),
+                request.getReason(),
+                "{\"beforeRole\":" + beforeRole + ",\"afterRole\":" + target.getSystemRole() + "}"
+        ));
+    }
+
     private AccountDO getManagedTargetAccount(String accountId, Long operatorId) {
         AccountDO target = loadTargetAccount(accountId);
         if (target.getId() != null && target.getId().equals(operatorId)) {
@@ -202,6 +259,14 @@ public class AdminAccountServiceImpl implements AdminAccountService {
         }
         if (target.isAdmin()) {
             throw new ClientException("当前版本暂不支持直接操作管理员账号，请走数据库或后续角色管理流程");
+        }
+        return target;
+    }
+
+    private AccountDO getRoleManageTargetAccount(String accountId, Long operatorId) {
+        AccountDO target = loadTargetAccount(accountId);
+        if (target.getId() != null && target.getId().equals(operatorId)) {
+            throw new ClientException("不能调整自己的管理员角色");
         }
         return target;
     }
@@ -214,6 +279,13 @@ public class AdminAccountServiceImpl implements AdminAccountService {
             throw new ClientException("账号不存在");
         }
         return target;
+    }
+
+    private long countAdminAccounts() {
+        Long count = accountMapper.selectCount(
+                new LambdaQueryWrapper<AccountDO>().eq(AccountDO::getSystemRole, AccountRoleEnum.ADMIN.getCode())
+        );
+        return count == null ? 0L : count;
     }
 
     private AdminAccountRespDTO toAdminAccountResp(AccountDO account) {
@@ -255,5 +327,9 @@ public class AdminAccountServiceImpl implements AdminAccountService {
                 .reason(reason)
                 .detailJson(detailJson)
                 .build();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

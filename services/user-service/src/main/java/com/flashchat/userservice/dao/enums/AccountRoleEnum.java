@@ -6,8 +6,8 @@ import lombok.Getter;
 /**
  * 系统级账号角色。
  * <p>
- * 该角色和房间内的房主/成员角色是两套维度：
- * systemRole 控制系统管理权限，room role 仅控制单个房间内的协作权限。
+ * 这里的角色和房间内的房主/成员是两套维度：
+ * systemRole 控制系统管理权限，room role 只控制某个房间内的协作权限。
  */
 @Getter
 @AllArgsConstructor

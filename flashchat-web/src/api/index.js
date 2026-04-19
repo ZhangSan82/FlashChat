@@ -1,5 +1,7 @@
 export * as accountApi from './account'
+export * as adminApi from './admin'
 export * as chatApi from './chat'
+export * as feedbackApi from './feedback'
 export * as roomApi from './room'
 export * as fileApi from './file'
 export * as gameApi from './game'

@@ -2,19 +2,28 @@ package com.flashchat.chatservice.service.impl;
 
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
+import com.flashchat.chatservice.config.MessageCryptoProperties;
+import com.flashchat.chatservice.service.crypto.MessageContentCodec;
+import com.flashchat.chatservice.service.crypto.MessageCryptoService;
 import com.flashchat.convention.exception.ServiceException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,7 +40,7 @@ class MessagePersistServiceImplTest {
     @BeforeEach
     void setUp() {
         messagePersistService = new MessagePersistServiceImpl(
-                stringRedisTemplate, messageMapper, new SimpleMeterRegistry());
+                stringRedisTemplate, messageMapper, buildCodec(), new SimpleMeterRegistry());
     }
 
     /**
@@ -64,6 +73,19 @@ class MessagePersistServiceImplTest {
         assertThrows(ServiceException.class, () -> messagePersistService.saveAsync(buildMessage()));
     }
 
+    @Test
+    void saveSyncShouldEncryptContentBeforeInsert() {
+        messagePersistService.saveSync(buildMessage());
+
+        ArgumentCaptor<MessageDO> captor = ArgumentCaptor.forClass(MessageDO.class);
+        verify(messageMapper).insert(captor.capture());
+        MessageDO stored = captor.getValue();
+        Assertions.assertNull(stored.getContent());
+        Assertions.assertNotNull(stored.getContentCipher());
+        Assertions.assertNotNull(stored.getContentIv());
+        Assertions.assertEquals(1, stored.getKeyVersion());
+    }
+
     /**
      * 作用：构造一条最小可持久化消息，供异常路径测试复用。
      * 预期结果：返回的 MessageDO 字段完整，足以让 saveSync/saveAsync 走到真正的持久化分支。
@@ -81,5 +103,14 @@ class MessagePersistServiceImplTest {
                 .status(0)
                 .isHost(0)
                 .build();
+    }
+
+    private MessageContentCodec buildCodec() {
+        MessageCryptoProperties properties = new MessageCryptoProperties();
+        properties.setEnabled(true);
+        properties.setKeyVersion(1);
+        properties.setKey(Base64.getEncoder().encodeToString(
+                "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8)));
+        return new MessageContentCodec(new MessageCryptoService(properties));
     }
 }

@@ -1,0 +1,367 @@
+﻿{
+    "createdAt":  "2026-04-19T22:43:28",
+    "resultDir":  "D:\\javaproject\\FlashChat\\perf\\results\\20260419-223341-ten-room-multi-room-20x50-250vu",
+    "queueWait":  {
+                      "name":  "chat.mailbox.queue.wait.duration",
+                      "available":  true,
+                      "count":  359147,
+                      "avgMs":  4.353,
+                      "maxMs":  479.758,
+                      "totalMs":  1563197.881,
+                      "baseUnit":  "seconds"
+                  },
+    "mailboxTask":  {
+                        "name":  "chat.mailbox.task.duration",
+                        "available":  true,
+                        "count":  359147,
+                        "avgMs":  1.528,
+                        "maxMs":  65.072,
+                        "totalMs":  548698.249,
+                        "baseUnit":  "seconds"
+                    },
+    "dominantStep":  {
+                         "name":  "window_add",
+                         "available":  true,
+                         "count":  359147,
+                         "avgMs":  1.472,
+                         "maxMs":  65.027,
+                         "totalMs":  528781.718,
+                         "baseUnit":  "seconds"
+                     },
+    "dominantBroadcastPhase":  {
+                                   "name":  "flush",
+                                   "available":  true,
+                                   "count":  359165,
+                                   "avgMs":  0.024,
+                                   "maxMs":  24.65,
+                                   "totalMs":  8535.963,
+                                   "baseUnit":  "seconds"
+                               },
+    "dominantWindowAddPhase":  {
+                                   "name":  "redis",
+                                   "available":  true,
+                                   "count":  359147,
+                                   "avgMs":  1.462,
+                                   "maxMs":  65.013,
+                                   "totalMs":  525111.672,
+                                   "baseUnit":  "seconds"
+                               },
+    "dominantSendSyncTimer":  {
+                                  "name":  "msg.id.slow_path",
+                                  "available":  true,
+                                  "count":  6846,
+                                  "avgMs":  1.992,
+                                  "maxMs":  23.317,
+                                  "totalMs":  13637.793,
+                                  "baseUnit":  "seconds"
+                              },
+    "sideEffectSteps":  [
+                            {
+                                "name":  "window_add",
+                                "available":  true,
+                                "count":  359147,
+                                "avgMs":  1.472,
+                                "maxMs":  65.027,
+                                "totalMs":  528781.718,
+                                "baseUnit":  "seconds"
+                            },
+                            {
+                                "name":  "broadcast",
+                                "available":  true,
+                                "count":  359147,
+                                "avgMs":  0.048,
+                                "maxMs":  24.742,
+                                "totalMs":  17331.609,
+                                "baseUnit":  "seconds"
+                            },
+                            {
+                                "name":  "touch",
+                                "available":  true,
+                                "count":  359147,
+                                "avgMs":  0.001,
+                                "maxMs":  0.869,
+                                "totalMs":  314.745,
+                                "baseUnit":  "seconds"
+                            },
+                            {
+                                "name":  "unread",
+                                "available":  true,
+                                "count":  0,
+                                "avgMs":  null,
+                                "maxMs":  0,
+                                "totalMs":  0,
+                                "baseUnit":  "seconds"
+                            },
+                            {
+                                "name":  "window_update",
+                                "available":  true,
+                                "count":  0,
+                                "avgMs":  null,
+                                "maxMs":  0,
+                                "totalMs":  0,
+                                "baseUnit":  "seconds"
+                            },
+                            {
+                                "name":  "window_remove",
+                                "available":  true,
+                                "count":  0,
+                                "avgMs":  null,
+                                "maxMs":  0,
+                                "totalMs":  0,
+                                "baseUnit":  "seconds"
+                            },
+                            {
+                                "name":  "broadcast_reaction",
+                                "available":  true,
+                                "count":  0,
+                                "avgMs":  null,
+                                "maxMs":  0,
+                                "totalMs":  0,
+                                "baseUnit":  "seconds"
+                            },
+                            {
+                                "name":  "broadcast_state",
+                                "available":  true,
+                                "count":  0,
+                                "avgMs":  null,
+                                "maxMs":  0,
+                                "totalMs":  0,
+                                "baseUnit":  "seconds"
+                            }
+                        ],
+    "broadcastPhases":  [
+                            {
+                                "name":  "serialize",
+                                "available":  true,
+                                "count":  359165,
+                                "avgMs":  0.008,
+                                "maxMs":  3.17,
+                                "totalMs":  3038.879,
+                                "baseUnit":  "seconds"
+                            },
+                            {
+                                "name":  "write",
+                                "available":  true,
+                                "count":  359165,
+                                "avgMs":  0.009,
+                                "maxMs":  13.867,
+                                "totalMs":  3156.719,
+                                "baseUnit":  "seconds"
+                            },
+                            {
+                                "name":  "flush",
+                                "available":  true,
+                                "count":  359165,
+                                "avgMs":  0.024,
+                                "maxMs":  24.65,
+                                "totalMs":  8535.963,
+                                "baseUnit":  "seconds"
+                            }
+                        ],
+    "windowAddPhases":  [
+                            {
+                                "name":  "serialize",
+                                "available":  true,
+                                "count":  359147,
+                                "avgMs":  0.006,
+                                "maxMs":  18.122,
+                                "totalMs":  2113.612,
+                                "baseUnit":  "seconds"
+                            },
+                            {
+                                "name":  "redis",
+                                "available":  true,
+                                "count":  359147,
+                                "avgMs":  1.462,
+                                "maxMs":  65.013,
+                                "totalMs":  525111.672,
+                                "baseUnit":  "seconds"
+                            }
+                        ],
+    "sendSyncPath":  [
+                         {
+                             "name":  "stripe.lock.wait",
+                             "available":  true,
+                             "count":  359147,
+                             "avgMs":  0.296,
+                             "maxMs":  102.417,
+                             "totalMs":  106319.7,
+                             "baseUnit":  "seconds"
+                         },
+                         {
+                             "name":  "send.pre_lock",
+                             "available":  true,
+                             "count":  359147,
+                             "avgMs":  1.751,
+                             "maxMs":  218.275,
+                             "totalMs":  628740.563,
+                             "baseUnit":  "seconds"
+                         },
+                         {
+                             "name":  "send.rate_limit",
+                             "available":  true,
+                             "count":  359147,
+                             "avgMs":  1.71,
+                             "maxMs":  82.734,
+                             "totalMs":  614006.816,
+                             "baseUnit":  "seconds"
+                         },
+                         {
+                             "name":  "send.audit",
+                             "available":  true,
+                             "count":  359147,
+                             "avgMs":  0.005,
+                             "maxMs":  0.407,
+                             "totalMs":  1692.818,
+                             "baseUnit":  "seconds"
+                         },
+                         {
+                             "name":  "send.reply_validate",
+                             "available":  true,
+                             "count":  0,
+                             "avgMs":  null,
+                             "maxMs":  0,
+                             "totalMs":  0,
+                             "baseUnit":  "seconds"
+                         },
+                         {
+                             "name":  "send.critical",
+                             "available":  true,
+                             "count":  359147,
+                             "avgMs":  1.298,
+                             "maxMs":  78.908,
+                             "totalMs":  466160.176,
+                             "baseUnit":  "seconds"
+                         },
+                         {
+                             "name":  "msg.xadd",
+                             "available":  true,
+                             "count":  359147,
+                             "avgMs":  1.245,
+                             "maxMs":  78.873,
+                             "totalMs":  447173.113,
+                             "baseUnit":  "seconds"
+                         },
+                         {
+                             "name":  "msg.id.slow_path",
+                             "available":  true,
+                             "count":  6846,
+                             "avgMs":  1.992,
+                             "maxMs":  23.317,
+                             "totalMs":  13637.793,
+                             "baseUnit":  "seconds"
+                         }
+                     ],
+    "sendSyncPathTimers":  [
+                               {
+                                   "name":  "stripe.lock.wait",
+                                   "available":  true,
+                                   "count":  359147,
+                                   "avgMs":  0.296,
+                                   "maxMs":  102.417,
+                                   "totalMs":  106319.7,
+                                   "baseUnit":  "seconds"
+                               },
+                               {
+                                   "name":  "send.pre_lock",
+                                   "available":  true,
+                                   "count":  359147,
+                                   "avgMs":  1.751,
+                                   "maxMs":  218.275,
+                                   "totalMs":  628740.563,
+                                   "baseUnit":  "seconds"
+                               },
+                               {
+                                   "name":  "send.rate_limit",
+                                   "available":  true,
+                                   "count":  359147,
+                                   "avgMs":  1.71,
+                                   "maxMs":  82.734,
+                                   "totalMs":  614006.816,
+                                   "baseUnit":  "seconds"
+                               },
+                               {
+                                   "name":  "send.audit",
+                                   "available":  true,
+                                   "count":  359147,
+                                   "avgMs":  0.005,
+                                   "maxMs":  0.407,
+                                   "totalMs":  1692.818,
+                                   "baseUnit":  "seconds"
+                               },
+                               {
+                                   "name":  "send.reply_validate",
+                                   "available":  true,
+                                   "count":  0,
+                                   "avgMs":  null,
+                                   "maxMs":  0,
+                                   "totalMs":  0,
+                                   "baseUnit":  "seconds"
+                               },
+                               {
+                                   "name":  "send.critical",
+                                   "available":  true,
+                                   "count":  359147,
+                                   "avgMs":  1.298,
+                                   "maxMs":  78.908,
+                                   "totalMs":  466160.176,
+                                   "baseUnit":  "seconds"
+                               },
+                               {
+                                   "name":  "msg.xadd",
+                                   "available":  true,
+                                   "count":  359147,
+                                   "avgMs":  1.245,
+                                   "maxMs":  78.873,
+                                   "totalMs":  447173.113,
+                                   "baseUnit":  "seconds"
+                               },
+                               {
+                                   "name":  "msg.id.slow_path",
+                                   "available":  true,
+                                   "count":  6846,
+                                   "avgMs":  1.992,
+                                   "maxMs":  23.317,
+                                   "totalMs":  13637.793,
+                                   "baseUnit":  "seconds"
+                               }
+                           ],
+    "sendSyncPathCounters":  [
+                                 {
+                                     "name":  "msg.xadd.fail",
+                                     "available":  true,
+                                     "count":  0
+                                 },
+                                 {
+                                     "name":  "stripe.lock.timeout",
+                                     "available":  true,
+                                     "count":  0
+                                 },
+                                 {
+                                     "name":  "send.rate_limited",
+                                     "available":  true,
+                                     "count":  0
+                                 },
+                                 {
+                                     "name":  "reply.not_found",
+                                     "available":  true,
+                                     "count":  0
+                                 },
+                                 {
+                                     "name":  "msg.persist.fallback",
+                                     "available":  true,
+                                     "count":  0
+                                 }
+                             ],
+    "findings":  [
+                     "Queue wait is larger than task execution time. This points to shard queueing.",
+                     "window_add is the slowest side-effect step.",
+                     "The slowest window_add phase is redis.",
+                     "msg.id.slow_path is the slowest send-sync timer."
+                 ],
+    "suggestions":  [
+                        "Check room-to-shard distribution and hot-room collisions on the same shard.",
+                        "Investigate Redis RTT, pipeline cost, and window-key hotspots.",
+                        "Investigate msg ID slow-path Lua latency and consider segment size or Redis contention."
+                    ]
+}

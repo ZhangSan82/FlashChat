@@ -96,6 +96,15 @@ public final class UserContext {
                 .orElse(null);
     }
 
+    /**
+     * 获取当前用户的系统角色。
+     */
+    public static Integer getSystemRole() {
+        return Optional.ofNullable(USER_THREAD_LOCAL.get())
+                .map(LoginUserInfoDTO::getSystemRole)
+                .orElse(null);
+    }
+
     // ==================== 身份判断 ====================
 
     public static boolean isLogin() {
@@ -110,5 +119,13 @@ public final class UserContext {
     public static boolean isRegisteredUser() {
         Integer userType = getUserType();
         return userType != null && userType == UserTypeConstant.USER;
+    }
+
+    /**
+     * 当前登录用户是否具备管理员权限。
+     */
+    public static boolean isAdmin() {
+        Integer systemRole = getSystemRole();
+        return systemRole != null && systemRole == 1;
     }
 }

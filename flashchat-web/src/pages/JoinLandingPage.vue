@@ -170,8 +170,14 @@ onMounted(async () => {
   setTimeout(() => { cardVisible.value = true }, 50)
 
   try {
-    loadingHint.value = '正在准备身份...'
-    await auth.init()
+    loadingHint.value = '正在验证身份...'
+    const valid = await auth.checkOnly()
+
+    if (!valid) {
+      // token 无效或不存在，跳转到选择页
+      router.replace({ name: 'EntryChoice', query: { roomId: props.roomId } })
+      return
+    }
 
     loadingHint.value = '获取房间信息...'
     await fetchRoomPreview()
@@ -222,7 +228,11 @@ async function retryLoad() {
   errorMsg.value = ''
   errorHint.value = ''
   try {
-    await auth.init()
+    const valid = await auth.checkOnly()
+    if (!valid) {
+      router.replace({ name: 'EntryChoice', query: { roomId: props.roomId } })
+      return
+    }
     await fetchRoomPreview()
     state.value = 'ready'
   } catch (e) {

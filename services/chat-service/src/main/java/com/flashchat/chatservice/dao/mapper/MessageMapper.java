@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 import java.util.Map;
@@ -40,19 +41,42 @@ public interface MessageMapper extends BaseMapper<MessageDO> {
     @Insert("<script>" +
             "INSERT IGNORE INTO t_message " +
             "(id, msg_id, room_id, sender_id, " +
-            " nickname, avatar_color, content, body, reply_msg_id, " +
+            " nickname, avatar_color, content, content_cipher, content_iv, key_version, body, reply_msg_id, " +
             " msg_type, status, is_host, create_time) " +
             "VALUES " +
             "<foreach collection='list' item='item' separator=','>" +
             "(#{item.id}, #{item.msgId}, #{item.roomId}, " +
             " #{item.senderId}, " +
             " #{item.nickname}, #{item.avatarColor}, " +
-            " #{item.content}, #{item.body}, #{item.replyMsgId}, " +
+            " #{item.content}, #{item.contentCipher}, #{item.contentIv}, #{item.keyVersion}, #{item.body}, #{item.replyMsgId}, " +
             " #{item.msgType}, #{item.status}, #{item.isHost}, " +
             " #{item.createTime})" +
             "</foreach>" +
             "</script>")
     int insertBatchIgnore(@Param("list") List<MessageDO> list);
+
+    @Update("<script>" +
+            "UPDATE t_message " +
+            "SET content = NULL, " +
+            " content_cipher = CASE id " +
+            " <foreach collection='list' item='item'>" +
+            "   WHEN #{item.id} THEN #{item.contentCipher} " +
+            " </foreach> END, " +
+            " content_iv = CASE id " +
+            " <foreach collection='list' item='item'>" +
+            "   WHEN #{item.id} THEN #{item.contentIv} " +
+            " </foreach> END, " +
+            " key_version = CASE id " +
+            " <foreach collection='list' item='item'>" +
+            "   WHEN #{item.id} THEN #{item.keyVersion} " +
+            " </foreach> END " +
+            "WHERE id IN " +
+            "<foreach collection='list' item='item' open='(' separator=',' close=')'>" +
+            " #{item.id} " +
+            "</foreach>" +
+            " AND content IS NOT NULL" +
+            "</script>")
+    int updateCryptoBatch(@Param("list") List<MessageDO> list);
 
 
     /**

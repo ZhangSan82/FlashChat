@@ -2,6 +2,7 @@ package com.flashchat.chatservice.service.impl;
 
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
+import com.flashchat.chatservice.service.crypto.MessageContentCodec;
 import com.flashchat.chatservice.service.persist.PersistResult;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 import com.flashchat.convention.errorcode.BaseErrorCode;
@@ -46,6 +47,7 @@ public class MessagePersistServiceImpl {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final MessageMapper messageMapper;
+    private final MessageContentCodec messageContentCodec;
 
     private final Timer xaddTimer;
     private final Counter xaddFailCounter;
@@ -53,9 +55,11 @@ public class MessagePersistServiceImpl {
 
     public MessagePersistServiceImpl(StringRedisTemplate stringRedisTemplate,
                                      MessageMapper messageMapper,
+                                     MessageContentCodec messageContentCodec,
                                      MeterRegistry meterRegistry) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.messageMapper = messageMapper;
+        this.messageContentCodec = messageContentCodec;
         this.xaddTimer = Timer.builder("chat.msg.xadd.duration")
                 .description("XADD 持久化握手耗时")
                 .register(meterRegistry);
@@ -128,8 +132,9 @@ public class MessagePersistServiceImpl {
      */
     public PersistResult saveSync(MessageDO messageDO) {
         fallbackCounter.increment();
+        MessageDO storageReady = messageContentCodec.encodeForStorage(messageDO);
         try {
-            messageMapper.insert(messageDO);
+            messageMapper.insert(storageReady);
             log.info("[同步持久化成功-降级] msgId={}, dbId={}",
                     messageDO.getMsgId(), messageDO.getId());
             return PersistResult.acceptedByDb(messageDO.getMsgId(), messageDO.getId());
@@ -138,7 +143,7 @@ public class MessagePersistServiceImpl {
             // 但这里不再静默吞掉，而是继续向上抛异常阻断副作用
             log.error("[同步写 DB 失败] 消息可能丢失! msgId={}, dbId={}, payload={}",
                     messageDO.getMsgId(), messageDO.getId(),
-                    JsonUtil.toJson(messageDO), e);
+                    JsonUtil.toJson(storageReady), e);
             throw new ServiceException("消息持久化失败，请稍后重试", e, BaseErrorCode.SERVICE_ERROR);
         }
     }

@@ -2,8 +2,11 @@ package com.flashchat.chatservice.config;
 
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
 import com.flashchat.convention.exception.ServiceException;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
@@ -64,6 +67,13 @@ public class MsgIdGenerator {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final MessageMapper messageMapper;
+    /**
+     * 慢路径计时器:仅当本地段耗尽、需要走 Redis Lua 拉段时才会 stop。
+     * 快路径 tryNextId()→segmentNext++ 不进入此 Timer,所以 count 就是慢路径命中次数。
+     * 用 @Autowired(required=false)+setter 注入,避免破坏既有构造器(单元测试沿用旧构造)。
+     */
+    private volatile MeterRegistry meterRegistry;
+    private volatile Timer slowPathTimer;
 
     /**
      * 本地 ID 段状态,由 segmentLock 保护。
@@ -89,6 +99,22 @@ public class MsgIdGenerator {
                           MessageMapper messageMapper) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.messageMapper = messageMapper;
+    }
+
+    /**
+     * 可选 setter 注入 MeterRegistry:
+     *   - 生产环境 Spring 自动注入 → 同步构建 slowPathTimer
+     *   - 单元测试沿用现有两参构造,不传 registry 时 timer 保持 null,调用处自行判空
+     */
+    @Autowired(required = false)
+    public void setMeterRegistry(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        if (meterRegistry != null) {
+            this.slowPathTimer = Timer.builder("flashchat.msg.id.slow_path.duration")
+                    .description("tryNextId 段耗尽走 Redis Lua 拉段的耗时 — count 即慢路径命中次数")
+                    .publishPercentiles(0.5, 0.95, 0.99)
+                    .register(meterRegistry);
+        }
     }
 
     @PostConstruct
@@ -133,7 +159,18 @@ public class MsgIdGenerator {
             }
         }
         // ===== 慢路径:段耗尽,拉下一段 =====
-        return fetchNextSegment();
+        // Timer 在此处起点(含 double-check + 可能的 DB 水位补查 + Redis Lua RTT),
+        // 这样 count 就等于慢路径命中次数,avg/p95 反映拉段真实开销(含竞争)
+        final Timer localSlowPathTimer = this.slowPathTimer;
+        if (localSlowPathTimer == null) {
+            return fetchNextSegment();
+        }
+        final Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            return fetchNextSegment();
+        } finally {
+            sample.stop(localSlowPathTimer);
+        }
     }
 
     private Long fetchNextSegment() {

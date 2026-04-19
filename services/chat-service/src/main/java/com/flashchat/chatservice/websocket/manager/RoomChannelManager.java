@@ -38,6 +38,9 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
     private final Counter broadcastCounter;
     private final Counter slowClientSkipCounter;
     private final Timer broadcastTimer;
+    private final Timer broadcastSerializeTimer;
+    private final Timer broadcastWriteTimer;
+    private final Timer broadcastFlushTimer;
     // ==================== 用户连接映射 ====================
     /**
      * userId → Channel
@@ -88,6 +91,9 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
         this.broadcastCounter = meterRegistry.counter("flashchat.broadcast.total");
         this.slowClientSkipCounter = meterRegistry.counter("flashchat.broadcast.skip.slow_client");
         this.broadcastTimer =  meterRegistry.timer("flashchat.broadcast.duration");
+        this.broadcastSerializeTimer = meterRegistry.timer("flashchat.broadcast.serialize.duration");
+        this.broadcastWriteTimer = meterRegistry.timer("flashchat.broadcast.write.duration");
+        this.broadcastFlushTimer = meterRegistry.timer("flashchat.broadcast.flush.duration");
     }
 
     // ===========================================================
@@ -488,25 +494,29 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
      * 广播核心逻辑（write + flush 两轮遍历）
      */
     private void doBroadcast(Set<Channel> channels, WsRespDTO<?> resp, Channel excludeCh) {
-        String json = JsonUtil.toJson(resp);
+        String json = broadcastSerializeTimer.record(() -> JsonUtil.toJson(resp));
 
         // 第一轮：write（不 flush），跳过不可写的慢客户端
-        for (Channel ch : channels) {
-            if (ch == excludeCh) continue;
-            if (!ch.isActive()) continue;
-            if (!ch.isWritable()) {
-                slowClientSkipCounter.increment();
-                continue;
+        broadcastWriteTimer.record(() -> {
+            for (Channel ch : channels) {
+                if (ch == excludeCh) continue;
+                if (!ch.isActive()) continue;
+                if (!ch.isWritable()) {
+                    slowClientSkipCounter.increment();
+                    continue;
+                }
+                ch.write(new TextWebSocketFrame(json));
             }
-            ch.write(new TextWebSocketFrame(json));
-        }
+        });
 
         // 第二轮：flush
         // 同一 EventLoop 上的多个 flush，第一个真正触发系统调用，后续无新数据时短路跳过
-        for (Channel ch : channels) {
-            if (ch == excludeCh) continue;
-            ch.flush();
-        }
+        broadcastFlushTimer.record(() -> {
+            for (Channel ch : channels) {
+                if (ch == excludeCh) continue;
+                ch.flush();
+            }
+        });
     }
 
 

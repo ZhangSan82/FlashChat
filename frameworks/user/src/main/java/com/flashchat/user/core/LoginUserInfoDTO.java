@@ -78,4 +78,11 @@ public class LoginUserInfoDTO implements Serializable {
      * {@code StpUtil.getSession().set(SESSION_KEY, updatedUserInfo)}
      */
     private String nickname;
+
+    /**
+     * 系统级角色。
+     * 0 = 普通用户
+     * 1 = 系统管理员
+     */
+    private Integer systemRole;
 }

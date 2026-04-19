@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 管理端账号接口。
+ * 管理员账号接口。
  */
 @Slf4j
 @RestController
@@ -80,6 +80,24 @@ public class AdminAccountController {
         log.info("[admin adjust credits] operator={}, target={}, amount={}, direction={}",
                 operatorId, accountId, request.getAmount(), request.getDirection());
         adminAccountService.adjustCredits(operatorId, accountId, request);
+        return Results.success();
+    }
+
+    @PostMapping("/{accountId}/grant-admin")
+    public Result<Void> grantAdmin(@PathVariable("accountId") String accountId,
+                                   @Valid @RequestBody AdminOperationReasonReqDTO request) {
+        Long operatorId = UserContext.getRequiredLoginId();
+        log.info("[admin grant admin] operator={}, target={}", operatorId, accountId);
+        adminAccountService.grantAdmin(operatorId, accountId, request);
+        return Results.success();
+    }
+
+    @PostMapping("/{accountId}/revoke-admin")
+    public Result<Void> revokeAdmin(@PathVariable("accountId") String accountId,
+                                    @Valid @RequestBody AdminOperationReasonReqDTO request) {
+        Long operatorId = UserContext.getRequiredLoginId();
+        log.info("[admin revoke admin] operator={}, target={}", operatorId, accountId);
+        adminAccountService.revokeAdmin(operatorId, accountId, request);
         return Results.success();
     }
 }

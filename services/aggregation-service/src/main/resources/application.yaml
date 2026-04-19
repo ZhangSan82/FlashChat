@@ -1,0 +1,182 @@
+server:
+  port: 8081
+  # ==================== Tomcat（2核4G 调优） ====================
+  tomcat:
+    threads:
+      max: 50
+      min-spare: 5
+    max-connections: 2000
+    accept-count: 100
+    connection-timeout: 5000
+
+spring:
+  application:
+    name: aggregation-service
+
+  # ==================== 数据源（2核4G 调优） ====================
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/flashchat?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 8
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 5000
+      pool-name: FlashChatHikariPool
+
+  # ==================== Redis（2核4G 调优） ====================
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
+          max-wait: 2000ms
+
+    # ====================文件上传 ====================
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+# ==================== MyBatis-Plus ====================
+mybatis-plus:
+  global-config:
+    db-config:
+      # 逻辑删除字段值
+      logic-delete-field: delFlag
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      # 主键策略：自增
+      id-type: auto
+    # 关闭 banner
+    banner: false
+  configuration:
+    # 驼峰映射（avatar_color → avatarColor）
+    map-underscore-to-camel-case: true
+    # 开发阶段打印 SQL
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+flashchat:
+  cache:
+    redis:
+      value-timeout: 60000
+      value-time-unit: MILLISECONDS
+    local:
+      enabled: true
+      null-value-ttl-seconds: 15
+      room:
+        max-size: 10000
+        ttl-seconds: 30
+      room-member:
+        max-size: 5000
+        ttl-seconds: 15
+      account:
+        max-size: 10000
+        ttl-seconds: 45
+  share:
+    # 前端域名，用于拼接房间分享链接
+    # 生产环境改为实际域名：https://flashchat.com
+    base-url: http://localhost:3002
+
+  rate-limit:
+    enabled: true
+    user-global:
+      window-ms: 60000
+      max-count: 30
+    user-room:
+      window-ms: 10000
+      max-count: 10
+    room-global:
+      window-ms: 60000
+      max-count: 200
+
+  audit:
+    enabled: true
+    content-length:
+      enabled: true
+      min-length: 1
+      max-length: 500
+    sensitive-word:
+      enabled: true
+      dict-path: classpath:audit/sensitive-words.txt
+      reload-interval-ms: 300000
+      default-strategy: REPLACE
+
+
+  file:
+    # 文件存储根路径（相对路径或绝对路径）
+    # 生产环境建议配置为绝对路径：/data/flashchat/uploads
+    upload-path: ./uploads
+    # 文件访问 URL 前缀
+    # 生产环境配置为 Nginx 域名：https://files.flashchat.com/uploads
+    url-prefix: http://localhost:8081/uploads
+
+  ai:
+    kimi:
+      enabled: true
+      base-url: https://api.siliconflow.cn
+      api-key: sk-vdqqbzbmargnvexckiitfulpimcvcpmdhxtnmowfuqdkktnj
+      model: moonshotai/Kimi-K2-Instruct-0905
+      temperature: 0.7
+      max-tokens: 128
+      default-timeout-seconds: 15
+
+# ==================== 监控 Actuator ====================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+
+# ==================== SaToken 认证 ====================
+sa-token:
+  # token 名称：前端通过 Header 传递时的 key 名
+  # 请求示例：Header → satoken: abc123-xxx-xxx
+  token-name: satoken
+
+  # token 有效期：30 天（单位：秒）
+  # 30 天后 Redis 中的 token 映射自动过期，用户需重新登录
+  timeout: 2592000
+
+  # 临时活跃超时：-1 表示不限制
+  # 如果设为 1800，则 30 分钟不操作 token 就失效
+  # 匿名社交场景用户可能挂着不操作，所以关闭此限制
+  active-timeout: -1
+
+  # 是否允许同一账号多端同时登录
+  # true：手机和电脑同时登录互不影响
+  is-concurrent: true
+
+  # 多端登录是否共享 token
+  # false：每个设备独立 token，A 设备登出不影响 B 设备
+  # true：所有设备共享一个 token，任一设备登出全部失效
+  is-share: false
+
+  # token 风格：uuid 格式
+  token-style: uuid
+
+  # 是否从 HTTP Header 中读取 token
+  is-read-header: true
+
+  # 是否从 Cookie 中读取 token
+  # 前后端分离架构，token 走 Header，关闭 Cookie 读取
+  is-read-cookie: false
+
+  # 是否输出操作日志（开发阶段可开启调试，生产关闭）
+  is-log: true

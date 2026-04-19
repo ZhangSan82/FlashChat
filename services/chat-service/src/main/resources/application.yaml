@@ -109,6 +109,26 @@ flashchat:
       reload-interval-ms: 300000
       default-strategy: REPLACE
 
+  message:
+    crypto:
+      enabled: ${FLASHCHAT_MESSAGE_CRYPTO_ENABLED:false}
+      algorithm: AES/GCM/NoPadding
+      key: ${FLASHCHAT_MESSAGE_CRYPTO_KEY:}
+      keyring: ${FLASHCHAT_MESSAGE_CRYPTO_KEYRING:}
+      key-version: ${FLASHCHAT_MESSAGE_CRYPTO_KEY_VERSION:1}
+      iv-length-bytes: 12
+      tag-length-bits: 128
+      backfill:
+        enabled: ${FLASHCHAT_MESSAGE_CRYPTO_BACKFILL_ENABLED:false}
+        run-on-startup: ${FLASHCHAT_MESSAGE_CRYPTO_BACKFILL_RUN_ON_STARTUP:false}
+        batch-size: ${FLASHCHAT_MESSAGE_CRYPTO_BACKFILL_BATCH_SIZE:200}
+        max-batches-per-run: ${FLASHCHAT_MESSAGE_CRYPTO_BACKFILL_MAX_BATCHES_PER_RUN:20}
+        batch-sleep-ms: ${FLASHCHAT_MESSAGE_CRYPTO_BACKFILL_BATCH_SLEEP_MS:100}
+        fixed-delay-ms: ${FLASHCHAT_MESSAGE_CRYPTO_BACKFILL_FIXED_DELAY_MS:30000}
+        initial-delay-ms: ${FLASHCHAT_MESSAGE_CRYPTO_BACKFILL_INITIAL_DELAY_MS:30000}
+        lock-wait-seconds: ${FLASHCHAT_MESSAGE_CRYPTO_BACKFILL_LOCK_WAIT_SECONDS:0}
+        lock-lease-seconds: ${FLASHCHAT_MESSAGE_CRYPTO_BACKFILL_LOCK_LEASE_SECONDS:600}
+
 
   file:
     # 文件存储根路径（相对路径或绝对路径）

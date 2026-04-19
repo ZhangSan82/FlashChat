@@ -1,0 +1,1805 @@
+
+         /\      Grafana   /â€¾â€?  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   â€¾â€¾\ 
+  /          \   |   (  |  (â€?  |
+ / __________ \  |_|\_\  \_____/ 
+
+     execution: local
+        script: D:\javaproject\FlashChat\perf\k6\ten-room.js
+        output: -
+
+     scenarios: (100.00%) 2 scenarios, 270 max VUs, 7m5s max duration (incl. graceful stop):
+              * listeners: 20 looping VUs for 7m0s (exec: listeners, gracefulStop: 5s)
+              * senders: Up to 250 looping VUs for 5m50s over 3 stages (gracefulRampDown: 10s, exec: senders, gracefulStop: 30s)
+
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+Run         [ 100% ] setup()
+listeners   [   0% ]
+senders     [   0% ]
+
+running (0m26.6s), 026/270 VUs, 5 complete and 0 interrupted iterations
+listeners   [   0% ] 20 VUs       0m00.6s/7m0s
+senders     [   0% ] 006/250 VUs  0m00.6s/5m50.0s
+
+running (0m27.6s), 034/270 VUs, 46 complete and 0 interrupted iterations
+listeners   [   0% ] 20 VUs       0m01.6s/7m0s
+senders     [   0% ] 014/250 VUs  0m01.6s/5m50.0s
+
+running (0m28.7s), 042/270 VUs, 127 complete and 0 interrupted iterations
+listeners   [   1% ] 20 VUs       0m02.6s/7m0s
+senders     [   1% ] 022/250 VUs  0m02.6s/5m50.0s
+
+running (0m29.6s), 051/270 VUs, 251 complete and 0 interrupted iterations
+listeners   [   1% ] 20 VUs       0m03.6s/7m0s
+senders     [   1% ] 031/250 VUs  0m03.6s/5m50.0s
+
+running (0m30.6s), 059/270 VUs, 404 complete and 0 interrupted iterations
+listeners   [   1% ] 20 VUs       0m04.6s/7m0s
+senders     [   1% ] 039/250 VUs  0m04.6s/5m50.0s
+
+running (0m31.6s), 067/270 VUs, 612 complete and 0 interrupted iterations
+listeners   [   1% ] 20 VUs       0m05.6s/7m0s
+senders     [   2% ] 047/250 VUs  0m05.6s/5m50.0s
+
+running (0m32.6s), 076/270 VUs, 843 complete and 0 interrupted iterations
+listeners   [   2% ] 20 VUs       0m06.6s/7m0s
+senders     [   2% ] 056/250 VUs  0m06.6s/5m50.0s
+
+running (0m33.7s), 084/270 VUs, 1113 complete and 0 interrupted iterations
+listeners   [   2% ] 20 VUs       0m07.6s/7m0s
+senders     [   2% ] 064/250 VUs  0m07.6s/5m50.0s
+
+running (0m34.6s), 092/270 VUs, 1418 complete and 0 interrupted iterations
+listeners   [   2% ] 20 VUs       0m08.6s/7m0s
+senders     [   2% ] 072/250 VUs  0m08.6s/5m50.0s
+
+running (0m35.7s), 101/270 VUs, 1777 complete and 0 interrupted iterations
+listeners   [   2% ] 20 VUs       0m09.6s/7m0s
+senders     [   3% ] 081/250 VUs  0m09.6s/5m50.0s
+
+running (0m36.6s), 109/270 VUs, 2159 complete and 0 interrupted iterations
+listeners   [   3% ] 20 VUs       0m10.6s/7m0s
+senders     [   3% ] 089/250 VUs  0m10.6s/5m50.0s
+
+running (0m37.7s), 117/270 VUs, 2601 complete and 0 interrupted iterations
+listeners   [   3% ] 20 VUs       0m11.6s/7m0s
+senders     [   3% ] 097/250 VUs  0m11.6s/5m50.0s
+
+running (0m38.6s), 125/270 VUs, 3061 complete and 0 interrupted iterations
+listeners   [   3% ] 20 VUs       0m12.6s/7m0s
+senders     [   4% ] 105/250 VUs  0m12.6s/5m50.0s
+
+running (0m39.7s), 134/270 VUs, 3589 complete and 0 interrupted iterations
+listeners   [   3% ] 20 VUs       0m13.6s/7m0s
+senders     [   4% ] 114/250 VUs  0m13.6s/5m50.0s
+
+running (0m40.7s), 142/270 VUs, 4109 complete and 0 interrupted iterations
+listeners   [   3% ] 20 VUs       0m14.6s/7m0s
+senders     [   4% ] 122/250 VUs  0m14.6s/5m50.0s
+
+running (0m41.7s), 150/270 VUs, 4715 complete and 0 interrupted iterations
+listeners   [   4% ] 20 VUs       0m15.6s/7m0s
+senders     [   4% ] 130/250 VUs  0m15.6s/5m50.0s
+
+running (0m42.7s), 159/270 VUs, 5318 complete and 0 interrupted iterations
+listeners   [   4% ] 20 VUs       0m16.7s/7m0s
+senders     [   5% ] 139/250 VUs  0m16.7s/5m50.0s
+
+running (0m43.7s), 167/270 VUs, 5959 complete and 0 interrupted iterations
+listeners   [   4% ] 20 VUs       0m17.6s/7m0s
+senders     [   5% ] 147/250 VUs  0m17.6s/5m50.0s
+
+running (0m44.7s), 175/270 VUs, 6580 complete and 0 interrupted iterations
+listeners   [   4% ] 20 VUs       0m18.6s/7m0s
+senders     [   5% ] 155/250 VUs  0m18.6s/5m50.0s
+
+running (0m45.6s), 184/270 VUs, 7298 complete and 0 interrupted iterations
+listeners   [   5% ] 20 VUs       0m19.6s/7m0s
+senders     [   6% ] 164/250 VUs  0m19.6s/5m50.0s
+
+running (0m46.7s), 192/270 VUs, 8094 complete and 0 interrupted iterations
+listeners   [   5% ] 20 VUs       0m20.6s/7m0s
+senders     [   6% ] 172/250 VUs  0m20.6s/5m50.0s
+
+running (0m47.7s), 200/270 VUs, 8809 complete and 0 interrupted iterations
+listeners   [   5% ] 20 VUs       0m21.6s/7m0s
+senders     [   6% ] 180/250 VUs  0m21.6s/5m50.0s
+
+running (0m48.7s), 208/270 VUs, 9596 complete and 0 interrupted iterations
+listeners   [   5% ] 20 VUs       0m22.6s/7m0s
+senders     [   6% ] 188/250 VUs  0m22.6s/5m50.0s
+
+running (0m49.7s), 217/270 VUs, 10451 complete and 0 interrupted iterations
+listeners   [   6% ] 20 VUs       0m23.6s/7m0s
+senders     [   7% ] 197/250 VUs  0m23.6s/5m50.0s
+
+running (0m50.7s), 225/270 VUs, 11340 complete and 0 interrupted iterations
+listeners   [   6% ] 20 VUs       0m24.6s/7m0s
+senders     [   7% ] 205/250 VUs  0m24.6s/5m50.0s
+
+running (0m51.7s), 233/270 VUs, 12152 complete and 0 interrupted iterations
+listeners   [   6% ] 20 VUs       0m25.6s/7m0s
+senders     [   7% ] 213/250 VUs  0m25.6s/5m50.0s
+
+running (0m52.7s), 242/270 VUs, 12978 complete and 0 interrupted iterations
+listeners   [   6% ] 20 VUs       0m26.6s/7m0s
+senders     [   8% ] 222/250 VUs  0m26.6s/5m50.0s
+
+running (0m53.7s), 250/270 VUs, 13635 complete and 0 interrupted iterations
+listeners   [   7% ] 20 VUs       0m27.6s/7m0s
+senders     [   8% ] 230/250 VUs  0m27.6s/5m50.0s
+
+running (0m54.7s), 258/270 VUs, 14458 complete and 0 interrupted iterations
+listeners   [   7% ] 20 VUs       0m28.6s/7m0s
+senders     [   8% ] 238/250 VUs  0m28.6s/5m50.0s
+
+running (0m55.6s), 267/270 VUs, 15271 complete and 0 interrupted iterations
+listeners   [   7% ] 20 VUs       0m29.6s/7m0s
+senders     [   8% ] 247/250 VUs  0m29.6s/5m50.0s
+
+running (0m56.7s), 270/270 VUs, 16304 complete and 0 interrupted iterations
+listeners   [   7% ] 20 VUs       0m30.6s/7m0s
+senders     [   9% ] 250/250 VUs  0m30.6s/5m50.0s
+
+running (0m57.7s), 270/270 VUs, 17470 complete and 0 interrupted iterations
+listeners   [   8% ] 20 VUs       0m31.6s/7m0s
+senders     [   9% ] 250/250 VUs  0m31.6s/5m50.0s
+
+running (0m58.7s), 270/270 VUs, 18324 complete and 0 interrupted iterations
+listeners   [   8% ] 20 VUs       0m32.6s/7m0s
+senders     [   9% ] 250/250 VUs  0m32.6s/5m50.0s
+
+running (0m59.7s), 270/270 VUs, 19483 complete and 0 interrupted iterations
+listeners   [   8% ] 20 VUs       0m33.6s/7m0s
+senders     [  10% ] 250/250 VUs  0m33.6s/5m50.0s
+
+running (1m00.7s), 270/270 VUs, 20650 complete and 0 interrupted iterations
+listeners   [   8% ] 20 VUs       0m34.6s/7m0s
+senders     [  10% ] 250/250 VUs  0m34.6s/5m50.0s
+
+running (1m01.6s), 270/270 VUs, 21791 complete and 0 interrupted iterations
+listeners   [   8% ] 20 VUs       0m35.6s/7m0s
+senders     [  10% ] 250/250 VUs  0m35.6s/5m50.0s
+
+running (1m02.7s), 270/270 VUs, 23005 complete and 0 interrupted iterations
+listeners   [   9% ] 20 VUs       0m36.6s/7m0s
+senders     [  10% ] 250/250 VUs  0m36.6s/5m50.0s
+
+running (1m03.7s), 270/270 VUs, 24142 complete and 0 interrupted iterations
+listeners   [   9% ] 20 VUs       0m37.6s/7m0s
+senders     [  11% ] 250/250 VUs  0m37.6s/5m50.0s
+
+running (1m04.7s), 270/270 VUs, 25304 complete and 0 interrupted iterations
+listeners   [   9% ] 20 VUs       0m38.6s/7m0s
+senders     [  11% ] 250/250 VUs  0m38.6s/5m50.0s
+
+running (1m05.7s), 270/270 VUs, 26414 complete and 0 interrupted iterations
+listeners   [   9% ] 20 VUs       0m39.6s/7m0s
+senders     [  11% ] 250/250 VUs  0m39.6s/5m50.0s
+
+running (1m06.6s), 270/270 VUs, 27620 complete and 0 interrupted iterations
+listeners   [  10% ] 20 VUs       0m40.6s/7m0s
+senders     [  12% ] 250/250 VUs  0m40.6s/5m50.0s
+
+running (1m07.6s), 270/270 VUs, 28675 complete and 0 interrupted iterations
+listeners   [  10% ] 20 VUs       0m41.6s/7m0s
+senders     [  12% ] 250/250 VUs  0m41.6s/5m50.0s
+
+running (1m08.6s), 270/270 VUs, 29175 complete and 0 interrupted iterations
+listeners   [  10% ] 20 VUs       0m42.6s/7m0s
+senders     [  12% ] 250/250 VUs  0m42.6s/5m50.0s
+
+running (1m09.6s), 270/270 VUs, 30235 complete and 0 interrupted iterations
+listeners   [  10% ] 20 VUs       0m43.6s/7m0s
+senders     [  12% ] 250/250 VUs  0m43.6s/5m50.0s
+
+running (1m10.7s), 270/270 VUs, 31441 complete and 0 interrupted iterations
+listeners   [  11% ] 20 VUs       0m44.6s/7m0s
+senders     [  13% ] 250/250 VUs  0m44.6s/5m50.0s
+
+running (1m11.6s), 270/270 VUs, 32638 complete and 0 interrupted iterations
+listeners   [  11% ] 20 VUs       0m45.6s/7m0s
+senders     [  13% ] 250/250 VUs  0m45.6s/5m50.0s
+
+running (1m12.7s), 270/270 VUs, 33731 complete and 0 interrupted iterations
+listeners   [  11% ] 20 VUs       0m46.6s/7m0s
+senders     [  13% ] 250/250 VUs  0m46.6s/5m50.0s
+
+running (1m13.7s), 270/270 VUs, 34619 complete and 0 interrupted iterations
+listeners   [  11% ] 20 VUs       0m47.6s/7m0s
+senders     [  14% ] 250/250 VUs  0m47.6s/5m50.0s
+
+running (1m14.7s), 270/270 VUs, 35647 complete and 0 interrupted iterations
+listeners   [  12% ] 20 VUs       0m48.6s/7m0s
+senders     [  14% ] 250/250 VUs  0m48.6s/5m50.0s
+
+running (1m15.7s), 270/270 VUs, 36840 complete and 0 interrupted iterations
+listeners   [  12% ] 20 VUs       0m49.6s/7m0s
+senders     [  14% ] 250/250 VUs  0m49.6s/5m50.0s
+
+running (1m16.6s), 270/270 VUs, 37980 complete and 0 interrupted iterations
+listeners   [  12% ] 20 VUs       0m50.6s/7m0s
+senders     [  14% ] 250/250 VUs  0m50.6s/5m50.0s
+
+running (1m17.6s), 270/270 VUs, 39134 complete and 0 interrupted iterations
+listeners   [  12% ] 20 VUs       0m51.6s/7m0s
+senders     [  15% ] 250/250 VUs  0m51.6s/5m50.0s
+
+running (1m18.7s), 270/270 VUs, 40273 complete and 0 interrupted iterations
+listeners   [  13% ] 20 VUs       0m52.6s/7m0s
+senders     [  15% ] 250/250 VUs  0m52.6s/5m50.0s
+
+running (1m19.7s), 270/270 VUs, 41413 complete and 0 interrupted iterations
+listeners   [  13% ] 20 VUs       0m53.6s/7m0s
+senders     [  15% ] 250/250 VUs  0m53.6s/5m50.0s
+
+running (1m20.7s), 270/270 VUs, 42596 complete and 0 interrupted iterations
+listeners   [  13% ] 20 VUs       0m54.6s/7m0s
+senders     [  16% ] 250/250 VUs  0m54.6s/5m50.0s
+
+running (1m21.7s), 270/270 VUs, 43697 complete and 0 interrupted iterations
+listeners   [  13% ] 20 VUs       0m55.6s/7m0s
+senders     [  16% ] 250/250 VUs  0m55.6s/5m50.0s
+
+running (1m22.6s), 270/270 VUs, 44869 complete and 0 interrupted iterations
+listeners   [  13% ] 20 VUs       0m56.6s/7m0s
+senders     [  16% ] 250/250 VUs  0m56.6s/5m50.0s
+
+running (1m23.7s), 270/270 VUs, 46004 complete and 0 interrupted iterations
+listeners   [  14% ] 20 VUs       0m57.6s/7m0s
+senders     [  16% ] 250/250 VUs  0m57.6s/5m50.0s
+
+running (1m24.7s), 270/270 VUs, 47137 complete and 0 interrupted iterations
+listeners   [  14% ] 20 VUs       0m58.6s/7m0s
+senders     [  17% ] 250/250 VUs  0m58.6s/5m50.0s
+
+running (1m25.6s), 270/270 VUs, 48279 complete and 0 interrupted iterations
+listeners   [  14% ] 20 VUs       0m59.6s/7m0s
+senders     [  17% ] 250/250 VUs  0m59.6s/5m50.0s
+
+running (1m26.6s), 270/270 VUs, 49415 complete and 0 interrupted iterations
+listeners   [  14% ] 20 VUs       1m00.6s/7m0s
+senders     [  17% ] 250/250 VUs  1m00.6s/5m50.0s
+
+running (1m27.7s), 270/270 VUs, 50464 complete and 0 interrupted iterations
+listeners   [  15% ] 20 VUs       1m01.6s/7m0s
+senders     [  18% ] 250/250 VUs  1m01.6s/5m50.0s
+
+running (1m28.7s), 270/270 VUs, 51485 complete and 0 interrupted iterations
+listeners   [  15% ] 20 VUs       1m02.6s/7m0s
+senders     [  18% ] 250/250 VUs  1m02.6s/5m50.0s
+
+running (1m29.6s), 270/270 VUs, 52540 complete and 0 interrupted iterations
+listeners   [  15% ] 20 VUs       1m03.6s/7m0s
+senders     [  18% ] 250/250 VUs  1m03.6s/5m50.0s
+
+running (1m30.7s), 270/270 VUs, 53677 complete and 0 interrupted iterations
+listeners   [  15% ] 20 VUs       1m04.6s/7m0s
+senders     [  18% ] 250/250 VUs  1m04.6s/5m50.0s
+
+running (1m31.6s), 270/270 VUs, 54833 complete and 0 interrupted iterations
+listeners   [  16% ] 20 VUs       1m05.6s/7m0s
+senders     [  19% ] 250/250 VUs  1m05.6s/5m50.0s
+
+running (1m32.7s), 270/270 VUs, 55964 complete and 0 interrupted iterations
+listeners   [  16% ] 20 VUs       1m06.6s/7m0s
+senders     [  19% ] 250/250 VUs  1m06.6s/5m50.0s
+
+running (1m33.7s), 270/270 VUs, 56913 complete and 0 interrupted iterations
+listeners   [  16% ] 20 VUs       1m07.6s/7m0s
+senders     [  19% ] 250/250 VUs  1m07.6s/5m50.0s
+
+running (1m34.6s), 270/270 VUs, 57981 complete and 0 interrupted iterations
+listeners   [  16% ] 20 VUs       1m08.6s/7m0s
+senders     [  20% ] 250/250 VUs  1m08.6s/5m50.0s
+
+running (1m35.6s), 270/270 VUs, 59123 complete and 0 interrupted iterations
+listeners   [  17% ] 20 VUs       1m09.6s/7m0s
+senders     [  20% ] 250/250 VUs  1m09.6s/5m50.0s
+
+running (1m36.7s), 270/270 VUs, 60305 complete and 0 interrupted iterations
+listeners   [  17% ] 20 VUs       1m10.6s/7m0s
+senders     [  20% ] 250/250 VUs  1m10.6s/5m50.0s
+
+running (1m37.7s), 270/270 VUs, 61372 complete and 0 interrupted iterations
+listeners   [  17% ] 20 VUs       1m11.6s/7m0s
+senders     [  20% ] 250/250 VUs  1m11.6s/5m50.0s
+
+running (1m38.6s), 270/270 VUs, 62507 complete and 0 interrupted iterations
+listeners   [  17% ] 20 VUs       1m12.6s/7m0s
+senders     [  21% ] 250/250 VUs  1m12.6s/5m50.0s
+
+running (1m39.6s), 270/270 VUs, 63656 complete and 0 interrupted iterations
+listeners   [  18% ] 20 VUs       1m13.6s/7m0s
+senders     [  21% ] 250/250 VUs  1m13.6s/5m50.0s
+
+running (1m40.6s), 270/270 VUs, 64720 complete and 0 interrupted iterations
+listeners   [  18% ] 20 VUs       1m14.6s/7m0s
+senders     [  21% ] 250/250 VUs  1m14.6s/5m50.0s
+
+running (1m41.6s), 270/270 VUs, 65868 complete and 0 interrupted iterations
+listeners   [  18% ] 20 VUs       1m15.6s/7m0s
+senders     [  22% ] 250/250 VUs  1m15.6s/5m50.0s
+
+running (1m42.7s), 270/270 VUs, 66992 complete and 0 interrupted iterations
+listeners   [  18% ] 20 VUs       1m16.6s/7m0s
+senders     [  22% ] 250/250 VUs  1m16.6s/5m50.0s
+
+running (1m43.7s), 270/270 VUs, 67998 complete and 0 interrupted iterations
+listeners   [  18% ] 20 VUs       1m17.6s/7m0s
+senders     [  22% ] 250/250 VUs  1m17.6s/5m50.0s
+
+running (1m44.6s), 270/270 VUs, 69022 complete and 0 interrupted iterations
+listeners   [  19% ] 20 VUs       1m18.6s/7m0s
+senders     [  22% ] 250/250 VUs  1m18.6s/5m50.0s
+
+running (1m45.7s), 270/270 VUs, 70201 complete and 0 interrupted iterations
+listeners   [  19% ] 20 VUs       1m19.6s/7m0s
+senders     [  23% ] 250/250 VUs  1m19.6s/5m50.0s
+
+running (1m46.7s), 270/270 VUs, 71200 complete and 0 interrupted iterations
+listeners   [  19% ] 20 VUs       1m20.6s/7m0s
+senders     [  23% ] 250/250 VUs  1m20.6s/5m50.0s
+
+running (1m47.6s), 270/270 VUs, 72377 complete and 0 interrupted iterations
+listeners   [  19% ] 20 VUs       1m21.6s/7m0s
+senders     [  23% ] 250/250 VUs  1m21.6s/5m50.0s
+
+running (1m48.7s), 270/270 VUs, 73551 complete and 0 interrupted iterations
+listeners   [  20% ] 20 VUs       1m22.6s/7m0s
+senders     [  24% ] 250/250 VUs  1m22.6s/5m50.0s
+
+running (1m49.6s), 270/270 VUs, 74700 complete and 0 interrupted iterations
+listeners   [  20% ] 20 VUs       1m23.6s/7m0s
+senders     [  24% ] 250/250 VUs  1m23.6s/5m50.0s
+
+running (1m50.6s), 270/270 VUs, 75800 complete and 0 interrupted iterations
+listeners   [  20% ] 20 VUs       1m24.6s/7m0s
+senders     [  24% ] 250/250 VUs  1m24.6s/5m50.0s
+
+running (1m51.6s), 270/270 VUs, 76971 complete and 0 interrupted iterations
+listeners   [  20% ] 20 VUs       1m25.6s/7m0s
+senders     [  24% ] 250/250 VUs  1m25.6s/5m50.0s
+
+running (1m52.7s), 270/270 VUs, 78165 complete and 0 interrupted iterations
+listeners   [  21% ] 20 VUs       1m26.6s/7m0s
+senders     [  25% ] 250/250 VUs  1m26.6s/5m50.0s
+
+running (1m53.6s), 270/270 VUs, 79268 complete and 0 interrupted iterations
+listeners   [  21% ] 20 VUs       1m27.6s/7m0s
+senders     [  25% ] 250/250 VUs  1m27.6s/5m50.0s
+
+running (1m54.6s), 270/270 VUs, 80313 complete and 0 interrupted iterations
+listeners   [  21% ] 20 VUs       1m28.6s/7m0s
+senders     [  25% ] 250/250 VUs  1m28.6s/5m50.0s
+
+running (1m55.6s), 270/270 VUs, 81479 complete and 0 interrupted iterations
+listeners   [  21% ] 20 VUs       1m29.6s/7m0s
+senders     [  26% ] 250/250 VUs  1m29.6s/5m50.0s
+
+running (1m56.6s), 270/270 VUs, 82658 complete and 0 interrupted iterations
+listeners   [  22% ] 20 VUs       1m30.6s/7m0s
+senders     [  26% ] 250/250 VUs  1m30.6s/5m50.0s
+
+running (1m57.6s), 270/270 VUs, 83825 complete and 0 interrupted iterations
+listeners   [  22% ] 20 VUs       1m31.6s/7m0s
+senders     [  26% ] 250/250 VUs  1m31.6s/5m50.0s
+
+running (1m58.6s), 270/270 VUs, 84966 complete and 0 interrupted iterations
+listeners   [  22% ] 20 VUs       1m32.6s/7m0s
+senders     [  26% ] 250/250 VUs  1m32.6s/5m50.0s
+
+running (1m59.7s), 270/270 VUs, 86123 complete and 0 interrupted iterations
+listeners   [  22% ] 20 VUs       1m33.6s/7m0s
+senders     [  27% ] 250/250 VUs  1m33.6s/5m50.0s
+
+running (2m00.6s), 270/270 VUs, 87319 complete and 0 interrupted iterations
+listeners   [  23% ] 20 VUs       1m34.6s/7m0s
+senders     [  27% ] 250/250 VUs  1m34.6s/5m50.0s
+
+running (2m01.6s), 270/270 VUs, 88511 complete and 0 interrupted iterations
+listeners   [  23% ] 20 VUs       1m35.6s/7m0s
+senders     [  27% ] 250/250 VUs  1m35.6s/5m50.0s
+
+running (2m02.7s), 270/270 VUs, 89607 complete and 0 interrupted iterations
+listeners   [  23% ] 20 VUs       1m36.6s/7m0s
+senders     [  28% ] 250/250 VUs  1m36.6s/5m50.0s
+
+running (2m03.6s), 270/270 VUs, 90770 complete and 0 interrupted iterations
+listeners   [  23% ] 20 VUs       1m37.6s/7m0s
+senders     [  28% ] 250/250 VUs  1m37.6s/5m50.0s
+
+running (2m04.6s), 270/270 VUs, 91868 complete and 0 interrupted iterations
+listeners   [  23% ] 20 VUs       1m38.6s/7m0s
+senders     [  28% ] 250/250 VUs  1m38.6s/5m50.0s
+
+running (2m05.7s), 270/270 VUs, 93032 complete and 0 interrupted iterations
+listeners   [  24% ] 20 VUs       1m39.6s/7m0s
+senders     [  28% ] 250/250 VUs  1m39.6s/5m50.0s
+
+running (2m06.7s), 270/270 VUs, 94185 complete and 0 interrupted iterations
+listeners   [  24% ] 20 VUs       1m40.6s/7m0s
+senders     [  29% ] 250/250 VUs  1m40.6s/5m50.0s
+
+running (2m07.7s), 270/270 VUs, 95369 complete and 0 interrupted iterations
+listeners   [  24% ] 20 VUs       1m41.6s/7m0s
+senders     [  29% ] 250/250 VUs  1m41.6s/5m50.0s
+
+running (2m08.6s), 270/270 VUs, 96522 complete and 0 interrupted iterations
+listeners   [  24% ] 20 VUs       1m42.6s/7m0s
+senders     [  29% ] 250/250 VUs  1m42.6s/5m50.0s
+
+running (2m09.6s), 270/270 VUs, 97718 complete and 0 interrupted iterations
+listeners   [  25% ] 20 VUs       1m43.6s/7m0s
+senders     [  30% ] 250/250 VUs  1m43.6s/5m50.0s
+
+running (2m10.6s), 270/270 VUs, 98908 complete and 0 interrupted iterations
+listeners   [  25% ] 20 VUs       1m44.6s/7m0s
+senders     [  30% ] 250/250 VUs  1m44.6s/5m50.0s
+
+running (2m11.6s), 270/270 VUs, 99961 complete and 0 interrupted iterations
+listeners   [  25% ] 20 VUs       1m45.6s/7m0s
+senders     [  30% ] 250/250 VUs  1m45.6s/5m50.0s
+
+running (2m12.7s), 270/270 VUs, 101043 complete and 0 interrupted iterations
+listeners   [  25% ] 20 VUs       1m46.6s/7m0s
+senders     [  30% ] 250/250 VUs  1m46.6s/5m50.0s
+
+running (2m13.7s), 270/270 VUs, 102040 complete and 0 interrupted iterations
+listeners   [  26% ] 20 VUs       1m47.6s/7m0s
+senders     [  31% ] 250/250 VUs  1m47.6s/5m50.0s
+
+running (2m14.6s), 270/270 VUs, 103120 complete and 0 interrupted iterations
+listeners   [  26% ] 20 VUs       1m48.6s/7m0s
+senders     [  31% ] 250/250 VUs  1m48.6s/5m50.0s
+
+running (2m15.7s), 270/270 VUs, 104270 complete and 0 interrupted iterations
+listeners   [  26% ] 20 VUs       1m49.6s/7m0s
+senders     [  31% ] 250/250 VUs  1m49.6s/5m50.0s
+
+running (2m16.6s), 270/270 VUs, 105460 complete and 0 interrupted iterations
+listeners   [  26% ] 20 VUs       1m50.6s/7m0s
+senders     [  32% ] 250/250 VUs  1m50.6s/5m50.0s
+
+running (2m17.7s), 270/270 VUs, 106618 complete and 0 interrupted iterations
+listeners   [  27% ] 20 VUs       1m51.6s/7m0s
+senders     [  32% ] 250/250 VUs  1m51.6s/5m50.0s
+
+running (2m18.7s), 270/270 VUs, 107778 complete and 0 interrupted iterations
+listeners   [  27% ] 20 VUs       1m52.6s/7m0s
+senders     [  32% ] 250/250 VUs  1m52.6s/5m50.0s
+
+running (2m19.7s), 270/270 VUs, 108776 complete and 0 interrupted iterations
+listeners   [  27% ] 20 VUs       1m53.6s/7m0s
+senders     [  32% ] 250/250 VUs  1m53.6s/5m50.0s
+
+running (2m20.6s), 270/270 VUs, 109783 complete and 0 interrupted iterations
+listeners   [  27% ] 20 VUs       1m54.6s/7m0s
+senders     [  33% ] 250/250 VUs  1m54.6s/5m50.0s
+
+running (2m21.6s), 270/270 VUs, 110906 complete and 0 interrupted iterations
+listeners   [  28% ] 20 VUs       1m55.6s/7m0s
+senders     [  33% ] 250/250 VUs  1m55.6s/5m50.0s
+
+running (2m22.6s), 270/270 VUs, 112112 complete and 0 interrupted iterations
+listeners   [  28% ] 20 VUs       1m56.6s/7m0s
+senders     [  33% ] 250/250 VUs  1m56.6s/5m50.0s
+
+running (2m23.7s), 270/270 VUs, 113293 complete and 0 interrupted iterations
+listeners   [  28% ] 20 VUs       1m57.6s/7m0s
+senders     [  34% ] 250/250 VUs  1m57.6s/5m50.0s
+
+running (2m24.6s), 270/270 VUs, 114378 complete and 0 interrupted iterations
+listeners   [  28% ] 20 VUs       1m58.6s/7m0s
+senders     [  34% ] 250/250 VUs  1m58.6s/5m50.0s
+
+running (2m25.6s), 270/270 VUs, 115575 complete and 0 interrupted iterations
+listeners   [  28% ] 20 VUs       1m59.6s/7m0s
+senders     [  34% ] 250/250 VUs  1m59.6s/5m50.0s
+
+running (2m26.7s), 270/270 VUs, 116736 complete and 0 interrupted iterations
+listeners   [  29% ] 20 VUs       2m00.6s/7m0s
+senders     [  34% ] 250/250 VUs  2m00.6s/5m50.0s
+
+running (2m27.7s), 270/270 VUs, 117800 complete and 0 interrupted iterations
+listeners   [  29% ] 20 VUs       2m01.6s/7m0s
+senders     [  35% ] 250/250 VUs  2m01.6s/5m50.0s
+
+running (2m28.7s), 270/270 VUs, 118722 complete and 0 interrupted iterations
+listeners   [  29% ] 20 VUs       2m02.6s/7m0s
+senders     [  35% ] 250/250 VUs  2m02.6s/5m50.0s
+
+running (2m29.7s), 270/270 VUs, 119782 complete and 0 interrupted iterations
+listeners   [  29% ] 20 VUs       2m03.6s/7m0s
+senders     [  35% ] 250/250 VUs  2m03.6s/5m50.0s
+
+running (2m30.6s), 270/270 VUs, 120986 complete and 0 interrupted iterations
+listeners   [  30% ] 20 VUs       2m04.6s/7m0s
+senders     [  36% ] 250/250 VUs  2m04.6s/5m50.0s
+
+running (2m31.6s), 270/270 VUs, 122193 complete and 0 interrupted iterations
+listeners   [  30% ] 20 VUs       2m05.6s/7m0s
+senders     [  36% ] 250/250 VUs  2m05.6s/5m50.0s
+
+running (2m32.6s), 270/270 VUs, 123388 complete and 0 interrupted iterations
+listeners   [  30% ] 20 VUs       2m06.6s/7m0s
+senders     [  36% ] 250/250 VUs  2m06.6s/5m50.0s
+
+running (2m33.7s), 270/270 VUs, 124491 complete and 0 interrupted iterations
+listeners   [  30% ] 20 VUs       2m07.6s/7m0s
+senders     [  36% ] 250/250 VUs  2m07.6s/5m50.0s
+
+running (2m34.7s), 270/270 VUs, 125502 complete and 0 interrupted iterations
+listeners   [  31% ] 20 VUs       2m08.6s/7m0s
+senders     [  37% ] 250/250 VUs  2m08.6s/5m50.0s
+
+running (2m35.6s), 270/270 VUs, 126577 complete and 0 interrupted iterations
+listeners   [  31% ] 20 VUs       2m09.6s/7m0s
+senders     [  37% ] 250/250 VUs  2m09.6s/5m50.0s
+
+running (2m36.7s), 270/270 VUs, 127771 complete and 0 interrupted iterations
+listeners   [  31% ] 20 VUs       2m10.6s/7m0s
+senders     [  37% ] 250/250 VUs  2m10.6s/5m50.0s
+
+running (2m37.6s), 270/270 VUs, 128987 complete and 0 interrupted iterations
+listeners   [  31% ] 20 VUs       2m11.6s/7m0s
+senders     [  38% ] 250/250 VUs  2m11.6s/5m50.0s
+
+running (2m38.7s), 270/270 VUs, 130185 complete and 0 interrupted iterations
+listeners   [  32% ] 20 VUs       2m12.6s/7m0s
+senders     [  38% ] 250/250 VUs  2m12.6s/5m50.0s
+
+running (2m39.7s), 270/270 VUs, 131395 complete and 0 interrupted iterations
+listeners   [  32% ] 20 VUs       2m13.6s/7m0s
+senders     [  38% ] 250/250 VUs  2m13.6s/5m50.0s
+
+running (2m40.7s), 270/270 VUs, 132611 complete and 0 interrupted iterations
+listeners   [  32% ] 20 VUs       2m14.6s/7m0s
+senders     [  38% ] 250/250 VUs  2m14.6s/5m50.0s
+
+running (2m41.6s), 270/270 VUs, 133787 complete and 0 interrupted iterations
+listeners   [  32% ] 20 VUs       2m15.6s/7m0s
+senders     [  39% ] 250/250 VUs  2m15.6s/5m50.0s
+
+running (2m42.6s), 270/270 VUs, 134992 complete and 0 interrupted iterations
+listeners   [  33% ] 20 VUs       2m16.6s/7m0s
+senders     [  39% ] 250/250 VUs  2m16.6s/5m50.0s
+
+running (2m43.7s), 270/270 VUs, 136096 complete and 0 interrupted iterations
+listeners   [  33% ] 20 VUs       2m17.6s/7m0s
+senders     [  39% ] 250/250 VUs  2m17.6s/5m50.0s
+
+running (2m44.7s), 270/270 VUs, 137294 complete and 0 interrupted iterations
+listeners   [  33% ] 20 VUs       2m18.6s/7m0s
+senders     [  40% ] 250/250 VUs  2m18.6s/5m50.0s
+
+running (2m45.7s), 270/270 VUs, 138413 complete and 0 interrupted iterations
+listeners   [  33% ] 20 VUs       2m19.6s/7m0s
+senders     [  40% ] 250/250 VUs  2m19.6s/5m50.0s
+
+running (2m46.7s), 270/270 VUs, 139608 complete and 0 interrupted iterations
+listeners   [  33% ] 20 VUs       2m20.6s/7m0s
+senders     [  40% ] 250/250 VUs  2m20.6s/5m50.0s
+
+running (2m47.6s), 270/270 VUs, 140823 complete and 0 interrupted iterations
+listeners   [  34% ] 20 VUs       2m21.6s/7m0s
+senders     [  40% ] 250/250 VUs  2m21.6s/5m50.0s
+
+running (2m48.7s), 270/270 VUs, 142033 complete and 0 interrupted iterations
+listeners   [  34% ] 20 VUs       2m22.6s/7m0s
+senders     [  41% ] 250/250 VUs  2m22.6s/5m50.0s
+
+running (2m49.6s), 270/270 VUs, 143238 complete and 0 interrupted iterations
+listeners   [  34% ] 20 VUs       2m23.6s/7m0s
+senders     [  41% ] 250/250 VUs  2m23.6s/5m50.0s
+
+running (2m50.7s), 270/270 VUs, 144453 complete and 0 interrupted iterations
+listeners   [  34% ] 20 VUs       2m24.6s/7m0s
+senders     [  41% ] 250/250 VUs  2m24.6s/5m50.0s
+
+running (2m51.6s), 270/270 VUs, 145667 complete and 0 interrupted iterations
+listeners   [  35% ] 20 VUs       2m25.6s/7m0s
+senders     [  42% ] 250/250 VUs  2m25.6s/5m50.0s
+
+running (2m52.7s), 270/270 VUs, 146878 complete and 0 interrupted iterations
+listeners   [  35% ] 20 VUs       2m26.6s/7m0s
+senders     [  42% ] 250/250 VUs  2m26.6s/5m50.0s
+
+running (2m53.6s), 270/270 VUs, 148060 complete and 0 interrupted iterations
+listeners   [  35% ] 20 VUs       2m27.6s/7m0s
+senders     [  42% ] 250/250 VUs  2m27.7s/5m50.0s
+
+running (2m54.6s), 270/270 VUs, 149044 complete and 0 interrupted iterations
+listeners   [  35% ] 20 VUs       2m28.6s/7m0s
+senders     [  42% ] 250/250 VUs  2m28.6s/5m50.0s
+
+running (2m55.6s), 270/270 VUs, 150253 complete and 0 interrupted iterations
+listeners   [  36% ] 20 VUs       2m29.6s/7m0s
+senders     [  43% ] 250/250 VUs  2m29.6s/5m50.0s
+
+running (2m56.7s), 270/270 VUs, 151478 complete and 0 interrupted iterations
+listeners   [  36% ] 20 VUs       2m30.6s/7m0s
+senders     [  43% ] 250/250 VUs  2m30.6s/5m50.0s
+
+running (2m57.6s), 270/270 VUs, 152681 complete and 0 interrupted iterations
+listeners   [  36% ] 20 VUs       2m31.6s/7m0s
+senders     [  43% ] 250/250 VUs  2m31.6s/5m50.0s
+
+running (2m58.7s), 270/270 VUs, 153864 complete and 0 interrupted iterations
+listeners   [  36% ] 20 VUs       2m32.6s/7m0s
+senders     [  44% ] 250/250 VUs  2m32.6s/5m50.0s
+
+running (2m59.7s), 270/270 VUs, 155079 complete and 0 interrupted iterations
+listeners   [  37% ] 20 VUs       2m33.6s/7m0s
+senders     [  44% ] 250/250 VUs  2m33.6s/5m50.0s
+
+running (3m00.6s), 270/270 VUs, 156303 complete and 0 interrupted iterations
+listeners   [  37% ] 20 VUs       2m34.6s/7m0s
+senders     [  44% ] 250/250 VUs  2m34.6s/5m50.0s
+
+running (3m01.6s), 270/270 VUs, 157515 complete and 0 interrupted iterations
+listeners   [  37% ] 20 VUs       2m35.6s/7m0s
+senders     [  44% ] 250/250 VUs  2m35.6s/5m50.0s
+
+running (3m02.7s), 270/270 VUs, 158660 complete and 0 interrupted iterations
+listeners   [  37% ] 20 VUs       2m36.6s/7m0s
+senders     [  45% ] 250/250 VUs  2m36.6s/5m50.0s
+
+running (3m03.7s), 270/270 VUs, 159894 complete and 0 interrupted iterations
+listeners   [  38% ] 20 VUs       2m37.6s/7m0s
+senders     [  45% ] 250/250 VUs  2m37.6s/5m50.0s
+
+running (3m04.7s), 270/270 VUs, 161014 complete and 0 interrupted iterations
+listeners   [  38% ] 20 VUs       2m38.6s/7m0s
+senders     [  45% ] 250/250 VUs  2m38.6s/5m50.0s
+
+running (3m05.6s), 270/270 VUs, 162149 complete and 0 interrupted iterations
+listeners   [  38% ] 20 VUs       2m39.6s/7m0s
+senders     [  46% ] 250/250 VUs  2m39.6s/5m50.0s
+
+running (3m06.7s), 270/270 VUs, 163337 complete and 0 interrupted iterations
+listeners   [  38% ] 20 VUs       2m40.6s/7m0s
+senders     [  46% ] 250/250 VUs  2m40.6s/5m50.0s
+
+running (3m07.7s), 270/270 VUs, 164515 complete and 0 interrupted iterations
+listeners   [  38% ] 20 VUs       2m41.6s/7m0s
+senders     [  46% ] 250/250 VUs  2m41.6s/5m50.0s
+
+running (3m08.6s), 270/270 VUs, 165697 complete and 0 interrupted iterations
+listeners   [  39% ] 20 VUs       2m42.6s/7m0s
+senders     [  46% ] 250/250 VUs  2m42.6s/5m50.0s
+
+running (3m09.7s), 270/270 VUs, 166884 complete and 0 interrupted iterations
+listeners   [  39% ] 20 VUs       2m43.6s/7m0s
+senders     [  47% ] 250/250 VUs  2m43.6s/5m50.0s
+
+running (3m10.7s), 270/270 VUs, 168050 complete and 0 interrupted iterations
+listeners   [  39% ] 20 VUs       2m44.6s/7m0s
+senders     [  47% ] 250/250 VUs  2m44.6s/5m50.0s
+
+running (3m11.7s), 270/270 VUs, 169252 complete and 0 interrupted iterations
+listeners   [  39% ] 20 VUs       2m45.6s/7m0s
+senders     [  47% ] 250/250 VUs  2m45.6s/5m50.0s
+
+running (3m12.7s), 270/270 VUs, 170422 complete and 0 interrupted iterations
+listeners   [  40% ] 20 VUs       2m46.6s/7m0s
+senders     [  48% ] 250/250 VUs  2m46.6s/5m50.0s
+
+running (3m13.7s), 270/270 VUs, 171568 complete and 0 interrupted iterations
+listeners   [  40% ] 20 VUs       2m47.6s/7m0s
+senders     [  48% ] 250/250 VUs  2m47.6s/5m50.0s
+
+running (3m14.6s), 270/270 VUs, 172722 complete and 0 interrupted iterations
+listeners   [  40% ] 20 VUs       2m48.6s/7m0s
+senders     [  48% ] 250/250 VUs  2m48.6s/5m50.0s
+
+running (3m15.6s), 270/270 VUs, 173898 complete and 0 interrupted iterations
+listeners   [  40% ] 20 VUs       2m49.6s/7m0s
+senders     [  48% ] 250/250 VUs  2m49.6s/5m50.0s
+
+running (3m16.7s), 270/270 VUs, 175102 complete and 0 interrupted iterations
+listeners   [  41% ] 20 VUs       2m50.6s/7m0s
+senders     [  49% ] 250/250 VUs  2m50.6s/5m50.0s
+
+running (3m17.6s), 270/270 VUs, 176272 complete and 0 interrupted iterations
+listeners   [  41% ] 20 VUs       2m51.6s/7m0s
+senders     [  49% ] 250/250 VUs  2m51.6s/5m50.0s
+
+running (3m18.7s), 270/270 VUs, 177465 complete and 0 interrupted iterations
+listeners   [  41% ] 20 VUs       2m52.6s/7m0s
+senders     [  49% ] 250/250 VUs  2m52.6s/5m50.0s
+
+running (3m19.7s), 270/270 VUs, 178647 complete and 0 interrupted iterations
+listeners   [  41% ] 20 VUs       2m53.6s/7m0s
+senders     [  50% ] 250/250 VUs  2m53.6s/5m50.0s
+
+running (3m20.6s), 270/270 VUs, 179824 complete and 0 interrupted iterations
+listeners   [  42% ] 20 VUs       2m54.6s/7m0s
+senders     [  50% ] 250/250 VUs  2m54.6s/5m50.0s
+
+running (3m21.6s), 270/270 VUs, 181026 complete and 0 interrupted iterations
+listeners   [  42% ] 20 VUs       2m55.6s/7m0s
+senders     [  50% ] 250/250 VUs  2m55.6s/5m50.0s
+
+running (3m22.7s), 270/270 VUs, 182200 complete and 0 interrupted iterations
+listeners   [  42% ] 20 VUs       2m56.6s/7m0s
+senders     [  50% ] 250/250 VUs  2m56.6s/5m50.0s
+
+running (3m23.6s), 270/270 VUs, 183365 complete and 0 interrupted iterations
+listeners   [  42% ] 20 VUs       2m57.6s/7m0s
+senders     [  51% ] 250/250 VUs  2m57.6s/5m50.0s
+
+running (3m24.7s), 270/270 VUs, 184574 complete and 0 interrupted iterations
+listeners   [  43% ] 20 VUs       2m58.6s/7m0s
+senders     [  51% ] 250/250 VUs  2m58.6s/5m50.0s
+
+running (3m25.7s), 270/270 VUs, 185779 complete and 0 interrupted iterations
+listeners   [  43% ] 20 VUs       2m59.6s/7m0s
+senders     [  51% ] 250/250 VUs  2m59.6s/5m50.0s
+
+running (3m26.6s), 270/270 VUs, 186984 complete and 0 interrupted iterations
+listeners   [  43% ] 20 VUs       3m00.6s/7m0s
+senders     [  52% ] 250/250 VUs  3m00.6s/5m50.0s
+
+running (3m27.7s), 270/270 VUs, 188128 complete and 0 interrupted iterations
+listeners   [  43% ] 20 VUs       3m01.6s/7m0s
+senders     [  52% ] 250/250 VUs  3m01.6s/5m50.0s
+
+running (3m28.6s), 270/270 VUs, 189293 complete and 0 interrupted iterations
+listeners   [  43% ] 20 VUs       3m02.6s/7m0s
+senders     [  52% ] 250/250 VUs  3m02.6s/5m50.0s
+
+running (3m29.6s), 270/270 VUs, 190495 complete and 0 interrupted iterations
+listeners   [  44% ] 20 VUs       3m03.6s/7m0s
+senders     [  52% ] 250/250 VUs  3m03.6s/5m50.0s
+
+running (3m30.7s), 270/270 VUs, 191705 complete and 0 interrupted iterations
+listeners   [  44% ] 20 VUs       3m04.6s/7m0s
+senders     [  53% ] 250/250 VUs  3m04.6s/5m50.0s
+
+running (3m31.7s), 270/270 VUs, 192896 complete and 0 interrupted iterations
+listeners   [  44% ] 20 VUs       3m05.6s/7m0s
+senders     [  53% ] 250/250 VUs  3m05.6s/5m50.0s
+
+running (3m32.7s), 270/270 VUs, 194108 complete and 0 interrupted iterations
+listeners   [  44% ] 20 VUs       3m06.6s/7m0s
+senders     [  53% ] 250/250 VUs  3m06.6s/5m50.0s
+
+running (3m33.7s), 270/270 VUs, 195295 complete and 0 interrupted iterations
+listeners   [  45% ] 20 VUs       3m07.6s/7m0s
+senders     [  54% ] 250/250 VUs  3m07.6s/5m50.0s
+
+running (3m34.6s), 270/270 VUs, 196394 complete and 0 interrupted iterations
+listeners   [  45% ] 20 VUs       3m08.6s/7m0s
+senders     [  54% ] 250/250 VUs  3m08.6s/5m50.0s
+
+running (3m35.6s), 270/270 VUs, 197525 complete and 0 interrupted iterations
+listeners   [  45% ] 20 VUs       3m09.6s/7m0s
+senders     [  54% ] 250/250 VUs  3m09.6s/5m50.0s
+
+running (3m36.7s), 270/270 VUs, 198595 complete and 0 interrupted iterations
+listeners   [  45% ] 20 VUs       3m10.6s/7m0s
+senders     [  54% ] 250/250 VUs  3m10.6s/5m50.0s
+
+running (3m37.7s), 270/270 VUs, 199780 complete and 0 interrupted iterations
+listeners   [  46% ] 20 VUs       3m11.6s/7m0s
+senders     [  55% ] 250/250 VUs  3m11.6s/5m50.0s
+
+running (3m38.7s), 270/270 VUs, 200980 complete and 0 interrupted iterations
+listeners   [  46% ] 20 VUs       3m12.6s/7m0s
+senders     [  55% ] 250/250 VUs  3m12.6s/5m50.0s
+
+running (3m39.6s), 270/270 VUs, 202169 complete and 0 interrupted iterations
+listeners   [  46% ] 20 VUs       3m13.6s/7m0s
+senders     [  55% ] 250/250 VUs  3m13.6s/5m50.0s
+
+running (3m40.6s), 270/270 VUs, 203377 complete and 0 interrupted iterations
+listeners   [  46% ] 20 VUs       3m14.6s/7m0s
+senders     [  56% ] 250/250 VUs  3m14.6s/5m50.0s
+
+running (3m41.6s), 270/270 VUs, 204526 complete and 0 interrupted iterations
+listeners   [  47% ] 20 VUs       3m15.6s/7m0s
+senders     [  56% ] 250/250 VUs  3m15.6s/5m50.0s
+
+running (3m42.6s), 270/270 VUs, 205541 complete and 0 interrupted iterations
+listeners   [  47% ] 20 VUs       3m16.6s/7m0s
+senders     [  56% ] 250/250 VUs  3m16.6s/5m50.0s
+
+running (3m43.7s), 270/270 VUs, 206550 complete and 0 interrupted iterations
+listeners   [  47% ] 20 VUs       3m17.6s/7m0s
+senders     [  56% ] 250/250 VUs  3m17.6s/5m50.0s
+
+running (3m44.6s), 270/270 VUs, 207412 complete and 0 interrupted iterations
+listeners   [  47% ] 20 VUs       3m18.6s/7m0s
+senders     [  57% ] 250/250 VUs  3m18.6s/5m50.0s
+
+running (3m45.6s), 270/270 VUs, 208563 complete and 0 interrupted iterations
+listeners   [  48% ] 20 VUs       3m19.6s/7m0s
+senders     [  57% ] 250/250 VUs  3m19.6s/5m50.0s
+
+running (3m46.7s), 270/270 VUs, 209616 complete and 0 interrupted iterations
+listeners   [  48% ] 20 VUs       3m20.6s/7m0s
+senders     [  57% ] 250/250 VUs  3m20.6s/5m50.0s
+
+running (3m47.6s), 270/270 VUs, 210708 complete and 0 interrupted iterations
+listeners   [  48% ] 20 VUs       3m21.6s/7m0s
+senders     [  58% ] 250/250 VUs  3m21.6s/5m50.0s
+
+running (3m48.7s), 270/270 VUs, 211752 complete and 0 interrupted iterations
+listeners   [  48% ] 20 VUs       3m22.6s/7m0s
+senders     [  58% ] 250/250 VUs  3m22.6s/5m50.0s
+
+running (3m49.6s), 270/270 VUs, 212811 complete and 0 interrupted iterations
+listeners   [  48% ] 20 VUs       3m23.6s/7m0s
+senders     [  58% ] 250/250 VUs  3m23.6s/5m50.0s
+
+running (3m50.6s), 270/270 VUs, 213980 complete and 0 interrupted iterations
+listeners   [  49% ] 20 VUs       3m24.6s/7m0s
+senders     [  58% ] 250/250 VUs  3m24.6s/5m50.0s
+
+running (3m51.6s), 270/270 VUs, 215089 complete and 0 interrupted iterations
+listeners   [  49% ] 20 VUs       3m25.6s/7m0s
+senders     [  59% ] 250/250 VUs  3m25.6s/5m50.0s
+
+running (3m52.6s), 270/270 VUs, 216200 complete and 0 interrupted iterations
+listeners   [  49% ] 20 VUs       3m26.6s/7m0s
+senders     [  59% ] 250/250 VUs  3m26.6s/5m50.0s
+
+running (3m53.7s), 270/270 VUs, 217200 complete and 0 interrupted iterations
+listeners   [  49% ] 20 VUs       3m27.6s/7m0s
+senders     [  59% ] 250/250 VUs  3m27.6s/5m50.0s
+
+running (3m54.7s), 270/270 VUs, 218256 complete and 0 interrupted iterations
+listeners   [  50% ] 20 VUs       3m28.6s/7m0s
+senders     [  60% ] 250/250 VUs  3m28.6s/5m50.0s
+
+running (3m55.7s), 270/270 VUs, 219409 complete and 0 interrupted iterations
+listeners   [  50% ] 20 VUs       3m29.6s/7m0s
+senders     [  60% ] 250/250 VUs  3m29.6s/5m50.0s
+
+running (3m56.6s), 270/270 VUs, 220503 complete and 0 interrupted iterations
+listeners   [  50% ] 20 VUs       3m30.6s/7m0s
+senders     [  60% ] 250/250 VUs  3m30.6s/5m50.0s
+
+running (3m57.6s), 270/270 VUs, 221674 complete and 0 interrupted iterations
+listeners   [  50% ] 20 VUs       3m31.6s/7m0s
+senders     [  60% ] 250/250 VUs  3m31.6s/5m50.0s
+
+running (3m58.6s), 270/270 VUs, 222564 complete and 0 interrupted iterations
+listeners   [  51% ] 20 VUs       3m32.6s/7m0s
+senders     [  61% ] 250/250 VUs  3m32.6s/5m50.0s
+
+running (3m59.7s), 270/270 VUs, 223289 complete and 0 interrupted iterations
+listeners   [  51% ] 20 VUs       3m33.6s/7m0s
+senders     [  61% ] 250/250 VUs  3m33.6s/5m50.0s
+
+running (4m00.6s), 270/270 VUs, 224386 complete and 0 interrupted iterations
+listeners   [  51% ] 20 VUs       3m34.6s/7m0s
+senders     [  61% ] 250/250 VUs  3m34.6s/5m50.0s
+
+running (4m01.7s), 270/270 VUs, 225530 complete and 0 interrupted iterations
+listeners   [  51% ] 20 VUs       3m35.6s/7m0s
+senders     [  62% ] 250/250 VUs  3m35.6s/5m50.0s
+
+running (4m02.6s), 270/270 VUs, 226537 complete and 0 interrupted iterations
+listeners   [  52% ] 20 VUs       3m36.6s/7m0s
+senders     [  62% ] 250/250 VUs  3m36.6s/5m50.0s
+
+running (4m03.7s), 270/270 VUs, 227668 complete and 0 interrupted iterations
+listeners   [  52% ] 20 VUs       3m37.6s/7m0s
+senders     [  62% ] 250/250 VUs  3m37.6s/5m50.0s
+
+running (4m04.6s), 270/270 VUs, 228630 complete and 0 interrupted iterations
+listeners   [  52% ] 20 VUs       3m38.6s/7m0s
+senders     [  62% ] 250/250 VUs  3m38.6s/5m50.0s
+
+running (4m05.7s), 270/270 VUs, 229744 complete and 0 interrupted iterations
+listeners   [  52% ] 20 VUs       3m39.6s/7m0s
+senders     [  63% ] 250/250 VUs  3m39.6s/5m50.0s
+
+running (4m06.7s), 270/270 VUs, 230846 complete and 0 interrupted iterations
+listeners   [  53% ] 20 VUs       3m40.6s/7m0s
+senders     [  63% ] 250/250 VUs  3m40.6s/5m50.0s
+
+running (4m07.7s), 270/270 VUs, 231982 complete and 0 interrupted iterations
+listeners   [  53% ] 20 VUs       3m41.6s/7m0s
+senders     [  63% ] 250/250 VUs  3m41.6s/5m50.0s
+
+running (4m08.7s), 270/270 VUs, 233074 complete and 0 interrupted iterations
+listeners   [  53% ] 20 VUs       3m42.6s/7m0s
+senders     [  64% ] 250/250 VUs  3m42.6s/5m50.0s
+
+running (4m09.6s), 270/270 VUs, 234161 complete and 0 interrupted iterations
+listeners   [  53% ] 20 VUs       3m43.6s/7m0s
+senders     [  64% ] 250/250 VUs  3m43.6s/5m50.0s
+
+running (4m10.7s), 270/270 VUs, 235300 complete and 0 interrupted iterations
+listeners   [  53% ] 20 VUs       3m44.6s/7m0s
+senders     [  64% ] 250/250 VUs  3m44.6s/5m50.0s
+
+running (4m11.7s), 270/270 VUs, 236362 complete and 0 interrupted iterations
+listeners   [  54% ] 20 VUs       3m45.6s/7m0s
+senders     [  64% ] 250/250 VUs  3m45.6s/5m50.0s
+
+running (4m12.7s), 270/270 VUs, 237528 complete and 0 interrupted iterations
+listeners   [  54% ] 20 VUs       3m46.6s/7m0s
+senders     [  65% ] 250/250 VUs  3m46.6s/5m50.0s
+
+running (4m13.7s), 270/270 VUs, 238513 complete and 0 interrupted iterations
+listeners   [  54% ] 20 VUs       3m47.6s/7m0s
+senders     [  65% ] 250/250 VUs  3m47.6s/5m50.0s
+
+running (4m14.7s), 270/270 VUs, 239541 complete and 0 interrupted iterations
+listeners   [  54% ] 20 VUs       3m48.6s/7m0s
+senders     [  65% ] 250/250 VUs  3m48.6s/5m50.0s
+
+running (4m15.7s), 270/270 VUs, 240684 complete and 0 interrupted iterations
+listeners   [  55% ] 20 VUs       3m49.6s/7m0s
+senders     [  66% ] 250/250 VUs  3m49.6s/5m50.0s
+
+running (4m16.6s), 270/270 VUs, 241812 complete and 0 interrupted iterations
+listeners   [  55% ] 20 VUs       3m50.6s/7m0s
+senders     [  66% ] 250/250 VUs  3m50.6s/5m50.0s
+
+running (4m17.7s), 270/270 VUs, 242904 complete and 0 interrupted iterations
+listeners   [  55% ] 20 VUs       3m51.6s/7m0s
+senders     [  66% ] 250/250 VUs  3m51.6s/5m50.0s
+
+running (4m18.6s), 270/270 VUs, 244022 complete and 0 interrupted iterations
+listeners   [  55% ] 20 VUs       3m52.6s/7m0s
+senders     [  66% ] 250/250 VUs  3m52.6s/5m50.0s
+
+running (4m19.7s), 270/270 VUs, 245182 complete and 0 interrupted iterations
+listeners   [  56% ] 20 VUs       3m53.6s/7m0s
+senders     [  67% ] 250/250 VUs  3m53.6s/5m50.0s
+
+running (4m20.7s), 270/270 VUs, 246177 complete and 0 interrupted iterations
+listeners   [  56% ] 20 VUs       3m54.6s/7m0s
+senders     [  67% ] 250/250 VUs  3m54.6s/5m50.0s
+
+running (4m21.6s), 270/270 VUs, 247343 complete and 0 interrupted iterations
+listeners   [  56% ] 20 VUs       3m55.6s/7m0s
+senders     [  67% ] 250/250 VUs  3m55.6s/5m50.0s
+
+running (4m22.7s), 270/270 VUs, 248523 complete and 0 interrupted iterations
+listeners   [  56% ] 20 VUs       3m56.6s/7m0s
+senders     [  68% ] 250/250 VUs  3m56.6s/5m50.0s
+
+running (4m23.7s), 270/270 VUs, 249624 complete and 0 interrupted iterations
+listeners   [  57% ] 20 VUs       3m57.6s/7m0s
+senders     [  68% ] 250/250 VUs  3m57.6s/5m50.0s
+
+running (4m24.6s), 270/270 VUs, 250591 complete and 0 interrupted iterations
+listeners   [  57% ] 20 VUs       3m58.6s/7m0s
+senders     [  68% ] 250/250 VUs  3m58.6s/5m50.0s
+
+running (4m25.7s), 270/270 VUs, 251758 complete and 0 interrupted iterations
+listeners   [  57% ] 20 VUs       3m59.6s/7m0s
+senders     [  68% ] 250/250 VUs  3m59.6s/5m50.0s
+
+running (4m26.6s), 270/270 VUs, 252845 complete and 0 interrupted iterations
+listeners   [  57% ] 20 VUs       4m00.6s/7m0s
+senders     [  69% ] 250/250 VUs  4m00.6s/5m50.0s
+
+running (4m27.7s), 270/270 VUs, 253928 complete and 0 interrupted iterations
+listeners   [  58% ] 20 VUs       4m01.6s/7m0s
+senders     [  69% ] 250/250 VUs  4m01.6s/5m50.0s
+
+running (4m28.6s), 270/270 VUs, 254918 complete and 0 interrupted iterations
+listeners   [  58% ] 20 VUs       4m02.6s/7m0s
+senders     [  69% ] 250/250 VUs  4m02.6s/5m50.0s
+
+running (4m29.6s), 270/270 VUs, 255652 complete and 0 interrupted iterations
+listeners   [  58% ] 20 VUs       4m03.6s/7m0s
+senders     [  70% ] 250/250 VUs  4m03.6s/5m50.0s
+
+running (4m30.7s), 270/270 VUs, 255711 complete and 0 interrupted iterations
+listeners   [  58% ] 20 VUs       4m04.6s/7m0s
+senders     [  70% ] 250/250 VUs  4m04.6s/5m50.0s
+
+running (4m31.6s), 270/270 VUs, 256042 complete and 0 interrupted iterations
+listeners   [  58% ] 20 VUs       4m05.6s/7m0s
+senders     [  70% ] 250/250 VUs  4m05.6s/5m50.0s
+
+running (4m32.6s), 270/270 VUs, 257207 complete and 0 interrupted iterations
+listeners   [  59% ] 20 VUs       4m06.6s/7m0s
+senders     [  70% ] 250/250 VUs  4m06.6s/5m50.0s
+
+running (4m33.6s), 270/270 VUs, 258381 complete and 0 interrupted iterations
+listeners   [  59% ] 20 VUs       4m07.6s/7m0s
+senders     [  71% ] 250/250 VUs  4m07.6s/5m50.0s
+
+running (4m34.6s), 270/270 VUs, 259543 complete and 0 interrupted iterations
+listeners   [  59% ] 20 VUs       4m08.6s/7m0s
+senders     [  71% ] 250/250 VUs  4m08.6s/5m50.0s
+
+running (4m35.7s), 270/270 VUs, 260712 complete and 0 interrupted iterations
+listeners   [  59% ] 20 VUs       4m09.6s/7m0s
+senders     [  71% ] 250/250 VUs  4m09.6s/5m50.0s
+
+running (4m36.7s), 270/270 VUs, 261897 complete and 0 interrupted iterations
+listeners   [  60% ] 20 VUs       4m10.6s/7m0s
+senders     [  72% ] 250/250 VUs  4m10.6s/5m50.0s
+
+running (4m37.6s), 270/270 VUs, 263109 complete and 0 interrupted iterations
+listeners   [  60% ] 20 VUs       4m11.6s/7m0s
+senders     [  72% ] 250/250 VUs  4m11.6s/5m50.0s
+
+running (4m38.6s), 270/270 VUs, 264180 complete and 0 interrupted iterations
+listeners   [  60% ] 20 VUs       4m12.6s/7m0s
+senders     [  72% ] 250/250 VUs  4m12.6s/5m50.0s
+
+running (4m39.6s), 270/270 VUs, 265157 complete and 0 interrupted iterations
+listeners   [  60% ] 20 VUs       4m13.6s/7m0s
+senders     [  72% ] 250/250 VUs  4m13.6s/5m50.0s
+
+running (4m40.7s), 270/270 VUs, 266306 complete and 0 interrupted iterations
+listeners   [  61% ] 20 VUs       4m14.6s/7m0s
+senders     [  73% ] 250/250 VUs  4m14.6s/5m50.0s
+
+running (4m41.7s), 270/270 VUs, 267375 complete and 0 interrupted iterations
+listeners   [  61% ] 20 VUs       4m15.6s/7m0s
+senders     [  73% ] 250/250 VUs  4m15.6s/5m50.0s
+
+running (4m42.6s), 270/270 VUs, 268511 complete and 0 interrupted iterations
+listeners   [  61% ] 20 VUs       4m16.6s/7m0s
+senders     [  73% ] 250/250 VUs  4m16.6s/5m50.0s
+
+running (4m43.7s), 270/270 VUs, 269655 complete and 0 interrupted iterations
+listeners   [  61% ] 20 VUs       4m17.6s/7m0s
+senders     [  74% ] 250/250 VUs  4m17.6s/5m50.0s
+
+running (4m44.6s), 270/270 VUs, 270767 complete and 0 interrupted iterations
+listeners   [  62% ] 20 VUs       4m18.6s/7m0s
+senders     [  74% ] 250/250 VUs  4m18.6s/5m50.0s
+
+running (4m45.6s), 270/270 VUs, 271932 complete and 0 interrupted iterations
+listeners   [  62% ] 20 VUs       4m19.6s/7m0s
+senders     [  74% ] 250/250 VUs  4m19.6s/5m50.0s
+
+running (4m46.6s), 270/270 VUs, 273028 complete and 0 interrupted iterations
+listeners   [  62% ] 20 VUs       4m20.6s/7m0s
+senders     [  74% ] 250/250 VUs  4m20.6s/5m50.0s
+
+running (4m47.7s), 270/270 VUs, 274149 complete and 0 interrupted iterations
+listeners   [  62% ] 20 VUs       4m21.6s/7m0s
+senders     [  75% ] 250/250 VUs  4m21.6s/5m50.0s
+
+running (4m48.7s), 270/270 VUs, 275308 complete and 0 interrupted iterations
+listeners   [  63% ] 20 VUs       4m22.6s/7m0s
+senders     [  75% ] 250/250 VUs  4m22.6s/5m50.0s
+
+running (4m49.7s), 270/270 VUs, 276490 complete and 0 interrupted iterations
+listeners   [  63% ] 20 VUs       4m23.6s/7m0s
+senders     [  75% ] 250/250 VUs  4m23.6s/5m50.0s
+
+running (4m50.7s), 270/270 VUs, 277695 complete and 0 interrupted iterations
+listeners   [  63% ] 20 VUs       4m24.6s/7m0s
+senders     [  76% ] 250/250 VUs  4m24.6s/5m50.0s
+
+running (4m51.7s), 270/270 VUs, 278865 complete and 0 interrupted iterations
+listeners   [  63% ] 20 VUs       4m25.6s/7m0s
+senders     [  76% ] 250/250 VUs  4m25.6s/5m50.0s
+
+running (4m52.6s), 270/270 VUs, 280057 complete and 0 interrupted iterations
+listeners   [  63% ] 20 VUs       4m26.6s/7m0s
+senders     [  76% ] 250/250 VUs  4m26.6s/5m50.0s
+
+running (4m53.7s), 270/270 VUs, 281232 complete and 0 interrupted iterations
+listeners   [  64% ] 20 VUs       4m27.6s/7m0s
+senders     [  76% ] 250/250 VUs  4m27.6s/5m50.0s
+
+running (4m54.7s), 270/270 VUs, 282368 complete and 0 interrupted iterations
+listeners   [  64% ] 20 VUs       4m28.6s/7m0s
+senders     [  77% ] 250/250 VUs  4m28.6s/5m50.0s
+
+running (4m55.7s), 270/270 VUs, 283451 complete and 0 interrupted iterations
+listeners   [  64% ] 20 VUs       4m29.6s/7m0s
+senders     [  77% ] 250/250 VUs  4m29.6s/5m50.0s
+
+running (4m56.7s), 270/270 VUs, 284604 complete and 0 interrupted iterations
+listeners   [  64% ] 20 VUs       4m30.6s/7m0s
+senders     [  77% ] 250/250 VUs  4m30.6s/5m50.0s
+
+running (4m57.6s), 270/270 VUs, 285782 complete and 0 interrupted iterations
+listeners   [  65% ] 20 VUs       4m31.6s/7m0s
+senders     [  78% ] 250/250 VUs  4m31.6s/5m50.0s
+
+running (4m58.7s), 270/270 VUs, 286914 complete and 0 interrupted iterations
+listeners   [  65% ] 20 VUs       4m32.6s/7m0s
+senders     [  78% ] 250/250 VUs  4m32.6s/5m50.0s
+
+running (4m59.6s), 270/270 VUs, 288116 complete and 0 interrupted iterations
+listeners   [  65% ] 20 VUs       4m33.6s/7m0s
+senders     [  78% ] 250/250 VUs  4m33.6s/5m50.0s
+
+running (5m00.6s), 270/270 VUs, 289304 complete and 0 interrupted iterations
+listeners   [  65% ] 20 VUs       4m34.6s/7m0s
+senders     [  78% ] 250/250 VUs  4m34.6s/5m50.0s
+
+running (5m01.6s), 270/270 VUs, 290504 complete and 0 interrupted iterations
+listeners   [  66% ] 20 VUs       4m35.6s/7m0s
+senders     [  79% ] 250/250 VUs  4m35.6s/5m50.0s
+
+running (5m02.7s), 270/270 VUs, 291668 complete and 0 interrupted iterations
+listeners   [  66% ] 20 VUs       4m36.6s/7m0s
+senders     [  79% ] 250/250 VUs  4m36.6s/5m50.0s
+
+running (5m03.7s), 270/270 VUs, 292837 complete and 0 interrupted iterations
+listeners   [  66% ] 20 VUs       4m37.6s/7m0s
+senders     [  79% ] 250/250 VUs  4m37.6s/5m50.0s
+
+running (5m04.6s), 270/270 VUs, 293972 complete and 0 interrupted iterations
+listeners   [  66% ] 20 VUs       4m38.6s/7m0s
+senders     [  80% ] 250/250 VUs  4m38.6s/5m50.0s
+
+running (5m05.6s), 270/270 VUs, 295114 complete and 0 interrupted iterations
+listeners   [  67% ] 20 VUs       4m39.6s/7m0s
+senders     [  80% ] 250/250 VUs  4m39.6s/5m50.0s
+
+running (5m06.7s), 270/270 VUs, 296316 complete and 0 interrupted iterations
+listeners   [  67% ] 20 VUs       4m40.6s/7m0s
+senders     [  80% ] 250/250 VUs  4m40.6s/5m50.0s
+
+running (5m07.7s), 270/270 VUs, 297514 complete and 0 interrupted iterations
+listeners   [  67% ] 20 VUs       4m41.6s/7m0s
+senders     [  80% ] 250/250 VUs  4m41.6s/5m50.0s
+
+running (5m08.6s), 270/270 VUs, 298692 complete and 0 interrupted iterations
+listeners   [  67% ] 20 VUs       4m42.6s/7m0s
+senders     [  81% ] 250/250 VUs  4m42.6s/5m50.0s
+
+running (5m09.7s), 270/270 VUs, 299863 complete and 0 interrupted iterations
+listeners   [  68% ] 20 VUs       4m43.6s/7m0s
+senders     [  81% ] 250/250 VUs  4m43.6s/5m50.0s
+
+running (5m10.6s), 270/270 VUs, 301072 complete and 0 interrupted iterations
+listeners   [  68% ] 20 VUs       4m44.6s/7m0s
+senders     [  81% ] 250/250 VUs  4m44.6s/5m50.0s
+
+running (5m11.7s), 270/270 VUs, 302277 complete and 0 interrupted iterations
+listeners   [  68% ] 20 VUs       4m45.6s/7m0s
+senders     [  82% ] 250/250 VUs  4m45.6s/5m50.0s
+
+running (5m12.7s), 270/270 VUs, 303472 complete and 0 interrupted iterations
+listeners   [  68% ] 20 VUs       4m46.6s/7m0s
+senders     [  82% ] 250/250 VUs  4m46.6s/5m50.0s
+
+running (5m13.6s), 270/270 VUs, 304519 complete and 0 interrupted iterations
+listeners   [  68% ] 20 VUs       4m47.6s/7m0s
+senders     [  82% ] 250/250 VUs  4m47.6s/5m50.0s
+
+running (5m14.6s), 270/270 VUs, 305623 complete and 0 interrupted iterations
+listeners   [  69% ] 20 VUs       4m48.6s/7m0s
+senders     [  82% ] 250/250 VUs  4m48.6s/5m50.0s
+
+running (5m15.6s), 270/270 VUs, 306838 complete and 0 interrupted iterations
+listeners   [  69% ] 20 VUs       4m49.6s/7m0s
+senders     [  83% ] 250/250 VUs  4m49.6s/5m50.0s
+
+running (5m16.7s), 270/270 VUs, 308017 complete and 0 interrupted iterations
+listeners   [  69% ] 20 VUs       4m50.6s/7m0s
+senders     [  83% ] 250/250 VUs  4m50.6s/5m50.0s
+
+running (5m17.7s), 270/270 VUs, 309229 complete and 0 interrupted iterations
+listeners   [  69% ] 20 VUs       4m51.6s/7m0s
+senders     [  83% ] 250/250 VUs  4m51.6s/5m50.0s
+
+running (5m18.6s), 270/270 VUs, 310407 complete and 0 interrupted iterations
+listeners   [  70% ] 20 VUs       4m52.6s/7m0s
+senders     [  84% ] 250/250 VUs  4m52.6s/5m50.0s
+
+running (5m19.7s), 270/270 VUs, 311608 complete and 0 interrupted iterations
+listeners   [  70% ] 20 VUs       4m53.6s/7m0s
+senders     [  84% ] 250/250 VUs  4m53.6s/5m50.0s
+
+running (5m20.7s), 270/270 VUs, 312758 complete and 0 interrupted iterations
+listeners   [  70% ] 20 VUs       4m54.6s/7m0s
+senders     [  84% ] 250/250 VUs  4m54.6s/5m50.0s
+
+running (5m21.7s), 270/270 VUs, 313951 complete and 0 interrupted iterations
+listeners   [  70% ] 20 VUs       4m55.6s/7m0s
+senders     [  84% ] 250/250 VUs  4m55.6s/5m50.0s
+
+running (5m22.6s), 270/270 VUs, 315021 complete and 0 interrupted iterations
+listeners   [  71% ] 20 VUs       4m56.6s/7m0s
+senders     [  85% ] 250/250 VUs  4m56.6s/5m50.0s
+
+running (5m23.7s), 270/270 VUs, 316186 complete and 0 interrupted iterations
+listeners   [  71% ] 20 VUs       4m57.6s/7m0s
+senders     [  85% ] 250/250 VUs  4m57.6s/5m50.0s
+
+running (5m24.6s), 270/270 VUs, 317151 complete and 0 interrupted iterations
+listeners   [  71% ] 20 VUs       4m58.6s/7m0s
+senders     [  85% ] 250/250 VUs  4m58.6s/5m50.0s
+
+running (5m25.6s), 270/270 VUs, 318259 complete and 0 interrupted iterations
+listeners   [  71% ] 20 VUs       4m59.6s/7m0s
+senders     [  86% ] 250/250 VUs  4m59.6s/5m50.0s
+
+running (5m26.6s), 270/270 VUs, 319418 complete and 0 interrupted iterations
+listeners   [  72% ] 20 VUs       5m00.6s/7m0s
+senders     [  86% ] 250/250 VUs  5m00.6s/5m50.0s
+
+running (5m27.6s), 270/270 VUs, 320632 complete and 0 interrupted iterations
+listeners   [  72% ] 20 VUs       5m01.6s/7m0s
+senders     [  86% ] 250/250 VUs  5m01.6s/5m50.0s
+
+running (5m28.6s), 270/270 VUs, 321829 complete and 0 interrupted iterations
+listeners   [  72% ] 20 VUs       5m02.6s/7m0s
+senders     [  86% ] 250/250 VUs  5m02.6s/5m50.0s
+
+running (5m29.7s), 270/270 VUs, 323023 complete and 0 interrupted iterations
+listeners   [  72% ] 20 VUs       5m03.6s/7m0s
+senders     [  87% ] 250/250 VUs  5m03.6s/5m50.0s
+
+running (5m30.7s), 270/270 VUs, 324222 complete and 0 interrupted iterations
+listeners   [  73% ] 20 VUs       5m04.6s/7m0s
+senders     [  87% ] 250/250 VUs  5m04.6s/5m50.0s
+
+running (5m31.7s), 270/270 VUs, 325347 complete and 0 interrupted iterations
+listeners   [  73% ] 20 VUs       5m05.6s/7m0s
+senders     [  87% ] 250/250 VUs  5m05.6s/5m50.0s
+
+running (5m32.7s), 270/270 VUs, 326537 complete and 0 interrupted iterations
+listeners   [  73% ] 20 VUs       5m06.6s/7m0s
+senders     [  88% ] 250/250 VUs  5m06.6s/5m50.0s
+
+running (5m33.7s), 270/270 VUs, 327754 complete and 0 interrupted iterations
+listeners   [  73% ] 20 VUs       5m07.6s/7m0s
+senders     [  88% ] 250/250 VUs  5m07.6s/5m50.0s
+
+running (5m34.6s), 270/270 VUs, 328901 complete and 0 interrupted iterations
+listeners   [  73% ] 20 VUs       5m08.6s/7m0s
+senders     [  88% ] 250/250 VUs  5m08.6s/5m50.0s
+
+running (5m35.6s), 270/270 VUs, 330073 complete and 0 interrupted iterations
+listeners   [  74% ] 20 VUs       5m09.6s/7m0s
+senders     [  88% ] 250/250 VUs  5m09.6s/5m50.0s
+
+running (5m36.7s), 270/270 VUs, 331288 complete and 0 interrupted iterations
+listeners   [  74% ] 20 VUs       5m10.6s/7m0s
+senders     [  89% ] 250/250 VUs  5m10.6s/5m50.0s
+
+running (5m37.6s), 270/270 VUs, 332487 complete and 0 interrupted iterations
+listeners   [  74% ] 20 VUs       5m11.6s/7m0s
+senders     [  89% ] 250/250 VUs  5m11.6s/5m50.0s
+
+running (5m38.7s), 270/270 VUs, 333701 complete and 0 interrupted iterations
+listeners   [  74% ] 20 VUs       5m12.6s/7m0s
+senders     [  89% ] 250/250 VUs  5m12.6s/5m50.0s
+
+running (5m39.6s), 270/270 VUs, 334886 complete and 0 interrupted iterations
+listeners   [  75% ] 20 VUs       5m13.6s/7m0s
+senders     [  90% ] 250/250 VUs  5m13.6s/5m50.0s
+
+running (5m40.7s), 270/270 VUs, 335986 complete and 0 interrupted iterations
+listeners   [  75% ] 20 VUs       5m14.6s/7m0s
+senders     [  90% ] 250/250 VUs  5m14.6s/5m50.0s
+
+running (5m41.6s), 270/270 VUs, 337172 complete and 0 interrupted iterations
+listeners   [  75% ] 20 VUs       5m15.6s/7m0s
+senders     [  90% ] 250/250 VUs  5m15.6s/5m50.0s
+
+running (5m42.7s), 270/270 VUs, 338354 complete and 0 interrupted iterations
+listeners   [  75% ] 20 VUs       5m16.6s/7m0s
+senders     [  90% ] 250/250 VUs  5m16.6s/5m50.0s
+
+running (5m43.6s), 270/270 VUs, 339541 complete and 0 interrupted iterations
+listeners   [  76% ] 20 VUs       5m17.6s/7m0s
+senders     [  91% ] 250/250 VUs  5m17.6s/5m50.0s
+
+running (5m44.7s), 270/270 VUs, 340687 complete and 0 interrupted iterations
+listeners   [  76% ] 20 VUs       5m18.6s/7m0s
+senders     [  91% ] 250/250 VUs  5m18.6s/5m50.0s
+
+running (5m45.7s), 270/270 VUs, 341894 complete and 0 interrupted iterations
+listeners   [  76% ] 20 VUs       5m19.6s/7m0s
+senders     [  91% ] 250/250 VUs  5m19.6s/5m50.0s
+
+running (5m46.6s), 270/270 VUs, 343050 complete and 0 interrupted iterations
+listeners   [  76% ] 20 VUs       5m20.6s/7m0s
+senders     [  92% ] 250/250 VUs  5m20.6s/5m50.0s
+
+running (5m47.7s), 270/270 VUs, 344221 complete and 0 interrupted iterations
+listeners   [  77% ] 20 VUs       5m21.6s/7m0s
+senders     [  92% ] 250/250 VUs  5m21.6s/5m50.0s
+
+running (5m48.6s), 270/270 VUs, 345318 complete and 0 interrupted iterations
+listeners   [  77% ] 20 VUs       5m22.6s/7m0s
+senders     [  92% ] 250/250 VUs  5m22.6s/5m50.0s
+
+running (5m49.7s), 270/270 VUs, 346472 complete and 0 interrupted iterations
+listeners   [  77% ] 20 VUs       5m23.6s/7m0s
+senders     [  92% ] 250/250 VUs  5m23.6s/5m50.0s
+
+running (5m50.7s), 270/270 VUs, 347656 complete and 0 interrupted iterations
+listeners   [  77% ] 20 VUs       5m24.6s/7m0s
+senders     [  93% ] 250/250 VUs  5m24.6s/5m50.0s
+
+running (5m51.7s), 270/270 VUs, 348823 complete and 0 interrupted iterations
+listeners   [  78% ] 20 VUs       5m25.6s/7m0s
+senders     [  93% ] 250/250 VUs  5m25.6s/5m50.0s
+
+running (5m52.6s), 270/270 VUs, 350001 complete and 0 interrupted iterations
+listeners   [  78% ] 20 VUs       5m26.6s/7m0s
+senders     [  93% ] 250/250 VUs  5m26.6s/5m50.0s
+
+running (5m53.6s), 270/270 VUs, 351149 complete and 0 interrupted iterations
+listeners   [  78% ] 20 VUs       5m27.6s/7m0s
+senders     [  94% ] 250/250 VUs  5m27.6s/5m50.0s
+
+running (5m54.6s), 270/270 VUs, 352296 complete and 0 interrupted iterations
+listeners   [  78% ] 20 VUs       5m28.6s/7m0s
+senders     [  94% ] 250/250 VUs  5m28.6s/5m50.0s
+
+running (5m55.6s), 270/270 VUs, 353464 complete and 0 interrupted iterations
+listeners   [  78% ] 20 VUs       5m29.6s/7m0s
+senders     [  94% ] 250/250 VUs  5m29.6s/5m50.0s
+
+running (5m56.7s), 263/270 VUs, 354656 complete and 0 interrupted iterations
+listeners   [  79% ] 20 VUs       5m30.6s/7m0s
+senders     [  94% ] 243/250 VUs  5m30.6s/5m50.0s
+
+running (5m57.7s), 252/270 VUs, 355721 complete and 0 interrupted iterations
+listeners   [  79% ] 20 VUs       5m31.6s/7m0s
+senders     [  95% ] 232/250 VUs  5m31.6s/5m50.0s
+
+running (5m58.6s), 238/270 VUs, 356567 complete and 0 interrupted iterations
+listeners   [  79% ] 20 VUs       5m32.6s/7m0s
+senders     [  95% ] 218/250 VUs  5m32.6s/5m50.0s
+
+running (5m59.6s), 226/270 VUs, 357550 complete and 0 interrupted iterations
+listeners   [  79% ] 20 VUs       5m33.6s/7m0s
+senders     [  95% ] 206/250 VUs  5m33.6s/5m50.0s
+
+running (6m00.7s), 213/270 VUs, 358538 complete and 0 interrupted iterations
+listeners   [  80% ] 20 VUs       5m34.6s/7m0s
+senders     [  96% ] 193/250 VUs  5m34.6s/5m50.0s
+
+running (6m01.7s), 202/270 VUs, 359448 complete and 0 interrupted iterations
+listeners   [  80% ] 20 VUs       5m35.6s/7m0s
+senders     [  96% ] 182/250 VUs  5m35.6s/5m50.0s
+
+running (6m02.7s), 189/270 VUs, 360299 complete and 0 interrupted iterations
+listeners   [  80% ] 20 VUs       5m36.6s/7m0s
+senders     [  96% ] 169/250 VUs  5m36.6s/5m50.0s
+
+running (6m03.7s), 175/270 VUs, 361086 complete and 0 interrupted iterations
+listeners   [  80% ] 20 VUs       5m37.6s/7m0s
+senders     [  96% ] 155/250 VUs  5m37.6s/5m50.0s
+
+running (6m04.6s), 163/270 VUs, 361818 complete and 0 interrupted iterations
+listeners   [  81% ] 20 VUs       5m38.6s/7m0s
+senders     [  97% ] 143/250 VUs  5m38.6s/5m50.0s
+
+running (6m05.6s), 151/270 VUs, 362470 complete and 0 interrupted iterations
+listeners   [  81% ] 20 VUs       5m39.6s/7m0s
+senders     [  97% ] 131/250 VUs  5m39.6s/5m50.0s
+
+running (6m06.6s), 138/270 VUs, 363099 complete and 0 interrupted iterations
+listeners   [  81% ] 20 VUs       5m40.6s/7m0s
+senders     [  97% ] 118/250 VUs  5m40.6s/5m50.0s
+
+running (6m07.7s), 126/270 VUs, 363664 complete and 0 interrupted iterations
+listeners   [  81% ] 20 VUs       5m41.6s/7m0s
+senders     [  98% ] 106/250 VUs  5m41.6s/5m50.0s
+
+running (6m08.7s), 114/270 VUs, 364145 complete and 0 interrupted iterations
+listeners   [  82% ] 20 VUs       5m42.6s/7m0s
+senders     [  98% ] 094/250 VUs  5m42.6s/5m50.0s
+
+running (6m09.7s), 102/270 VUs, 364550 complete and 0 interrupted iterations
+listeners   [  82% ] 20 VUs       5m43.6s/7m0s
+senders     [  98% ] 082/250 VUs  5m43.6s/5m50.0s
+
+running (6m10.6s), 089/270 VUs, 364927 complete and 0 interrupted iterations
+listeners   [  82% ] 20 VUs       5m44.6s/7m0s
+senders     [  98% ] 069/250 VUs  5m44.6s/5m50.0s
+
+running (6m11.6s), 075/270 VUs, 365242 complete and 0 interrupted iterations
+listeners   [  82% ] 20 VUs       5m45.6s/7m0s
+senders     [  99% ] 055/250 VUs  5m45.6s/5m50.0s
+
+running (6m12.7s), 063/270 VUs, 365495 complete and 0 interrupted iterations
+listeners   [  83% ] 20 VUs       5m46.6s/7m0s
+senders     [  99% ] 043/250 VUs  5m46.6s/5m50.0s
+
+running (6m13.7s), 052/270 VUs, 365666 complete and 0 interrupted iterations
+listeners   [  83% ] 20 VUs       5m47.6s/7m0s
+senders     [  99% ] 032/250 VUs  5m47.6s/5m50.0s
+
+running (6m14.7s), 039/270 VUs, 365800 complete and 0 interrupted iterations
+listeners   [  83% ] 20 VUs       5m48.6s/7m0s
+senders     [ 100% ] 019/250 VUs  5m48.6s/5m50.0s
+
+running (6m15.6s), 026/270 VUs, 365870 complete and 0 interrupted iterations
+listeners   [  83% ] 20 VUs       5m49.6s/7m0s
+senders     [ 100% ] 006/250 VUs  5m49.6s/5m50.0s
+
+running (6m16.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  83% ] 20 VUs       5m50.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m17.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  84% ] 20 VUs       5m51.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m18.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  84% ] 20 VUs       5m52.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m19.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  84% ] 20 VUs       5m53.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m20.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  84% ] 20 VUs       5m54.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m21.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  85% ] 20 VUs       5m55.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m22.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  85% ] 20 VUs       5m56.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m23.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  85% ] 20 VUs       5m57.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m24.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  85% ] 20 VUs       5m58.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m25.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  86% ] 20 VUs       5m59.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m26.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  86% ] 20 VUs       6m00.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m27.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  86% ] 20 VUs       6m01.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m28.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  86% ] 20 VUs       6m02.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m29.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  87% ] 20 VUs       6m03.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m30.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  87% ] 20 VUs       6m04.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m31.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  87% ] 20 VUs       6m05.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m32.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  87% ] 20 VUs       6m06.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m33.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  88% ] 20 VUs       6m07.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m34.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  88% ] 20 VUs       6m08.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m35.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  88% ] 20 VUs       6m09.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m36.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  88% ] 20 VUs       6m10.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m37.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  88% ] 20 VUs       6m11.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m38.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  89% ] 20 VUs       6m12.7s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m39.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  89% ] 20 VUs       6m13.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m40.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  89% ] 20 VUs       6m14.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m41.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  89% ] 20 VUs       6m15.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m42.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  90% ] 20 VUs       6m16.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m43.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  90% ] 20 VUs       6m17.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m44.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  90% ] 20 VUs       6m18.7s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m45.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  90% ] 20 VUs       6m19.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m46.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  91% ] 20 VUs       6m20.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m47.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  91% ] 20 VUs       6m21.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m48.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  91% ] 20 VUs       6m22.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m49.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  91% ] 20 VUs       6m23.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m50.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  92% ] 20 VUs       6m24.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m51.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  92% ] 20 VUs       6m25.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m52.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  92% ] 20 VUs       6m26.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m53.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  92% ] 20 VUs       6m27.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m54.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  93% ] 20 VUs       6m28.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m55.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  93% ] 20 VUs       6m29.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m56.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  93% ] 20 VUs       6m30.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m57.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  93% ] 20 VUs       6m31.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m58.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  93% ] 20 VUs       6m32.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (6m59.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  94% ] 20 VUs       6m33.7s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m00.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  94% ] 20 VUs       6m34.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m01.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  94% ] 20 VUs       6m35.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m02.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  94% ] 20 VUs       6m36.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m03.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  95% ] 20 VUs       6m37.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m04.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  95% ] 20 VUs       6m38.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m05.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  95% ] 20 VUs       6m39.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m06.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  95% ] 20 VUs       6m40.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m07.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  96% ] 20 VUs       6m41.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m08.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  96% ] 20 VUs       6m42.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m09.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  96% ] 20 VUs       6m43.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m10.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  96% ] 20 VUs       6m44.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m11.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  97% ] 20 VUs       6m45.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m12.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  97% ] 20 VUs       6m46.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m13.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  97% ] 20 VUs       6m47.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m14.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  97% ] 20 VUs       6m48.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m15.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  98% ] 20 VUs       6m49.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m16.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  98% ] 20 VUs       6m50.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m17.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  98% ] 20 VUs       6m51.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m18.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  98% ] 20 VUs       6m52.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m19.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  98% ] 20 VUs       6m53.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m20.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  99% ] 20 VUs       6m54.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m21.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  99% ] 20 VUs       6m55.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m22.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  99% ] 20 VUs       6m56.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m23.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [  99% ] 20 VUs       6m57.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m24.6s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [ 100% ] 20 VUs       6m58.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m25.7s), 020/270 VUs, 365881 complete and 0 interrupted iterations
+listeners   [ 100% ] 20 VUs       6m59.6s/7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+
+running (7m26.1s), 000/270 VUs, 365901 complete and 0 interrupted iterations
+listeners âœ?[ 100% ] 20 VUs       7m0s
+senders   âœ?[ 100% ] 000/250 VUs  5m50s
+time="2026-04-19T23:39:02+08:00" level=info msg="[ten-room-init] reusing fixed topology, rehydratedParticipants=1000, roomDuration=DAY_3, shardCount=8, shardLayout=0:3 1:3 2:1 3:3 4:3 5:1 6:3 7:3, actualMaxRoomsPerShard=3, maxRoomsPerShard=4" source=console
+

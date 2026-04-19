@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * 积分变动类型枚举
+ * 积分变动类型枚举。
  */
 @Getter
 @AllArgsConstructor
@@ -12,37 +12,41 @@ public enum CreditTypeEnum {
 
     // ==================== 收入类型 (+) ====================
 
-    /** 注册奖励：匿名用户升级为注册用户时赠送 */
+    /** 匿名账号升级为注册用户后的注册奖励。 */
     REGISTER_BONUS("注册奖励", 1),
 
-    /** 邀请人奖励：被邀请人升级成功后，邀请人获得 */
+    /** 邀请人奖励。 */
     INVITE_REWARD_INVITER("邀请人奖励", 1),
 
-    /** 被邀请人奖励：使用邀请码升级时额外获得 */
+    /** 被邀请人奖励。 */
     INVITE_REWARD_INVITEE("被邀请人奖励", 1),
 
-    /** 每日签到奖励 */
+    /** 每日签到奖励。 */
     DAILY_LOGIN("每日签到", 1),
+
+    /** 管理员手动增加积分。 */
+    ADMIN_ADJUST_INCREASE("管理员增加积分", 1),
 
     // ==================== 支出类型 (-) ====================
 
-    /** 创建房间消费：根据房间时长档位扣除 */
+    /** 创建房间消耗积分。 */
     ROOM_CREATE_COST("创建房间消费", -1),
 
-    /** 房间延期消费：根据延期时长档位扣除 */
-    ROOM_EXTEND_COST("房间延期消费", -1);
+    /** 房间延期消耗积分。 */
+    ROOM_EXTEND_COST("房间延期消费", -1),
 
-    /** 类型描述 */
+    /** 管理员手动扣减积分。 */
+    ADMIN_ADJUST_DECREASE("管理员扣减积分", -1);
+
+    /** 类型描述。 */
     private final String desc;
 
-
+    /** 方向：1=收入，-1=支出。 */
     private final int direction;
-
 
     public boolean isIncome() {
         return direction == 1;
     }
-
 
     public boolean isExpense() {
         return direction == -1;

@@ -1,6 +1,5 @@
 package com.flashchat.userservice.dto.resp;
 
-
 import com.flashchat.userservice.dao.entity.AccountDO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,9 +7,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 认证响应（注册/登录/检查登录状态 统一返回）
+ * 认证响应。
  * <p>
- * 所有认证相关接口返回同一结构，前端只需处理一种格式。
+ * 登录、自动注册、登录态检查统一复用这一份结构。
  */
 @Data
 @Builder
@@ -18,32 +17,30 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AuthRespDTO {
 
-    /** SaToken 令牌，前端存入 localStorage，后续请求放 Header: satoken=xxx */
+    /** 当前会话 token。 */
     private String token;
 
-    /** 面向用户的账号 ID（FC-XXXXXX） */
+    /** 面向用户展示的业务账号 ID。 */
     private String accountId;
 
-    /** 昵称 */
+    /** 昵称。 */
     private String nickname;
 
-    /** 头像背景色（如 #FF6B6B） */
+    /** 头像背景色。 */
     private String avatarColor;
 
-    /** 头像 URL（注册后可上传，匿名阶段为空） */
+    /** 头像 URL。 */
     private String avatarUrl;
 
-    /** 是否已注册（true=注册用户，false=匿名成员） */
+    /** 是否已完成注册。 */
     private Boolean isRegistered;
 
-    /**
-     * 从 AccountDO 构建认证响应（工厂方法）
-     * <p>
-     * 用于 /check 等已知 token 的场景，避免每个接口重复写 builder
-     *
-     * @param account 账号实体
-     * @param token   当前会话的 SaToken 值
-     */
+    /** 系统角色。0=普通用户，1=管理员。 */
+    private Integer systemRole;
+
+    /** 当前账号是否是管理员。 */
+    private Boolean isAdmin;
+
     public static AuthRespDTO from(AccountDO account, String token) {
         return AuthRespDTO.builder()
                 .token(token)
@@ -52,6 +49,8 @@ public class AuthRespDTO {
                 .avatarColor(account.getAvatarColor())
                 .avatarUrl(account.getAvatarUrl())
                 .isRegistered(account.registered())
+                .systemRole(account.getSystemRole())
+                .isAdmin(account.isAdmin())
                 .build();
     }
 }

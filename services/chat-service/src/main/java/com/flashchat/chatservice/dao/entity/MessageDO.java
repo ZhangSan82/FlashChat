@@ -56,6 +56,21 @@ public class MessageDO {
     private String content;
 
     /**
+     * 加密后的消息正文(Base64)。
+     */
+    private String contentCipher;
+
+    /**
+     * 消息正文加密使用的随机 IV(Base64)。
+     */
+    private String contentIv;
+
+    /**
+     * 消息正文加密使用的密钥版本。
+     */
+    private Integer keyVersion;
+
+    /**
      * 媒体消息 = vue-advanced-chat files 数组格式的 JSON 字符串
      */
     private String body;

@@ -1,0 +1,5 @@
+flashchat:
+  rate-limit:
+    room-global:
+      window-ms: 60000
+      max-count: 12000

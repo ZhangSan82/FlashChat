@@ -12,6 +12,39 @@ const isLoading = ref(false)
 
 export function useAuth() {
 
+    /**
+     * 检查本地是否有 token（同步，不发请求）
+     */
+    function hasToken() {
+        return !!loadToken()
+    }
+
+    /**
+     * 仅验证现有 token 是否有效，不做 auto-register。
+     * 成功返回 true，失败（token 无效/过期）返回 false 并清除本地态。
+     */
+    async function checkOnly() {
+        const token = loadToken()
+        if (!token) return false
+
+        try {
+            const resp = await checkLogin()
+            updateIdentity(resp)
+            isReady.value = true
+            return true
+        } catch (e) {
+            console.warn('[Auth] checkOnly 失败，token 无效', e.message)
+            clearAll()
+            identity.value = null
+            isReady.value = false
+            return false
+        }
+    }
+
+    /**
+     * 完整初始化：有 token 则验证，无 token 则 auto-register。
+     * 注意：扫码场景下不应调用此方法，应使用 checkOnly() 配合路由守卫。
+     */
     async function init() {
         if (isReady.value) return
         isLoading.value = true
@@ -45,7 +78,9 @@ export function useAuth() {
             nickname: resp.nickname,
             avatarColor: resp.avatarColor,
             avatarUrl: resp.avatarUrl || '',
-            isRegistered: resp.isRegistered || false
+            isRegistered: resp.isRegistered || false,
+            systemRole: Number(resp.systemRole || 0),
+            isAdmin: Boolean(resp.isAdmin)
         }
         identity.value = data
         saveIdentity(data)
@@ -98,6 +133,8 @@ export function useAuth() {
         memberId: readonly(memberId),
         isReady: readonly(isReady),
         isLoading: readonly(isLoading),
+        hasToken,
+        checkOnly,
         init,
         setMemberId,
         getToken,

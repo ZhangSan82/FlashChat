@@ -20,6 +20,7 @@ import com.flashchat.chatservice.dto.resp.*;
 import com.flashchat.chatservice.ratelimit.MessageRateLimiter;
 import com.flashchat.chatservice.ratelimit.RateLimitResult;
 import com.flashchat.chatservice.service.*;
+import com.flashchat.chatservice.service.crypto.MessageContentCodec;
 import com.flashchat.chatservice.service.dispatch.RoomSerialLock;
 import com.flashchat.chatservice.service.persist.PersistResult;
 import com.flashchat.chatservice.service.strategy.msg.AbstractMsgHandler;
@@ -31,6 +32,7 @@ import com.flashchat.convention.exception.ClientException;
 import com.flashchat.user.core.UserContext;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -58,10 +60,19 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private final MessageAuditChain  messageAuditChain;
     private final RoomSerialLock roomSerialLock;
     private final MessageRateLimiter messageRateLimiter;
+    private final MessageContentCodec messageContentCodec;
     private final MeterRegistry meterRegistry;
 
     private Counter replyNotFoundCounter;
     private Counter rateLimitedCounter;
+    // 同步路径埋点:把 sendMsg 的"锁前预处理"与"真实临界区"分开观测。
+    // 锁前:audit chain / rate limit / DB reply 查询 / handler 构建体的总耗时
+    // 临界区:stripe 锁内的 ID 分配 + XADD + mailbox submit(不含等锁,等锁走 stripe.lock.wait)
+    private Timer sendPreLockTimer;
+    private Timer sendCriticalTimer;
+    private Timer sendRateLimitTimer;
+    private Timer sendAuditTimer;
+    private Timer sendReplyValidateTimer;
 
     @PostConstruct
     void initMetrics() {
@@ -71,6 +82,26 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .register(meterRegistry);
         this.rateLimitedCounter = Counter.builder("chat.send.rate_limited")
                 .description("发送消息被限流器拦截的次数 — 按 result 枚举区分命中的维度")
+                .register(meterRegistry);
+        this.sendPreLockTimer = Timer.builder("flashchat.send.pre_lock.duration")
+                .description("sendMsg 从入口到 acquireRoomLockOrBusy 之前的耗时 — 暴露 audit/rate limit/回复校验的尾部")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+        this.sendCriticalTimer = Timer.builder("flashchat.send.critical.duration")
+                .description("sendMsg 真实临界区耗时(ID 分配 + XADD + mailbox submit)— 不含等锁,等锁见 chat.stripe.lock.wait.duration")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+        this.sendRateLimitTimer = Timer.builder("flashchat.send.rate_limit.duration")
+                .description("Time spent inside MessageRateLimiter.checkLimit before entering the room stripe lock")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+        this.sendAuditTimer = Timer.builder("flashchat.send.audit.duration")
+                .description("Time spent in message audit before entering the room stripe lock")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+        this.sendReplyValidateTimer = Timer.builder("flashchat.send.reply_validate.duration")
+                .description("Time spent validating replyMsgId against DB before entering the room stripe lock")
+                .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
     }
     /** 撤回时间窗口：2 分钟（秒级精度） */
@@ -97,15 +128,33 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     //TODO未来实现完全异步
     @Override
     public ChatBroadcastMsgRespDTO sendMsg(SendMsgReqDTO request) {
-
+        // 锁前段计时:覆盖到 acquireRoomLockOrBusy 调用之前的所有预处理
+        // 成功/抛出都记录(finally 里 stop),让 p95 能反映 audit chain / rate limit 的尾部
+        final Timer.Sample preLockSample = Timer.start(meterRegistry);
+        boolean preLockStopped = false;
         Long accountId = UserContext.getRequiredLoginId();
         String roomId = request.getRoomId();
+        RoomMemberInfo memberInfo;
+        String content;
+        List<FileDTO> files;
+        String bodyJson;
+        String contentSummary;
+        Integer msgType;
+        MessageDO replyMsg = null;
+        String msgId = null;
+        Integer isHost = null;
+        long nowMillis = 0L;
+        LocalDateTime createTime = null;
+        ChatBroadcastMsgRespDTO broadcastMsg = null;
+        Long finalMsgSeqId = null;
+        PersistResult persistResult = null;
+        try {
         // ===== 1. 公共前置校验 =====
         validateRoomCanSendMsg(roomId);
         if (!roomChannelManager.isInRoom(roomId, accountId)) {
             throw new ClientException("你不在该房间中，请先加入房间");
         }
-        RoomMemberInfo memberInfo = roomChannelManager.getRoomMemberInfo(roomId, accountId);
+        memberInfo = roomChannelManager.getRoomMemberInfo(roomId, accountId);
         if (memberInfo != null && memberInfo.isMuted()) {
             throw new ClientException("你已被禁言，无法发送消息");
         }
@@ -113,7 +162,13 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         // 位置选在最早的廉价 Redis 调用:早于 audit chain / XADD / stripe lock,
         // 被限流的请求不占用任何下游资源。即使是畸形请求(content/files 都空)
         // 也会先消耗一次限流额度,防止攻击者用畸形包压 limiter 下游。
-        RateLimitResult rateLimitResult = messageRateLimiter.checkLimit(accountId, roomId);
+        final Timer.Sample rateLimitSample = Timer.start(meterRegistry);
+        RateLimitResult rateLimitResult;
+        try {
+            rateLimitResult = messageRateLimiter.checkLimit(accountId, roomId);
+        } finally {
+            rateLimitSample.stop(sendRateLimitTimer);
+        }
         if (!rateLimitResult.isPassed()) {
             rateLimitedCounter.increment();
             log.warn("[发消息-限流] room={}, memberId={}, reason={}",
@@ -121,8 +176,8 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             throw new ClientException(rateLimitResult.getMessage());
         }
         // ===== 2. 跨字段校验：content 和 files 不能同时为空 =====
-        String content = request.getContent();
-        List<FileDTO> files = request.getFiles();
+        content = request.getContent();
+        files = request.getFiles();
         if ((content == null || content.isBlank()) && (files == null || files.isEmpty())) {
             throw new ClientException("消息内容不能为空");
         }
@@ -134,13 +189,18 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             handler.enrichFiles(files);
         }
         // ===== 4. Handler 构建消息体 =====
-        String bodyJson = handler.buildBodyJson(files);
-        String contentSummary = handler.buildContentSummary(content, files);
-        Integer msgType = handler.getMsgTypeEnum().getType();
+        bodyJson = handler.buildBodyJson(files);
+        contentSummary = handler.buildContentSummary(content, files);
+        msgType = handler.getMsgTypeEnum().getType();
         // ===== 4.5 消息审核 =====
         MessageAuditContext auditCtx = MessageAuditContext.of(
                 contentSummary,files,roomId,accountId,msgType);
-        messageAuditChain.execute(auditCtx);
+        final Timer.Sample auditSample = Timer.start(meterRegistry);
+        try {
+            messageAuditChain.execute(auditCtx);
+        } finally {
+            auditSample.stop(sendAuditTimer);
+        }
         if (auditCtx.isRejected()) {
             // 通过 WS 通知发送者（MSG_REJECTED 已有前端监听，会 Toast 提示）
             roomChannelManager.sendToUser(accountId,
@@ -158,15 +218,19 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         //   - 时间窗口 <= 200ms(BLOCK 超时 + 批处理延迟),且要求用户在此期间恰好回复该条
         //   - 失败语义是 clean ClientException,前端重试即可,不产生脏数据
         //   - chat.reply.not_found 计数器兜底监控,若 QPS 显著升高再考虑加窗口 fallback
-        MessageDO replyMsg = null;
         if (request.getReplyMsgId() != null) {
-            replyMsg = this.getById(request.getReplyMsgId());
-            if (replyMsg == null) {
-                replyNotFoundCounter.increment();
-                throw new ClientException("引用的消息不存在");
-            }
-            if (!replyMsg.getRoomId().equals(roomId)) {
-                throw new ClientException("只能引用同一房间的消息");
+            final Timer.Sample replyValidateSample = Timer.start(meterRegistry);
+            try {
+                replyMsg = this.getById(request.getReplyMsgId());
+                if (replyMsg == null) {
+                    replyNotFoundCounter.increment();
+                    throw new ClientException("引用的消息不存在");
+                }
+                if (!replyMsg.getRoomId().equals(roomId)) {
+                    throw new ClientException("只能引用同一房间的消息");
+                }
+            } finally {
+                replyValidateSample.stop(sendReplyValidateTimer);
             }
         }
         // ===== 6-11 房间级串行临界区 =====
@@ -176,14 +240,24 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         // 临界区内包含一次 XADD(约 1ms),同房间吞吐 ~1000 msg/s,单机场景足够。
         // 锁外预计算(不依赖 msgSeqId):降低临界区内的无关工作量,避免 stripe 内竞争放大。
         // createTime/timestamp 统一用一个时刻源,保证 DB/Stream/广播之间的时间一致性。
-        String msgId = UUID.randomUUID().toString().replace("-", "");
-        Integer isHost = memberInfo != null && memberInfo.isHost() ? 1 : 0;
-        long nowMillis = System.currentTimeMillis();
-        LocalDateTime createTime = LocalDateTime.now();
-        ChatBroadcastMsgRespDTO broadcastMsg;
-        Long finalMsgSeqId;
-        PersistResult persistResult;
+        msgId = UUID.randomUUID().toString().replace("-", "");
+        isHost = memberInfo != null && memberInfo.isHost() ? 1 : 0;
+        nowMillis = System.currentTimeMillis();
+        createTime = LocalDateTime.now();
+        // 锁前段结束点:停在 acquireRoomLockOrBusy 调用之前,不含等锁本身
+        // 等锁耗时由 chat.stripe.lock.wait.duration 单独统计,避免两个指标口径重叠
+        preLockSample.stop(sendPreLockTimer);
+        preLockStopped = true;
+        } finally {
+            if (!preLockStopped) {
+                preLockSample.stop(sendPreLockTimer);
+            }
+        }
         try (RoomSerialLock.Handle ignored = acquireRoomLockOrBusy(roomId)) {
+            // 真实临界区计时:进入锁之后才 start,退出 try 前 stop(放在 finally 保证异常路径也记录)
+            // 口径:ID 分配 + XADD + mailbox submit,不含等锁
+            final Timer.Sample criticalSample = Timer.start(meterRegistry);
+            try {
             // ===== 6. 生成消息 ID =====
             Long msgSeqId = msgIdGenerator.tryNextId();
             // ===== 7. 构建消息实体 =====
@@ -237,6 +311,10 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                     .build();
             // ===== 11. 提交 side effect mailbox(仍在临界区内,保证同房间 submit 顺序) =====
             messageSideEffectService.dispatchUserMessageAccepted(roomId, accountId, msgSeqId, broadcastMsg);
+            } finally {
+                // 异常路径(例如 saveSync/DB 抛)也会落入 finally,确保临界区 Timer 始终被 stop
+                criticalSample.stop(sendCriticalTimer);
+            }
         }
 
         log.info("[发消息] room={}, memberId={}, dbId={}, acceptedBy={}",
@@ -822,7 +900,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         } else if (isRecalled) {
             displayContent = "此消息已撤回";      // 前端展示撤回占位文案
         } else {
-            displayContent = msg.getContent();
+            displayContent = messageContentCodec.decodeContent(msg);
         }
 
         // ===== 3. files 处理 =====
@@ -886,7 +964,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         }
         // 正常
         return ReplyMessageDTO.builder()
-                .content(replyMsg.getContent())
+                .content(messageContentCodec.decodeContent(replyMsg))
                 .senderId(getSenderId(replyMsg))
                 .files(parseFiles(replyMsg.getBody()))
                 .build();

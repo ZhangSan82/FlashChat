@@ -1,0 +1,1 @@
+time="2026-04-19T23:59:59+08:00" level=info msg="[ten-room-init] reusing fixed topology, rehydratedParticipants=1000, roomDuration=DAY_3, shardCount=8, shardLayout=0:3 1:3 2:1 3:3 4:3 5:1 6:3 7:3, activeShardCount=8, emptyShardCount=0, actualMaxRoomsPerShard=3, maxRoomsPerShard=4, minActiveShards=7, maxEmptyShards=1" source=console

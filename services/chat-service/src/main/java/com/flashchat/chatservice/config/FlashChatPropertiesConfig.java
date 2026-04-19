@@ -8,7 +8,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @EnableConfigurationProperties({
         AuditProperties.class,
-        RateLimitProperties.class
+        RateLimitProperties.class,
+        MailboxProperties.class,
+        MessageCryptoProperties.class
 })
 public class FlashChatPropertiesConfig {
 }

@@ -160,6 +160,7 @@
         :account-id="auth.identity.value?.accountId || ''"
         :avatar-color="auth.identity.value?.avatarColor || '#C8956C'"
         :avatar-url="auth.identity.value?.avatarUrl || ''"
+        :is-admin="Boolean(auth.identity.value?.isAdmin)"
         @close="drawerOpen = false"
         @action="onDrawerAction"
     />
@@ -1102,6 +1103,7 @@ function onDrawerAction(act) {
   drawerOpen.value = false
   if (act === 'create') createDlg.value = true
   else if (act === 'join') joinDlg.value = true
+  else if (act === 'admin') router.push('/admin')
   else if (act === 'public') router.push('/room/public')
   else if (act === 'credits') router.push('/credits')
   else if (act === 'invites') router.push('/invites')
@@ -1326,6 +1328,17 @@ async function doInit() {
       } finally {
         consumeRouteState()
         await game.handleSocketConnected()
+
+        // 快速进入后提示绑定邮箱
+        if (sessionStorage.getItem('fc_quick_entry') === '1') {
+          sessionStorage.removeItem('fc_quick_entry')
+          const id = auth.identity.value
+          if (id && !id.isRegistered) {
+            setTimeout(() => {
+              showToast('当前为快速进入状态，建议绑定邮箱以保留账号', 'info', 6000)
+            }, 2000)
+          }
+        }
       }
     })
     ws.on(WS_TYPE.CHAT_BROADCAST, chat.onChatBroadcast)

@@ -22,6 +22,7 @@ import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.req.*;
 import com.flashchat.chatservice.dto.resp.*;
 import com.flashchat.chatservice.service.*;
+import com.flashchat.chatservice.service.crypto.MessageContentCodec;
 import com.flashchat.chatservice.toolkit.HashUtil;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
@@ -74,6 +75,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final RoomCacheGetFilter roomCacheGetFilter;
     private final RoomCacheIfAbsentHandler roomCacheIfAbsentHandler;
     private final StringRedisTemplate stringRedisTemplate;
+    private final MessageContentCodec messageContentCodec;
     private static final long CACHE_TIMEOUT = 60000L;
     /** 公开房间列表缓存 TTL（秒） */
     private static final long PUBLIC_LIST_TTL_SECONDS = 30L;
@@ -89,6 +91,14 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     @Value("${flashchat.share.base-url:http://localhost:3002}")
     private String shareBaseUrl;
 
+    /**
+     * 仅供本地 perf/压测使用：
+     * 允许游客创建/延期收费时长房间，并跳过积分校验与扣费。
+     * 正常环境必须保持 false。
+     */
+    @Value("${flashchat.room.perf-bypass-paid-duration-restrictions:false}")
+    private boolean perfBypassPaidDurationRestrictions;
+
     /**创建房间*/
     @Override
     public RoomInfoRespDTO createRoom(RoomCreateReqDTO request) {
@@ -100,12 +110,13 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             durationEnum = RoomDurationEnum.MIN_30;  // 默认 30 分钟
         }
         int cost = durationEnum.getCost();
+        boolean skipPaidDurationRestrictions = cost > 0 && perfBypassPaidDurationRestrictions;
 
-        if (cost > 0 && !creator.registered()) {
+        if (cost > 0 && !skipPaidDurationRestrictions && !creator.registered()) {
             throw new ClientException("创建房间需要先升级为注册用户");
         }
 
-        if (cost > 0 && creator.getCredits() != null && creator.getCredits() < cost) {
+        if (cost > 0 && !skipPaidDurationRestrictions && creator.getCredits() != null && creator.getCredits() < cost) {
             throw new ClientException("积分不足，需要 " + cost + " 积分，当前 " + creator.getCredits());
         }
 
@@ -139,7 +150,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
 
         transactionTemplate.executeWithoutResult(status -> {
 
-            if (cost > 0) {
+            if (cost > 0 && !skipPaidDurationRestrictions) {
                 creditService.deductCredits(creatorId, cost,
                         CreditTypeEnum.ROOM_CREATE_COST, roomId,
                         "创建房间-" + finalDuration.getDesc());
@@ -148,7 +159,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             roomMemberService.save(hostMember);
         });
 
-        if (cost > 0) {
+        if (cost > 0 && !skipPaidDurationRestrictions) {
             accountService.evictCacheByDbId(creatorId);
         }
         try {
@@ -199,10 +210,16 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 new LambdaQueryWrapper<MessageDO>()
                         .select(
                                 MessageDO::getId,
+                                MessageDO::getMsgId,
+                                MessageDO::getRoomId,
                                 MessageDO::getSenderId,
                                 MessageDO::getNickname,
                                 MessageDO::getAvatarColor,
                                 MessageDO::getContent,
+                                MessageDO::getContentCipher,
+                                MessageDO::getContentIv,
+                                MessageDO::getKeyVersion,
+                                MessageDO::getMsgType,
                                 MessageDO::getStatus,
                                 MessageDO::getCreateTime
                         )
@@ -251,7 +268,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private RoomPreviewMessageRespDTO toPreviewMessageFromDb(MessageDO message) {
         String content = Objects.equals(message.getStatus(), MSG_STATUS_RECALLED)
                 ? "此消息已撤回"
-                : normalizePreviewContent(message.getContent());
+                : normalizePreviewContent(messageContentCodec.decodeContent(message));
         if (content.isEmpty()) {
             content = "[文件]";
         }
@@ -384,6 +401,11 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         // ===== 3. 幂等分支 =====
         if (!joined[0]) {
             log.info("[加入房间-幂等] room={}, accountId={}, 已在房间中", roomId, accountId);
+            // 应用重启后，DB 里的 ACTIVE 成员关系仍在，
+            // 但 roomChannelManager 的内存态会被清空。
+            // 幂等 joinRoom 不能直接返回，需要把当前成员静默恢复回内存，
+            // 否则后续 HTTP send 会被误判成“你不在该房间中”。
+            restoreActiveMemberToRoomMemoryIfNeeded(roomId, accountId, account);
             return buildRoomInfoResp(getRoomByRoomId(roomId));
         }
 
@@ -399,6 +421,36 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 account.getNickname(), resolveAccountAvatar(account), false, isMuted);
         log.info("[加入房间] room={}, accountId={}", roomId, accountId);
         return buildRoomInfoResp(getRoomByRoomId(roomId));
+    }
+
+    void restoreActiveMemberToRoomMemoryIfNeeded(String roomId, Long accountId, AccountDO account) {
+        if (roomChannelManager.isInRoom(roomId, accountId)) {
+            return;
+        }
+
+        RoomMemberDO activeMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
+        if (activeMember == null || activeMember.getStatus() != RoomMemberStatusEnum.ACTIVE.getCode()) {
+            return;
+        }
+
+        boolean isHost = activeMember.getRole() != null
+                && activeMember.getRole() == RoomMemberRoleEnum.HOST.getCode();
+        boolean isMuted = activeMember.getIsMuted() != null
+                && activeMember.getIsMuted() == RoomMemberMuteStatusEnum.MUTE.getCode();
+        String nickname = account != null && account.getNickname() != null && !account.getNickname().isBlank()
+                ? account.getNickname()
+                : "匿名用户";
+
+        roomChannelManager.joinRoomSilent(
+                roomId,
+                accountId,
+                nickname,
+                resolveAccountAvatar(account),
+                isHost,
+                isMuted
+        );
+        log.info("[加入房间-内存恢复] room={}, accountId={}, isHost={}, isMuted={}",
+                roomId, accountId, isHost, isMuted);
     }
 
     @Override
@@ -924,6 +976,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     public RoomInfoRespDTO extendRoom(RoomExtendReqDTO request) {
         String roomId = request.getRoomId();
         Long operatorId = UserContext.getRequiredLoginId();
+        boolean skipPaidDurationRestrictions = perfBypassPaidDurationRestrictions;
         // ===== 1. 查询房间 =====
         RoomDO room = getRoomByRoomId(roomId);
         if (room == null) {
@@ -957,10 +1010,10 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         // ===== 5. 积分校验（免费档位跳过） =====
         if (cost > 0) {
             AccountDO creator = accountService.getAccountByDbId(operatorId);
-            if (!creator.registered()) {
+            if (!skipPaidDurationRestrictions && !creator.registered()) {
                 throw new ClientException("延期房间需要先升级为注册用户");
             }
-            if (creator.getCredits() == null || creator.getCredits() < cost) {
+            if (!skipPaidDurationRestrictions && (creator.getCredits() == null || creator.getCredits() < cost)) {
                 throw new ClientException("积分不足，需要 " + cost + " 积分，当前 "
                         + (creator.getCredits() != null ? creator.getCredits() : 0));
             }
@@ -980,7 +1033,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 : room.getStatus();
         transactionTemplate.executeWithoutResult(txStatus -> {
             // 7a. 扣积分（免费档位跳过）
-            if (finalDuration.getCost() > 0) {
+            if (finalDuration.getCost() > 0 && !skipPaidDurationRestrictions) {
                 creditService.deductCredits(operatorId, finalDuration.getCost(),
                         CreditTypeEnum.ROOM_EXTEND_COST,
                         roomId + ":" + newVersion,

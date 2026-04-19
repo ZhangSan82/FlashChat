@@ -1,6 +1,5 @@
 package com.flashchat.chatservice.service;
 
-
 import java.util.Map;
 import java.util.Set;
 
@@ -21,11 +20,16 @@ public interface UnreadService {
 
     /**
      * 发消息后，给房间所有成员（除发送者）的未读数 +1
+     *
+     * <p>补充说明：当前实现已切换到“读时 DB 统计”，这个入口保留是为了兼容旧调用链，
+     * 以及方便后续灰度观察和回溯历史瓶颈。
      */
     void incrementUnread(String roomId, Long excludeMemberId);
 
     /**
      * ACK 后，清除该用户该房间的未读数
+     *
+     * <p>补充说明：当前主要用于清理历史 Redis unread 缓存，避免新旧逻辑混用。
      */
     void clearUnread(Long accountId, String roomId);
 
@@ -48,12 +52,17 @@ public interface UnreadService {
 
     /**
      * 获取用户所有房间的未读数
+     *
      * @return roomId → unreadCount（只包含 > 0 的）
+     *
+     * <p>补充说明：当前主路径为“读时 DB 统计”。
      */
     Map<String, Integer> getAllUnreadCounts(Long accountId);
 
     /**
      * 获取用户在某个房间的未读数
+     *
+     * <p>补充说明：当前主路径为“读时 DB 统计”。
      */
     int getUnreadCount(Long accountId, String roomId);
 }

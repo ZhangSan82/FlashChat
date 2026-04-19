@@ -1,5 +1,6 @@
 package com.flashchat.chatservice.service.dispatch;
 
+import com.flashchat.chatservice.config.MailboxProperties;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -50,10 +51,16 @@ public class RoomSideEffectMailbox {
     private final ThreadPoolExecutor[] shardExecutors;
     private final Counter[] rejectedCounters;
     private final Timer[] taskDurationTimers;
+    private final Timer[] queueWaitTimers;
 
     @Autowired
-    public RoomSideEffectMailbox(MeterRegistry meterRegistry) {
-        this(DEFAULT_SHARD_COUNT, DEFAULT_QUEUE_CAPACITY, DEFAULT_THREAD_NAME_PREFIX, meterRegistry);
+    public RoomSideEffectMailbox(MailboxProperties mailboxProperties, MeterRegistry meterRegistry) {
+        this(
+                mailboxProperties.getShardCount(),
+                mailboxProperties.getQueueCapacity(),
+                mailboxProperties.getThreadNamePrefix(),
+                meterRegistry
+        );
     }
 
     RoomSideEffectMailbox(int shardCount, int queueCapacity, String threadNamePrefix) {
@@ -71,6 +78,7 @@ public class RoomSideEffectMailbox {
         this.shardExecutors = new ThreadPoolExecutor[shardCount];
         this.rejectedCounters = new Counter[shardCount];
         this.taskDurationTimers = new Timer[shardCount];
+        this.queueWaitTimers = new Timer[shardCount];
         for (int i = 0; i < shardCount; i++) {
             int shard = i;
             // AbortPolicy: 队列满或 shutdown 时抛 RejectedExecutionException,
@@ -102,6 +110,10 @@ public class RoomSideEffectMailbox {
                         .tags(tags)
                         .description("房间副作用任务执行耗时")
                         .register(meterRegistry);
+                this.queueWaitTimers[shard] = Timer.builder("chat.mailbox.queue.wait.duration")
+                        .tags(tags)
+                        .description("Time spent waiting in mailbox queue before task execution")
+                        .register(meterRegistry);
             }
         }
         log.info("[RoomMailbox] 初始化完成, shards={}, queueCapacity={}", shardCount, queueCapacity);
@@ -122,6 +134,7 @@ public class RoomSideEffectMailbox {
         int shard = shardFor(roomId);
         ThreadPoolExecutor executor = shardExecutors[shard];
         CompletableFuture<Void> future = new CompletableFuture<>();
+        long submittedAtNanos = System.nanoTime();
 
         // 快速失败: shutdown 竞态防护(避免任务入队后永不被执行)
         if (executor.isShutdown()) {
@@ -132,6 +145,9 @@ public class RoomSideEffectMailbox {
         }
 
         Runnable wrapped = () -> {
+            if (queueWaitTimers[shard] != null) {
+                queueWaitTimers[shard].record(System.nanoTime() - submittedAtNanos, TimeUnit.NANOSECONDS);
+            }
             Timer.Sample sample = Timer.start();
             try {
                 task.run();
@@ -170,6 +186,10 @@ public class RoomSideEffectMailbox {
         int h = roomId.hashCode();
         h = h ^ (h >>> 16);
         return Math.floorMod(h, shardExecutors.length);
+    }
+
+    int shardCount() {
+        return shardExecutors.length;
     }
 
     private void incrementRejected(int shard) {

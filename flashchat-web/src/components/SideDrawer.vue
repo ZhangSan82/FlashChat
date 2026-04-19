@@ -154,6 +154,24 @@
                 </svg>
               </span>
             </button>
+
+            <button v-if="isAdmin" class="dr-item" type="button" @click="$emit('action', 'admin')">
+              <span class="dr-item-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M12 3l7 4v5c0 4.3-2.8 8.2-7 9-4.2-.8-7-4.7-7-9V7l7-4z" />
+                  <path d="M9.4 12.2l1.8 1.8 3.6-4.1" />
+                </svg>
+              </span>
+              <span class="dr-item-copy">
+                <strong>管理员控制台</strong>
+                <small>查看账号、房间与操作日志</small>
+              </span>
+              <span class="dr-item-arrow" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </span>
+            </button>
           </nav>
 
           <div class="dr-divider"></div>
@@ -190,7 +208,8 @@ defineProps({
   nickname: { type: String, default: '' },
   accountId: { type: String, default: '' },
   avatarColor: { type: String, default: '#C8956C' },
-  avatarUrl: { type: String, default: '' }
+  avatarUrl: { type: String, default: '' },
+  isAdmin: { type: Boolean, default: false }
 })
 
 defineEmits(['close', 'action'])

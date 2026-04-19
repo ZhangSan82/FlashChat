@@ -1,16 +1,18 @@
 package com.flashchat.chatservice.service.impl;
 
-import com.flashchat.chatservice.service.MessageSideEffectService;
-import com.flashchat.chatservice.service.MessageWindowService;
-import com.flashchat.chatservice.service.UnreadService;
-import com.flashchat.chatservice.service.dispatch.RoomSideEffectMailbox;
-import com.flashchat.chatservice.toolkit.JsonUtil;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.resp.ChatBroadcastMsgRespDTO;
 import com.flashchat.chatservice.dto.resp.MsgReactionRespDTO;
 import com.flashchat.chatservice.dto.resp.MsgRecallRespDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
+import com.flashchat.chatservice.service.MessageSideEffectService;
+import com.flashchat.chatservice.service.MessageWindowService;
+import com.flashchat.chatservice.service.UnreadService;
+import com.flashchat.chatservice.service.dispatch.RoomSideEffectMailbox;
+import com.flashchat.chatservice.toolkit.JsonUtil;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,17 +48,24 @@ class MessageSideEffectServiceImplTest {
     @Mock
     private UnreadService unreadService;
 
+    private SimpleMeterRegistry meterRegistry;
     private MessageSideEffectService messageSideEffectService;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         messageSideEffectService = new MessageSideEffectServiceImpl(
                 mailbox,
                 messageWindowService,
                 roomChannelManager,
                 unreadService,
-                null
+                meterRegistry
         );
+    }
+
+    @AfterEach
+    void cleanUp() {
+        meterRegistry.close();
     }
 
     /**
@@ -64,9 +73,12 @@ class MessageSideEffectServiceImplTest {
      * side-effect service 会把“写窗口、广播、更新活跃时间、累加未读”四个副作用全部串起来执行。
      * 预期结果：这四类依赖都被调用一次，说明发送主链路已经只负责 durable accept，
      * 副作用则统一下沉到 mailbox 内执行。
+     *
+     * <p>补充说明：当前实现里“累加未读”已改成读时 DB 统计，因此本测试保留原注释，
+     * 但断言调整为“不再触发 incrementUnread()”。
      */
     @Test
-    void dispatchUserMessageAcceptedShouldExecuteAllUserSideEffects() {
+    void dispatchUserMessageAcceptedShouldExecuteUserSideEffectsExceptUnreadIncrement() {
         when(mailbox.submit(eq("room-1"), anyString(), any(Runnable.class)))
                 .thenAnswer(invocation -> {
                     Runnable task = invocation.getArgument(2);
@@ -81,7 +93,7 @@ class MessageSideEffectServiceImplTest {
         verify(messageWindowService).addToWindow("room-1", 100L, broadcastMsg);
         verify(roomChannelManager).broadcastToRoom(eq("room-1"), any());
         verify(roomChannelManager).touchMember("room-1", 1L);
-        verify(unreadService).incrementUnread("room-1", 1L);
+        verify(unreadService, never()).incrementUnread(anyString(), any());
     }
 
     /**
@@ -218,6 +230,32 @@ class MessageSideEffectServiceImplTest {
                 100L,
                 "1"
         );
+    }
+
+    /**
+     * 作用：验证副作用步骤埋点是否仍然准确。
+     * 预期结果：window_add / broadcast / touch 会计时，
+     * 而 unread 因为已经退出发送副作用路径，所以不再产生计时样本。
+     */
+    @Test
+    void dispatchUserMessageAcceptedShouldRecordStepDurationMetrics() {
+        when(mailbox.submit(eq("room-1"), anyString(), any(Runnable.class)))
+                .thenAnswer(invocation -> {
+                    Runnable task = invocation.getArgument(2);
+                    task.run();
+                    return CompletableFuture.completedFuture(null);
+                });
+
+        ChatBroadcastMsgRespDTO broadcastMsg = buildBroadcastMsg();
+
+        messageSideEffectService.dispatchUserMessageAccepted("room-1", 1L, 100L, broadcastMsg);
+
+        assertEquals(1L, meterRegistry.get("chat.side_effect.step.duration").tag("step", "window_add").timer().count());
+        assertEquals(1L, meterRegistry.get("chat.side_effect.step.duration").tag("step", "broadcast").timer().count());
+        assertEquals(1L, meterRegistry.get("chat.side_effect.step.duration").tag("step", "touch").timer().count());
+        assertEquals(0L, meterRegistry.find("chat.side_effect.step.duration").tag("step", "unread").timer() == null
+                ? 0L
+                : meterRegistry.get("chat.side_effect.step.duration").tag("step", "unread").timer().count());
     }
 
     /**

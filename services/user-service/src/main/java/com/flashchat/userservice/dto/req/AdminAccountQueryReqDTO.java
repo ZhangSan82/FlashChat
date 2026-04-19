@@ -21,7 +21,7 @@ public class AdminAccountQueryReqDTO {
     private Integer status;
 
     /**
-     * 系统角色筛选：0=普通用户，1=管理员。
+     * 系统角色筛选：0=普通用户，1=系统管理员。
      */
     private Integer systemRole;
 

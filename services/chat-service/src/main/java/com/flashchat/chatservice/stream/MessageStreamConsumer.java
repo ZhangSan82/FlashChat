@@ -2,6 +2,7 @@ package com.flashchat.chatservice.stream;
 
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
+import com.flashchat.chatservice.service.crypto.MessageContentCodec;
 import com.flashchat.chatservice.toolkit.JsonUtil;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -48,6 +49,7 @@ public class MessageStreamConsumer {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final MessageMapper messageMapper;
+    private final MessageContentCodec messageContentCodec;
 
     /** 控制消费循环退出 */
     private volatile boolean running = true;
@@ -156,7 +158,7 @@ public class MessageStreamConsumer {
                 }
 
                 if (!batch.isEmpty()) {
-                    int affected = messageMapper.insertBatchIgnore(batch);
+                    int affected = messageMapper.insertBatchIgnore(encodeBatchForStorage(batch));
                     ackBatch(recordIds);
                     log.info("[Stream Consumer] Pending 恢复: {} 条, 实际插入 {} 条",
                             batch.size(), affected);
@@ -271,7 +273,7 @@ public class MessageStreamConsumer {
         }
 
         try {
-            int affected = messageMapper.insertBatchIgnore(buffer);
+            int affected = messageMapper.insertBatchIgnore(encodeBatchForStorage(buffer));
 
             try {
                 ackBatch(recordIds);
@@ -310,6 +312,12 @@ public class MessageStreamConsumer {
      * 反序列化 Stream 消息 → MessageDO
      * @return MessageDO 对象；消息体为空或反序列化失败时返回 null
      */
+    List<MessageDO> encodeBatchForStorage(List<MessageDO> batch) {
+        return batch.stream()
+                .map(messageContentCodec::encodeForStorage)
+                .toList();
+    }
+
     private MessageDO deserialize(MapRecord<String, Object, Object> record) {
         Map<Object, Object> body = record.getValue();
         if (body == null || body.isEmpty()) {
