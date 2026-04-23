@@ -1,0 +1,87 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Local Tooling ###
+.agent/
+.claude/
+.codebuddy/
+.codex*/
+.continue/
+.cursor/
+.windsurf/
+.github/prompts/
+services/aggregation-service/.codex-tmp/
+
+### Local Environment ###
+flashchat-web/.env.*
+,uptime,level,tags
+temp-shard-layout.ps1
+
+### Preview Assets ###
+flashchat-web/design/
+flashchat-web/game-preview.html
+flashchat-web/style-preview.html
+
+### Generated Assets ###
+tools/
+uploads/
+**/uploads/
+
+### Perf Outputs ###
+perf/results/**
+!perf/results/.gitkeep
+perf/logs/
+perf/run/local-perf.json
+perf/run/local-perf.pid
+
+### Wrapper Noise ###
+.mvn/
+dependencies/.mvn/
+frameworks/.mvn/
+frameworks/*/.mvn/
+services/.mvn/
+services/*/.mvn/
+
+### Module Local Ignore Files ###
+dependencies/.gitignore
+dependencies/.gitattributes
+frameworks/.gitignore
+frameworks/.gitattributes
+frameworks/*/.gitignore
+frameworks/*/.gitattributes
+services/.gitignore
+services/.gitattributes
+services/*/.gitignore
+services/*/.gitattributes
+flashchat-web/.gitignore
