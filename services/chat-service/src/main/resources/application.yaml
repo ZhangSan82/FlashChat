@@ -80,6 +80,10 @@ flashchat:
       account:
         max-size: 5000
         ttl-seconds: 45
+    circuit-breaker:
+      enabled: true
+      failure-threshold: 5
+      open-duration-ms: 30000
   share:
     # 前端域名，用于拼接房间分享链接
     # 生产环境改为实际域名：https://flashchat.com

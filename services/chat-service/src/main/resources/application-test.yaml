@@ -82,6 +82,10 @@ flashchat:
       account:
         max-size: 10000
         ttl-seconds: 45
+    circuit-breaker:
+      enabled: true
+      failure-threshold: 5
+      open-duration-ms: 30000
   file:
     upload-path: ./uploads
     url-prefix: http://localhost:8081/uploads
