@@ -1,0 +1,27 @@
+{
+    "name":  "chat.mailbox.submit.rejected",
+    "description":  "иж????????????бд2 shutdown ?бе?ии?бф????oбшиибщ???????????????бу",
+    "measurements":  [
+                         {
+                             "statistic":  "COUNT",
+                             "value":  0.0
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          },
+                          {
+                              "tag":  "shard",
+                              "values":  [
+                                             "0",
+                                             "1",
+                                             "2",
+                                             "3"
+                                         ]
+                          }
+                      ]
+}

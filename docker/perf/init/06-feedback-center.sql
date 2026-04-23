@@ -1,0 +1,23 @@
+CREATE TABLE t_feedback (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    account_id VARCHAR(16) NULL COMMENT '提交人业务账号ID，可为空',
+    nickname_snapshot VARCHAR(64) NULL COMMENT '提交人昵称快照',
+    account_type VARCHAR(32) NOT NULL COMMENT '账号类型：GUEST/REGISTERED',
+    feedback_type VARCHAR(32) NOT NULL COMMENT '反馈类型',
+    content TEXT NOT NULL COMMENT '反馈正文',
+    contact VARCHAR(100) NULL COMMENT '联系方式',
+    screenshot_url VARCHAR(255) NULL COMMENT '截图地址',
+    willing_contact TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否愿意被联系',
+    source_page VARCHAR(64) NOT NULL COMMENT '来源页面',
+    source_scene VARCHAR(64) NOT NULL COMMENT '来源场景',
+    status VARCHAR(32) NOT NULL COMMENT '处理状态：NEW/PROCESSING/RESOLVED/CLOSED',
+    reply TEXT NULL COMMENT '处理备注',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    del_flag TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (id),
+    KEY idx_account_id (account_id),
+    KEY idx_feedback_type (feedback_type),
+    KEY idx_feedback_status (status),
+    KEY idx_feedback_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户反馈表';

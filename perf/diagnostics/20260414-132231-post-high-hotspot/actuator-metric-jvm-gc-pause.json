@@ -1,0 +1,50 @@
+{
+    "name":  "jvm.gc.pause",
+    "description":  "Time spent in GC pause",
+    "baseUnit":  "seconds",
+    "measurements":  [
+                         {
+                             "statistic":  "COUNT",
+                             "value":  74.0
+                         },
+                         {
+                             "statistic":  "TOTAL_TIME",
+                             "value":  6.529
+                         },
+                         {
+                             "statistic":  "MAX",
+                             "value":  0.404
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          },
+                          {
+                              "tag":  "cause",
+                              "values":  [
+                                             "G1 Humongous Allocation",
+                                             "G1 Evacuation Pause",
+                                             "CodeCache GC Threshold",
+                                             "Heap Inspection Initiated GC"
+                                         ]
+                          },
+                          {
+                              "tag":  "action",
+                              "values":  [
+                                             "end of minor GC",
+                                             "end of major GC"
+                                         ]
+                          },
+                          {
+                              "tag":  "gc",
+                              "values":  [
+                                             "G1 Young Generation",
+                                             "G1 Old Generation"
+                                         ]
+                          }
+                      ]
+}

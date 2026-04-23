@@ -1,0 +1,36 @@
+{
+    "name":  "chat.mailbox.task.duration",
+    "description":  "???¨¦?¡ä??¡¥?????¡§????????¡ì¨¨??¨¨?????",
+    "baseUnit":  "seconds",
+    "measurements":  [
+                         {
+                             "statistic":  "COUNT",
+                             "value":  62363.0
+                         },
+                         {
+                             "statistic":  "TOTAL_TIME",
+                             "value":  129.4453944
+                         },
+                         {
+                             "statistic":  "MAX",
+                             "value":  0.0
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          },
+                          {
+                              "tag":  "shard",
+                              "values":  [
+                                             "0",
+                                             "1",
+                                             "2",
+                                             "3"
+                                         ]
+                          }
+                      ]
+}

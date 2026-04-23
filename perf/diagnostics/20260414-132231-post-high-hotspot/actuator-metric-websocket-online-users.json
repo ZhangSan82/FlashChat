@@ -1,0 +1,17 @@
+{
+    "name":  "websocket.online.users",
+    "measurements":  [
+                         {
+                             "statistic":  "VALUE",
+                             "value":  0.0
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          }
+                      ]
+}

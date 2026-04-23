@@ -1,0 +1,160 @@
+server:
+  port: 8081
+  tomcat:
+    threads:
+      max: 50
+      min-spare: 5
+    max-connections: 2000
+    accept-count: 100
+    connection-timeout: 5000
+
+spring:
+  application:
+    name: flashchat-aggregation-local-perf
+  jmx:
+    enabled: true
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:13306/flashchat?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: root
+    password: 123456
+    hikari:
+      minimum-idle: 3
+      maximum-pool-size: 8
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 3000
+      pool-name: FlashChatHikariPool
+      register-mbeans: true
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      timeout: 3000
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+mybatis-plus:
+  global-config:
+    banner: false
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+flashchat:
+  mailbox:
+    shard-count: 12
+    queue-capacity: 1024
+  websocket:
+    port: 8090
+    boss-threads: 1
+    worker-threads: 2
+    business-core-pool-size: 2
+    business-max-pool-size: 4
+    business-queue-capacity: 256
+    business-keep-alive-seconds: 60
+    queue-capacity-threshold: 10
+  room:
+    perf-bypass-paid-duration-restrictions: true
+  file:
+    upload-path: ./uploads
+    url-prefix: ${FLASHCHAT_FILE_URL_PREFIX:http://localhost:8081/uploads}
+  share:
+    base-url: ${FLASHCHAT_SHARE_BASE_URL:http://localhost:3002}
+  ai:
+    kimi:
+      enabled: false
+  rate-limit:
+    enabled: false
+    user-global:
+      window-ms: 60000
+      max-count: 600
+    user-room:
+      window-ms: 10000
+      max-count: 60
+    room-global:
+      window-ms: 60000
+      max-count: 2000
+
+logging:
+  level:
+    root: WARN
+    com.flashchat: INFO
+    org.springframework: WARN
+    com.baomidou: WARN
+    org.redisson: WARN
+    io.netty: WARN
+    com.zaxxer.hikari: INFO
+    org.apache.ibatis: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{20} - %msg%n"
+  file:
+    name: perf/logs/flashchat-local-perf.log
+
+management:
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,prometheus,metrics,threaddump,heapdump,env,hikaricp,loggers,configprops
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+    threaddump:
+      enabled: true
+    heapdump:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+        "[flashchat.broadcast.duration]": true
+        "[flashchat.broadcast.serialize.duration]": true
+        "[flashchat.broadcast.write.duration]": true
+        "[flashchat.broadcast.flush.duration]": true
+        "[flashchat.broadcast.write.complete.duration]": true
+        "[flashchat.broadcast.batch.complete.duration]": true
+        "[chat.mailbox.task.duration]": true
+        "[chat.mailbox.queue.wait.duration]": true
+        "[chat.side_effect.step.duration]": true
+        "[flashchat.send.pre_lock.duration]": true
+        "[flashchat.send.critical.duration]": true
+        "[flashchat.send.rate_limit.duration]": true
+        "[flashchat.send.audit.duration]": true
+        "[flashchat.send.reply_validate.duration]": true
+        "[flashchat.msg.id.slow_path.duration]": true
+        "[chat.msg.xadd.duration]": true
+        "[chat.msg.xadd_window.merged.duration]": true
+        "[chat.stripe.lock.wait.duration]": true
+      percentiles:
+        "[http.server.requests]": [0.5, 0.95, 0.99]
+        "[flashchat.broadcast.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.broadcast.serialize.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.broadcast.write.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.broadcast.flush.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.broadcast.write.complete.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.broadcast.batch.complete.duration]": [0.5, 0.95, 0.99]
+        "[chat.mailbox.task.duration]": [0.5, 0.95, 0.99]
+        "[chat.mailbox.queue.wait.duration]": [0.5, 0.95, 0.99]
+        "[chat.side_effect.step.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.send.pre_lock.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.send.critical.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.send.rate_limit.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.send.audit.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.send.reply_validate.duration]": [0.5, 0.95, 0.99]
+        "[flashchat.msg.id.slow_path.duration]": [0.5, 0.95, 0.99]
+        "[chat.msg.xadd.duration]": [0.5, 0.95, 0.99]
+        "[chat.msg.xadd_window.merged.duration]": [0.5, 0.95, 0.99]
+        "[chat.stripe.lock.wait.duration]": [0.5, 0.95, 0.99]

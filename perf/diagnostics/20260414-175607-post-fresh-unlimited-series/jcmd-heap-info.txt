@@ -1,0 +1,3 @@
+﻿31420:
+garbage-first heap   total reserved 786432K, committed 786432K, used 273374K [0x00000000d0000000, 0x0000000100000000)
+ region size 1024K, 33 young (33792K), 20 survivors (20480K)

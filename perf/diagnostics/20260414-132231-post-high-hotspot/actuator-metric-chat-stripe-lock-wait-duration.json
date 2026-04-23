@@ -1,0 +1,27 @@
+{
+    "name":  "chat.stripe.lock.wait.duration",
+    "description":  "???иж?бф stripe иж???-???\u0085ии????? (???иибу???бз acquire ??бу?????буиж??)",
+    "baseUnit":  "seconds",
+    "measurements":  [
+                         {
+                             "statistic":  "COUNT",
+                             "value":  62363.0
+                         },
+                         {
+                             "statistic":  "TOTAL_TIME",
+                             "value":  4.6991792
+                         },
+                         {
+                             "statistic":  "MAX",
+                             "value":  0.0
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          }
+                      ]
+}

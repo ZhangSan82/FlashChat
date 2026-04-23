@@ -1,0 +1,39 @@
+{
+    "name":  "jvm.memory.used",
+    "description":  "The amount of used memory",
+    "baseUnit":  "bytes",
+    "measurements":  [
+                         {
+                             "statistic":  "VALUE",
+                             "value":  165756024
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "area",
+                              "values":  [
+                                             "heap",
+                                             "nonheap"
+                                         ]
+                          },
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          },
+                          {
+                              "tag":  "id",
+                              "values":  [
+                                             "CodeHeap \u0027profiled nmethods\u0027",
+                                             "G1 Old Gen",
+                                             "CodeHeap \u0027non-profiled nmethods\u0027",
+                                             "G1 Survivor Space",
+                                             "Compressed Class Space",
+                                             "Metaspace",
+                                             "G1 Eden Space",
+                                             "CodeHeap \u0027non-nmethods\u0027"
+                                         ]
+                          }
+                      ]
+}

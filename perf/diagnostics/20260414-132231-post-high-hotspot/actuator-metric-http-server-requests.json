@@ -1,0 +1,73 @@
+{
+    "name":  "http.server.requests",
+    "baseUnit":  "seconds",
+    "measurements":  [
+                         {
+                             "statistic":  "COUNT",
+                             "value":  63067.0
+                         },
+                         {
+                             "statistic":  "TOTAL_TIME",
+                             "value":  7133.234670700001
+                         },
+                         {
+                             "statistic":  "MAX",
+                             "value":  0.5443921
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "exception",
+                              "values":  [
+                                             "none"
+                                         ]
+                          },
+                          {
+                              "tag":  "method",
+                              "values":  [
+                                             "POST",
+                                             "GET"
+                                         ]
+                          },
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          },
+                          {
+                              "tag":  "error",
+                              "values":  [
+                                             "none"
+                                         ]
+                          },
+                          {
+                              "tag":  "uri",
+                              "values":  [
+                                             "/actuator/metrics/{requiredMetricName}",
+                                             "/api/FlashChat/v1/room/join",
+                                             "/api/FlashChat/v1/account/auto-register",
+                                             "/api/FlashChat/v1/chat/msg",
+                                             "/actuator/threaddump",
+                                             "/api/FlashChat/v1/chat/new",
+                                             "/api/FlashChat/v1/room/create",
+                                             "/actuator/health",
+                                             "/api/FlashChat/v1/chat/ack",
+                                             "/actuator/prometheus",
+                                             "/api/FlashChat/v1/chat/history"
+                                         ]
+                          },
+                          {
+                              "tag":  "outcome",
+                              "values":  [
+                                             "SUCCESS"
+                                         ]
+                          },
+                          {
+                              "tag":  "status",
+                              "values":  [
+                                             "200"
+                                         ]
+                          }
+                      ]
+}

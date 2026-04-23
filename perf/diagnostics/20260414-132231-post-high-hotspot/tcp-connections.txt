@@ -1,0 +1,8 @@
+﻿
+      State LocalAddress LocalPort RemoteAddress RemotePort OwningProcess
+      ----- ------------ --------- ------------- ---------- -------------
+     Listen ::                8081 ::                     0         35108
+Established 127.0.0.1         8081 127.0.0.1          50087         35108
+     Listen ::                8090 ::                     0         35108
+
+

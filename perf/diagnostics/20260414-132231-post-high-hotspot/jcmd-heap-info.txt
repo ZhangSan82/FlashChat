@@ -1,0 +1,3 @@
+﻿35108:
+garbage-first heap   total reserved 786432K, committed 786432K, used 347426K [0x00000000d0000000, 0x0000000100000000)
+ region size 1024K, 137 young (140288K), 13 survivors (13312K)

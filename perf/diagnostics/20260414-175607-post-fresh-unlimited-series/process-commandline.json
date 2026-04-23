@@ -1,0 +1,6 @@
+{
+    "ProcessId":  31420,
+    "Name":  "java.exe",
+    "CommandLine":  "\"D:\\java\\jdk\\bin\\java.exe\" -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai -Dspring.profiles.active=local-perf,local-perf-room-unlimited -XX:+UseG1GC -XX:ActiveProcessorCount=2 -XX:MaxRAM=1408m -Xms768m -Xmx768m -XX:MaxDirectMemorySize=256m -XX:MaxMetaspaceSize=256m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=D:\\javaproject\\FlashChat\\perf\\logs -Xlog:gc*:file=D:\\javaproject\\FlashChat\\perf\\logs\\flashchat-local-perf-20260414-174305.gc.log:time,uptime,level,tags -jar D:\\javaproject\\FlashChat\\services\\aggregation-service\\target\\FlashChat.jar --flashchat.rate-limit.room-global.max-count=2147483647 ",
+    "ExecutablePath":  "D:\\java\\jdk\\bin\\java.exe"
+}

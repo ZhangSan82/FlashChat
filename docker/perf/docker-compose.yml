@@ -1,0 +1,53 @@
+services:
+  mysql:
+    image: mysql:8.0.33
+    container_name: flashchat-mysql-perf
+    cpus: 1.0
+    mem_limit: 1536m
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max_connections=200
+      - --innodb_buffer_pool_size=512M
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: flashchat
+      TZ: Asia/Shanghai
+    ports:
+      - "13306:3306"
+    volumes:
+      - mysql_perf_data:/var/lib/mysql
+      - ../../frameworks/database/chat.sql:/docker-entrypoint-initdb.d/01-chat.sql:ro
+      - ../../frameworks/database/game.sql:/docker-entrypoint-initdb.d/02-game.sql:ro
+      - ./init/03-chat-perf-patch.sql:/docker-entrypoint-initdb.d/03-chat-perf-patch.sql:ro
+      - ./init/04-chat-message-crypto.sql:/docker-entrypoint-initdb.d/04-chat-message-crypto.sql:ro
+      - ./init/05-admin-account-permission.sql:/docker-entrypoint-initdb.d/05-admin-account-permission.sql:ro
+      - ./init/06-feedback-center.sql:/docker-entrypoint-initdb.d/06-feedback-center.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p123456 --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: flashchat-redis-perf
+    cpus: 0.5
+    mem_limit: 512m
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_perf_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mysql_perf_data:
+  redis_perf_data:

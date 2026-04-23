@@ -1,0 +1,18 @@
+{
+    "name":  "chat.stripe.lock.timeout",
+    "description":  "???¨¦?¡ä stripe ¨¦???-???\u0085¨¨?\u0085????????¡ã a?? ¨¦?? 0 ??3¨¦??¨¨¡¤¡¥?????¡§?????¡¤",
+    "measurements":  [
+                         {
+                             "statistic":  "COUNT",
+                             "value":  0.0
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          }
+                      ]
+}

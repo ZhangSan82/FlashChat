@@ -1,0 +1,29 @@
+{
+    "name":  "cache.redis.degradation",
+    "measurements":  [
+                         {
+                             "statistic":  "COUNT",
+                             "value":  0.0
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          },
+                          {
+                              "tag":  "operation",
+                              "values":  [
+                                             "hasKey",
+                                             "safeGet",
+                                             "get",
+                                             "safePut",
+                                             "delete",
+                                             "put",
+                                             "countExistingKeys"
+                                         ]
+                          }
+                      ]
+}

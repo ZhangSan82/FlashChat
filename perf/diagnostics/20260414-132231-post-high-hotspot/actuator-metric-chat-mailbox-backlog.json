@@ -1,0 +1,27 @@
+{
+    "name":  "chat.mailbox.backlog",
+    "description":  "???иж?бф side-effect mailbox ??????иж?????иж???o|",
+    "measurements":  [
+                         {
+                             "statistic":  "VALUE",
+                             "value":  0.0
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          },
+                          {
+                              "tag":  "shard",
+                              "values":  [
+                                             "0",
+                                             "1",
+                                             "2",
+                                             "3"
+                                         ]
+                          }
+                      ]
+}

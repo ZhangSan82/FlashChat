@@ -1,0 +1,343 @@
+{
+  "shardCount": 8,
+  "shardCounts": [
+    0,
+    1,
+    2,
+    0,
+    0,
+    1,
+    0,
+    0
+  ],
+  "actualMaxRoomsPerShard": 2,
+  "roomDuration": "DAY_3",
+  "rooms": [
+    {
+      "key": "room_01",
+      "participants": [
+        {
+          "accountId": "FC-kYYFO",
+          "avatarColor": "#96CEB4",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "暴躁的浣熊",
+          "token": "781b1aef-1e17-4f31-be90-65b69798a293"
+        },
+        {
+          "accountId": "FC-3bhBB",
+          "avatarColor": "#27AE60",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "机智的猫咪",
+          "token": "58293bd1-26a2-433d-b4e2-185f74a102f2"
+        },
+        {
+          "accountId": "FC-2cGET3",
+          "avatarColor": "#85C1E9",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "勇敢的鹦鹉",
+          "token": "35d59207-bff8-4d1b-8280-0cd87c71c88c"
+        },
+        {
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "神秘的浣熊",
+          "token": "aae356f1-b4c2-426c-a921-b32f584ae08f",
+          "accountId": "FC-1K9T93",
+          "avatarColor": "#82E0AA"
+        },
+        {
+          "accountId": "FC-1rhykY",
+          "avatarColor": "#8E44AD",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "温柔的猫头鹰",
+          "token": "b16b92b4-f2cb-4ca9-97c9-be9075ee2460"
+        },
+        {
+          "accountId": "FC-2yTp0d",
+          "avatarColor": "#4ECDC4",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "迷糊的松鼠",
+          "token": "732c52c8-4ab9-4d26-8885-e225079b72b0"
+        },
+        {
+          "accountId": "FC-2Rxxp1",
+          "avatarColor": "#F0B27A",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "暴躁的水母",
+          "token": "4b0bbb6d-bfa7-4705-9676-475445198554"
+        },
+        {
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "调皮的熊猫",
+          "token": "c269bb55-2b4f-4819-a0e2-902d97ca25b9",
+          "accountId": "FC-2fxZdi",
+          "avatarColor": "#F0B27A"
+        }
+      ],
+      "roomId": "1jqaxT",
+      "shard": 5,
+      "host": {
+        "isRegistered": false,
+        "nickname": "暴躁的浣熊",
+        "token": "781b1aef-1e17-4f31-be90-65b69798a293",
+        "accountId": "FC-kYYFO",
+        "avatarColor": "#96CEB4",
+        "avatarUrl": ""
+      },
+      "index": 0
+    },
+    {
+      "shard": 2,
+      "host": {
+        "isRegistered": false,
+        "nickname": "暴躁的水母",
+        "token": "fb6068c3-0da3-4c2c-a8ee-7eafccd9164b",
+        "accountId": "FC-1jiMXE",
+        "avatarColor": "#FF6B6B",
+        "avatarUrl": ""
+      },
+      "index": 1,
+      "key": "room_02",
+      "participants": [
+        {
+          "isRegistered": false,
+          "nickname": "暴躁的水母",
+          "token": "fb6068c3-0da3-4c2c-a8ee-7eafccd9164b",
+          "accountId": "FC-1jiMXE",
+          "avatarColor": "#FF6B6B",
+          "avatarUrl": ""
+        },
+        {
+          "avatarColor": "#FFEAA7",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "优雅的考拉",
+          "token": "bb21c99b-4b94-46f7-854e-7a91e9f67c57",
+          "accountId": "FC-xxOZz"
+        },
+        {
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "快乐的浣熊",
+          "token": "16cd1b39-0475-45bd-bf87-7a5ff8d9ee58",
+          "accountId": "FC-1YyGpL",
+          "avatarColor": "#8E44AD"
+        },
+        {
+          "isRegistered": false,
+          "nickname": "迷糊的浣熊",
+          "token": "e056bc67-d242-44d9-8969-8c0eba5841b3",
+          "accountId": "FC-2cpRGT",
+          "avatarColor": "#F7DC6F",
+          "avatarUrl": ""
+        },
+        {
+          "accountId": "FC-1HGhqI",
+          "avatarColor": "#45B7D1",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "机智的柴犬",
+          "token": "c73fa4eb-953c-45a1-9c0d-06b4e142c930"
+        },
+        {
+          "accountId": "FC-UBs48",
+          "avatarColor": "#FFEAA7",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "优雅的水母",
+          "token": "18d27c64-7856-49d1-95fd-199a804cc24f"
+        },
+        {
+          "isRegistered": false,
+          "nickname": "勇敢的熊猫",
+          "token": "5ea4c0fe-ab12-4cda-9a93-a11afe538376",
+          "accountId": "FC-11aqIs",
+          "avatarColor": "#FF6B6B",
+          "avatarUrl": ""
+        },
+        {
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "勇敢的松鼠",
+          "token": "96bede46-f17d-4e34-be35-cbc4a2597a33",
+          "accountId": "FC-QG99a",
+          "avatarColor": "#D35400"
+        }
+      ],
+      "roomId": "1UdQwi"
+    },
+    {
+      "key": "room_03",
+      "participants": [
+        {
+          "isRegistered": false,
+          "nickname": "温柔的狐狸",
+          "token": "f9d692a7-eb47-4f88-9393-80ea58455fe3",
+          "accountId": "FC-3Wcm5R",
+          "avatarColor": "#DDA0DD",
+          "avatarUrl": ""
+        },
+        {
+          "accountId": "FC-4amG1O",
+          "avatarColor": "#8E44AD",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "勇敢的树懒",
+          "token": "5dec921b-98e5-4399-aa84-300ae91b326b"
+        },
+        {
+          "token": "a6f85491-d577-4f72-ac4e-ea19e33bf469",
+          "accountId": "FC-ObuVW",
+          "avatarColor": "#82E0AA",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "快乐的考拉"
+        },
+        {
+          "nickname": "快乐的鹦鹉",
+          "token": "0f798f77-2e5d-4cf1-a5a3-31b127d084a7",
+          "accountId": "FC-2eje1E",
+          "avatarColor": "#8E44AD",
+          "avatarUrl": "",
+          "isRegistered": false
+        },
+        {
+          "accountId": "FC-RpKaa",
+          "avatarColor": "#82E0AA",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "快乐的鹦鹉",
+          "token": "441d6764-b47c-4818-8909-1e1aa5b18487"
+        },
+        {
+          "nickname": "快乐的猫头鹰",
+          "token": "16bf2e35-61f6-4bd3-83ed-90d7b5e88eeb",
+          "accountId": "FC-1yHXnP",
+          "avatarColor": "#27AE60",
+          "avatarUrl": "",
+          "isRegistered": false
+        },
+        {
+          "accountId": "FC-7Smo2",
+          "avatarColor": "#BB8FCE",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "忧伤的狐狸",
+          "token": "c44259e0-fe0a-4473-b9d8-498aece489f0"
+        },
+        {
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "忧伤的猫咪",
+          "token": "0343f654-0c8e-4004-ab27-6138d72bafeb",
+          "accountId": "FC-3RwPQD",
+          "avatarColor": "#FF6B6B"
+        }
+      ],
+      "roomId": "2nkwor",
+      "shard": 1,
+      "host": {
+        "nickname": "温柔的狐狸",
+        "token": "f9d692a7-eb47-4f88-9393-80ea58455fe3",
+        "accountId": "FC-3Wcm5R",
+        "avatarColor": "#DDA0DD",
+        "avatarUrl": "",
+        "isRegistered": false
+      },
+      "index": 2
+    },
+    {
+      "shard": 2,
+      "host": {
+        "accountId": "FC-4QBDNp",
+        "avatarColor": "#85C1E9",
+        "avatarUrl": "",
+        "isRegistered": false,
+        "nickname": "机智的海豚",
+        "token": "c2b6059d-65a3-4517-b69e-3f72cdfb2423"
+      },
+      "index": 3,
+      "key": "room_04",
+      "participants": [
+        {
+          "nickname": "机智的海豚",
+          "token": "c2b6059d-65a3-4517-b69e-3f72cdfb2423",
+          "accountId": "FC-4QBDNp",
+          "avatarColor": "#85C1E9",
+          "avatarUrl": "",
+          "isRegistered": false
+        },
+        {
+          "accountId": "FC-1fM7vI",
+          "avatarColor": "#BB8FCE",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "冷静的兔子",
+          "token": "1bb40612-a410-4d81-a66e-6100706d29c0"
+        },
+        {
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "迷糊的海豚",
+          "token": "51195c5d-1dc3-4a7a-9b14-c9d0d6b56ea6",
+          "accountId": "FC-21FkSn",
+          "avatarColor": "#F0B27A"
+        },
+        {
+          "accountId": "FC-4ZhKGm",
+          "avatarColor": "#DDA0DD",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "调皮的浣熊",
+          "token": "43883903-eca4-4f8f-a0ac-a1cffb9490ad"
+        },
+        {
+          "token": "c24b7c79-31bf-4ddd-9a96-de5750a80d48",
+          "accountId": "FC-1jgEAA",
+          "avatarColor": "#82E0AA",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "害羞的狐狸"
+        },
+        {
+          "accountId": "FC-LiWXo",
+          "avatarColor": "#45B7D1",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "温柔的考拉",
+          "token": "63bde684-6826-4c99-96c0-1153c4cc7a1c"
+        },
+        {
+          "accountId": "FC-4LODVW",
+          "avatarColor": "#FFEAA7",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "神秘的狐狸",
+          "token": "6fa5ac8e-7568-40df-b6fe-6d31c7875e3f"
+        },
+        {
+          "accountId": "FC-4WYyOH",
+          "avatarColor": "#D35400",
+          "avatarUrl": "",
+          "isRegistered": false,
+          "nickname": "调皮的水母",
+          "token": "400f2a39-da14-445d-a916-126e4ed8da05"
+        }
+      ],
+      "roomId": "4WYglu"
+    }
+  ],
+  "topologySource": "fresh-build",
+  "totalParticipants": 32,
+  "maxRoomsPerShard": 0,
+  "participantsPerRoom": 8,
+  "rejectedRoomCreations": 0,
+  "roomCount": 4
+}

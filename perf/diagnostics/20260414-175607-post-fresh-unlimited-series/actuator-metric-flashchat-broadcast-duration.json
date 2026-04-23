@@ -1,0 +1,26 @@
+{
+    "name":  "flashchat.broadcast.duration",
+    "baseUnit":  "seconds",
+    "measurements":  [
+                         {
+                             "statistic":  "COUNT",
+                             "value":  127190.0
+                         },
+                         {
+                             "statistic":  "TOTAL_TIME",
+                             "value":  10.1503989
+                         },
+                         {
+                             "statistic":  "MAX",
+                             "value":  0.0002648
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          }
+                      ]
+}

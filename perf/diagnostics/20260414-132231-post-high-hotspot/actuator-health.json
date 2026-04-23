@@ -1,0 +1,31 @@
+{
+    "status":  "UP",
+    "components":  {
+                       "db":  {
+                                  "status":  "UP",
+                                  "details":  {
+                                                  "database":  "MySQL",
+                                                  "validationQuery":  "isValid()"
+                                              }
+                              },
+                       "diskSpace":  {
+                                         "status":  "UP",
+                                         "details":  {
+                                                         "total":  699697983488,
+                                                         "free":  309567614976,
+                                                         "threshold":  10485760,
+                                                         "path":  "D:\\javaproject\\FlashChat\\.",
+                                                         "exists":  true
+                                                     }
+                                     },
+                       "ping":  {
+                                    "status":  "UP"
+                                },
+                       "redis":  {
+                                     "status":  "UP",
+                                     "details":  {
+                                                     "version":  "5.0.14.1"
+                                                 }
+                                 }
+                   }
+}

@@ -1,0 +1,24 @@
+{
+    "name":  "hikaricp.connections.pending",
+    "description":  "Pending threads",
+    "measurements":  [
+                         {
+                             "statistic":  "VALUE",
+                             "value":  0.0
+                         }
+                     ],
+    "availableTags":  [
+                          {
+                              "tag":  "application",
+                              "values":  [
+                                             "flashchat-aggregation-local-perf"
+                                         ]
+                          },
+                          {
+                              "tag":  "pool",
+                              "values":  [
+                                             "FlashChatHikariPool"
+                                         ]
+                          }
+                      ]
+}
