@@ -1,26 +1,34 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
-export default defineConfig({
-    plugins: [vue()],
+export default defineConfig(({ mode }) => {
+    const env = loadEnv(mode, process.cwd(), '')
+    const proxyTarget = env.VITE_PROXY_TARGET || 'http://localhost:8081'
 
-    resolve: {
-        alias: {
-            // 支持 @/xxx 路径导入（项目已有代码大量使用）
-            '@': fileURLToPath(new URL('./src', import.meta.url))
-        }
-    },
+    return {
+        plugins: [vue()],
 
-    server: {
-        port: 3002,
-        // 开发代理：将 /api 请求转发到后端 8081 端口
-        // WS 端口 8090 前端直连，不走代理
-        proxy: {
-            '/api': {
-                target: 'http://localhost:8081',
-                changeOrigin: true
+        resolve: {
+            alias: {
+                '@': fileURLToPath(new URL('./src', import.meta.url))
             }
+        },
+
+        server: {
+            host: '0.0.0.0',
+            port: 3002,
+            proxy: {
+                '/api': {
+                    target: proxyTarget,
+                    changeOrigin: true
+                }
+            }
+        },
+
+        preview: {
+            host: '0.0.0.0',
+            port: 3002
         }
     }
 })

@@ -1,0 +1,129 @@
+html {
+  min-height: 100%;
+  background: var(--fc-bg);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--fc-text);
+  font-family: var(--fc-font);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+  background: var(--fc-app-gradient);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  min-height: 100vh;
+  position: relative;
+  isolation: isolate;
+}
+
+#app::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 62% 48% at 18% 0%, rgba(182, 118, 57, 0.05), transparent 68%),
+    radial-gradient(ellipse 44% 38% at 84% 100%, rgba(148, 115, 76, 0.045), transparent 72%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+::selection {
+  background: rgba(182, 118, 57, 0.18);
+  color: var(--fc-text);
+}
+
+/* ── global kicker / section label ── */
+.fc-kicker {
+  font-family: var(--fc-font);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fc-accent);
+  line-height: 1;
+}
+
+.fc-section-label {
+  font-family: var(--fc-font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fc-text-muted);
+  line-height: 1;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--fc-focus-ring);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(28, 23, 20, 0.14) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(28, 23, 20, 0.14);
+  background-clip: padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -15,8 +15,10 @@
 import axios from 'axios'
 import { loadToken, clearAll } from '@/utils/storage'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/FlashChat/v1'
+
 const request = axios.create({
-    baseURL: '/api/FlashChat/v1',
+    baseURL: API_BASE_URL,
     timeout: 10000,
     headers: { 'Content-Type': 'application/json' }
 })
