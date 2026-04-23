@@ -71,6 +71,19 @@ public class GameTurnTimer {
     }
 
     /**
+     * 启动一个与主流程倒计时解耦的独立延迟任务。
+     */
+    public ScheduledFuture<?> scheduleDetached(int delaySeconds, Runnable action) {
+        return timerExecutor.schedule(() -> {
+            try {
+                action.run();
+            } catch (Exception e) {
+                log.error("[独立延迟任务执行异常]", e);
+            }
+        }, delaySeconds, TimeUnit.SECONDS);
+    }
+
+    /**
      * Delay the next engine step after vote result broadcast.
      * The task is bound to currentTurnTimer so cancelAll() can stop it safely.
      */

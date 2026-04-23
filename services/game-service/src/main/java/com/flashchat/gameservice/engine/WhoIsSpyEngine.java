@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 public class WhoIsSpyEngine {
 
     private static final int VOTE_RESULT_DISPLAY_SECONDS = 2;
+    private static final int AI_VOTE_SAFETY_TIMEOUT_SECONDS = 4;
 
     private final ChannelPushService channelPushService;
     private final GameContextManager gameContextManager;
@@ -634,6 +635,8 @@ public class WhoIsSpyEngine {
 
         for (GamePlayerInfo aiPlayer : aiPlayers) {
             AiVoteInput input = aiContextAssembler.buildVoteInput(ctx, aiPlayer);
+            gameTurnTimer.scheduleDetached(AI_VOTE_SAFETY_TIMEOUT_SECONDS,
+                    () -> handleAiVoteSafetyTimeout(ctx, aiPlayer));
             aiPlayerExecutor.submit(() -> {
                 try {
                     Long targetPlayerId = aiPlayerService.generateVoteTarget(input);
@@ -658,6 +661,27 @@ public class WhoIsSpyEngine {
     /**
      * AI 投票完成后的统一收口。
      */
+    private void handleAiVoteSafetyTimeout(GameContext ctx, GamePlayerInfo aiPlayer) {
+        if (ctx.getGameStatus().get() != GameStatusEnum.PLAYING
+                || ctx.getCurrentPhase().get() != RoundPhaseEnum.VOTING) {
+            return;
+        }
+
+        Long voterPlayerId = aiPlayer.getPlayerId();
+        if (voterPlayerId == null || ctx.getVotes().containsKey(voterPlayerId)) {
+            return;
+        }
+
+        Long randomTarget = pickRandomVoteTarget(ctx, voterPlayerId);
+        if (randomTarget == null) {
+            return;
+        }
+
+        log.warn("[Engine] AI 投票安全兜底触发 gameId={}, aiAccountId={}, timeout={}s",
+                ctx.getGameId(), aiPlayer.getAccountId(), AI_VOTE_SAFETY_TIMEOUT_SECONDS);
+        completeAiVote(ctx, aiPlayer, randomTarget);
+    }
+
     private void completeAiVote(GameContext ctx, GamePlayerInfo aiPlayer, Long targetPlayerId) {
         if (ctx.getGameStatus().get() != GameStatusEnum.PLAYING
                 || ctx.getCurrentPhase().get() != RoundPhaseEnum.VOTING) {

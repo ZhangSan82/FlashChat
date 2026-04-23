@@ -228,6 +228,61 @@ class WhoIsSpyEngineTest {
     }
 
     @Test
+    void enterVotingPhase_shouldFallbackToRandomVote_whenAiVoteTaskStalls() {
+        GameContext ctx = newContext("game-ai-vote-timeout");
+        GamePlayerInfo aiPlayer = buildAiPlayer(311L, -1L, 1, GameRoleEnum.CIVILIAN, PlayerStatusEnum.ALIVE);
+        GamePlayerInfo spyPlayer = buildHumanPlayer(312L, 2L, 2, GameRoleEnum.SPY, PlayerStatusEnum.ALIVE);
+        preparePlayers(ctx, aiPlayer, spyPlayer);
+        ctx.setCivilianWord("苹果");
+        ctx.setSpyWord("梨");
+        ctx.startNewRound();
+        ctx.getCurrentPhase().set(RoundPhaseEnum.DESCRIBING);
+        ctx.castVote(312L, 311L);
+
+        AiVoteInput input = AiVoteInput.builder()
+                .gameId(ctx.getGameId())
+                .aiPlayerId(aiPlayer.getPlayerId())
+                .provider(AiProviderEnum.KIMI)
+                .persona(AiPersonaEnum.MASTER)
+                .role(aiPlayer.getRole())
+                .word(aiPlayer.getWord())
+                .roundNumber(ctx.getCurrentRound().get())
+                .candidates(List.of(
+                        AiVoteInput.VoteCandidate.builder().index(1).playerId(312L).nickname("人类二").descriptionsByRound(List.of()).build()
+                ))
+                .build();
+        when(aiContextAssembler.buildVoteInput(ctx, aiPlayer)).thenReturn(input);
+
+        List<Runnable> submittedTasks = new ArrayList<>();
+        doAnswer(invocation -> {
+            submittedTasks.add(invocation.getArgument(0));
+            return CompletableFuture.completedFuture(null);
+        }).when(aiPlayerExecutor).submit(any(Runnable.class));
+
+        List<Runnable> detachedTimeouts = new ArrayList<>();
+        doAnswer(invocation -> {
+            detachedTimeouts.add(invocation.getArgument(1));
+            return null;
+        }).when(gameTurnTimer).scheduleDetached(anyInt(), any(Runnable.class));
+
+        runPostVoteDelayImmediately();
+
+        engine.enterVotingPhase(ctx);
+
+        assertThat(submittedTasks).hasSize(1);
+        assertThat(detachedTimeouts).hasSize(1);
+
+        detachedTimeouts.get(0).run();
+
+        assertThat(ctx.getGameStatus().get()).isEqualTo(GameStatusEnum.ENDED);
+        assertThat(ctx.getVotes()).hasSize(2);
+        assertThat(ctx.getVotes()).containsKey(311L);
+        assertThat(ctx.isAutoVoter(311L)).isTrue();
+        verify(gamePersistService).persistRoundResult(ctx, null, true);
+        verify(gamePersistService).persistGameEnd(ctx, WinnerSideEnum.SPY, EndReasonEnum.NORMAL);
+    }
+
+    @Test
     void handlePlayerDisconnected_shouldAutoVoteAndEndGame_whenVotingVoteIsMissing() {
         GameContext ctx = newContext("game-disconnect-vote");
         GamePlayerInfo disconnectedCivilian = buildHumanPlayer(401L, 1L, 1, GameRoleEnum.CIVILIAN, PlayerStatusEnum.DISCONNECTED);
