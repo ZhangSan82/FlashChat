@@ -53,7 +53,7 @@
                   </div>
 
                   <!-- 清除自定义头像按钮 -->
-                  <button v-if="editForm.avatarUrl" class="pp-clear-avatar" type="button" @click="editForm.avatarUrl = ''">
+                  <button v-if="editForm.avatarUrl" class="pp-clear-avatar" type="button" @click="clearCustomAvatar">
                     清除自定义头像（回到颜色方案）
                   </button>
 
@@ -185,7 +185,7 @@ let toastTimer = null
 const checkedIn = ref(false)
 const fileInput = ref(null)
 
-const editForm = reactive({ nickname: '', avatarColor: '', avatarUrl: '' })
+const editForm = reactive({ nickname: '', avatarColor: '', avatarUrl: '', avatarRef: null })
 
 const avatarColors = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
@@ -219,7 +219,7 @@ watch(() => props.visible, async (val) => {
     loadCheckedInStatus() // ★ FIX: 从 sessionStorage 恢复状态
     await fetchProfile()
   }
-})
+}, { immediate: true })
 
 async function fetchProfile() {
   loading.value = true
@@ -238,6 +238,7 @@ function startEdit() {
   editForm.nickname = profile.value.nickname || ''
   editForm.avatarColor = profile.value.avatarColor || '#C8956C'
   editForm.avatarUrl = profile.value.avatarUrl || ''
+  editForm.avatarRef = null
   editError.value = ''
   editing.value = true
 }
@@ -245,6 +246,11 @@ function startEdit() {
 function cancelEdit() {
   editing.value = false
   editError.value = ''
+}
+
+function clearCustomAvatar() {
+  editForm.avatarUrl = ''
+  editForm.avatarRef = ''
 }
 
 // ★ FIX: 头像上传
@@ -270,7 +276,8 @@ async function onFileSelected(e) {
   editError.value = ''
   try {
     const result = await uploadFile(file)
-    editForm.avatarUrl = result.url
+    editForm.avatarRef = result?.url || ''
+    editForm.avatarUrl = result?.preview || result?.url || ''
   } catch (err) {
     editError.value = err.message || '上传失败'
   } finally {
@@ -292,8 +299,7 @@ async function saveProfile() {
     const body = {}
     if (nick !== profile.value.nickname) body.nickname = nick
     if (editForm.avatarColor !== profile.value.avatarColor) body.avatarColor = editForm.avatarColor
-    // ★ FIX: 头像 URL 变更检测（包括清除头像的情况）
-    if (editForm.avatarUrl !== (profile.value.avatarUrl || '')) body.avatarUrl = editForm.avatarUrl
+    if (editForm.avatarRef !== null) body.avatarUrl = editForm.avatarRef
 
     if (Object.keys(body).length === 0) {
       editing.value = false
@@ -301,8 +307,12 @@ async function saveProfile() {
     }
 
     await updateProfile(body)
-    auth.updateLocalIdentity(body)
     await fetchProfile()
+    auth.updateLocalIdentity({
+      nickname: profile.value?.nickname || nick,
+      avatarColor: profile.value?.avatarColor || editForm.avatarColor,
+      avatarUrl: profile.value?.avatarUrl || ''
+    })
     editing.value = false
     showToast('修改成功', 'success')
     emit('profile-updated')

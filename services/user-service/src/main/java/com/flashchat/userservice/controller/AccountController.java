@@ -5,6 +5,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.result.Result;
 import com.flashchat.convention.result.Results;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.user.constant.UserTypeConstant;
 import com.flashchat.user.core.UserContext;
 import com.flashchat.userservice.dao.entity.AccountDO;
@@ -32,6 +33,7 @@ public class AccountController {
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
     private final InviteCodeService inviteCodeService;
     private final CreditService  creditService;
+    private final OssAssetUrlService ossAssetUrlService;
 
     /** 匿名用户自动注册 */
     @PostMapping("/auto-register")
@@ -87,7 +89,9 @@ public class AccountController {
         if (account == null) {
             throw new ClientException("账号不存在");
         }
-        return Results.success(AuthRespDTO.from(account, StpUtil.getTokenValue()));
+        AuthRespDTO resp = AuthRespDTO.from(account, StpUtil.getTokenValue());
+        resp.setAvatarUrl(ossAssetUrlService.resolveAccessUrl(resp.getAvatarUrl()));
+        return Results.success(resp);
     }
 
     /** 获取账号信息 */

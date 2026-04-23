@@ -87,7 +87,7 @@ flashchat:
   share:
     # 前端域名，用于拼接房间分享链接
     # 生产环境改为实际域名：https://flashchat.com
-    base-url: http://localhost:3002
+    base-url: ${FLASHCHAT_SHARE_BASE_URL:http://localhost:3002}
 
   rate-limit:
     enabled: true
@@ -117,10 +117,15 @@ flashchat:
   file:
     # 文件存储根路径（相对路径或绝对路径）
     # 生产环境建议配置为绝对路径：/data/flashchat/uploads
-    upload-path: ./uploads
+    oss:
+      endpoint: ${FLASHCHAT_OSS_ENDPOINT:}
+      bucket: ${FLASHCHAT_OSS_BUCKET:}
+      public-base-url: ${FLASHCHAT_OSS_PUBLIC_BASE_URL:}
+      object-prefix: ${FLASHCHAT_OSS_OBJECT_PREFIX:flashchat}
+      access-key-id: ${FLASHCHAT_OSS_ACCESS_KEY_ID:}
+      access-key-secret: ${FLASHCHAT_OSS_ACCESS_KEY_SECRET:}
     # 文件访问 URL 前缀
     # 生产环境配置为 Nginx 域名：https://files.flashchat.com/uploads
-    url-prefix: http://localhost:8081/uploads
 
   ai:
     kimi:

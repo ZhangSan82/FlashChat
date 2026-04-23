@@ -3,6 +3,7 @@ package com.flashchat.userservice.service.admin;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.flashchat.convention.exception.ClientException;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.user.event.AccountBannedEvent;
 import com.flashchat.user.event.MemberLogoutEvent;
 import com.flashchat.userservice.dao.entity.AccountDO;
@@ -41,6 +42,7 @@ public class AdminAccountServiceImpl implements AdminAccountService {
     private final AdminOperationLogService adminOperationLogService;
     private final AccountSessionService accountSessionService;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final OssAssetUrlService ossAssetUrlService;
 
     @Override
     public AdminPageRespDTO<AdminAccountRespDTO> searchAccounts(Long operatorId, AdminAccountQueryReqDTO request) {
@@ -297,7 +299,7 @@ public class AdminAccountServiceImpl implements AdminAccountService {
                 .accountId(account.getAccountId())
                 .nickname(account.getNickname())
                 .avatarColor(account.getAvatarColor())
-                .avatarUrl(account.getAvatarUrl())
+                .avatarUrl(ossAssetUrlService.resolveAccessUrl(account.getAvatarUrl()))
                 .email(account.getEmail())
                 .credits(account.getCredits())
                 .isRegistered(account.registered())

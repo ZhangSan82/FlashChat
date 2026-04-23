@@ -2,6 +2,7 @@ package com.flashchat.userservice.service.admin;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.flashchat.convention.exception.ClientException;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.user.event.AccountBannedEvent;
 import com.flashchat.user.event.MemberLogoutEvent;
 import com.flashchat.userservice.dao.entity.AccountDO;
@@ -59,6 +60,9 @@ class AdminAccountServiceImplTest {
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
 
+    @Mock
+    private OssAssetUrlService ossAssetUrlService;
+
     private AdminAccountService adminAccountService;
 
     @BeforeEach
@@ -70,7 +74,8 @@ class AdminAccountServiceImplTest {
                 creditService,
                 adminOperationLogService,
                 accountSessionService,
-                applicationEventPublisher
+                applicationEventPublisher,
+                ossAssetUrlService
         );
     }
 

@@ -1,160 +1,164 @@
 package com.flashchat.chatservice.service.impl;
 
+import com.aliyun.oss.OSS;
+import com.aliyun.oss.model.ObjectMetadata;
+import com.flashchat.chatservice.config.FileStorageProperties;
 import com.flashchat.chatservice.dto.context.FileSecurityConstants;
 import com.flashchat.chatservice.dto.msg.FileDTO;
 import com.flashchat.chatservice.service.FileService;
+import com.flashchat.chatservice.service.oss.OssClientFactory;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 /**
- * 文件上传服务 — 本地磁盘存储实现
- * 存储规则：
- *   存储路径：{upload-path}/{yyyy/MM/dd}/{uuid}.{ext}
- *   访问URL：{url-prefix}/{yyyy/MM/dd}/{uuid}.{ext}
- * 安全措施：
- *   1. UUID 重命名：彻底消除路径穿越风险（../../etc/passwd）
- *      原始文件名只在 FileDTO.name 中返回给前端展示，不用于存储
- *   2. 黑名单后缀拦截：引用 FileSecurityConstants 公共常量
- *      与 FileMsgHandler 共用同一份黑名单，一处定义避免不同步
- *   3. 文件大小：由 Spring multipart 配置限制（application.yaml）
- * 写入方式：
- *   使用 Files.copy + InputStream 而不是 MultipartFile.transferTo
- *   原因：transferTo 依赖 Servlet 容器的临时文件机制，
- *         某些嵌入式 Tomcat 场景下临时文件可能提前被清理导致失败
- *         Files.copy 是 NIO 原生方法，更可靠
+ * 文件上传服务。
+ * 当前统一上传到阿里云 OSS，成功后返回公网可访问 URL。
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class FileServiceImpl implements FileService {
 
-    /**
-     * 文件存储根路径
-     * 默认：./uploads（相对于应用工作目录）
-     * 生产环境建议配置为绝对路径（如 /data/flashchat/uploads）
-     */
-    @Value("${flashchat.file.upload-path:./uploads}")
-    private String uploadPath;
+    private static final DateTimeFormatter DATE_DIR_FORMAT = DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
-    /**
-     * 文件访问 URL 前缀
-     * 默认：http://localhost:8081/uploads
-     * 生产环境配置为 Nginx 域名（如 https://files.flashchat.com/uploads）
-     */
-    @Value("${flashchat.file.url-prefix:http://localhost:8081/uploads}")
-    private String urlPrefix;
+    private final FileStorageProperties fileStorageProperties;
+    private final OssClientFactory ossClientFactory;
+    private final OssAssetUrlService ossAssetUrlService;
 
-    /** 日期目录格式 */
-    private static final DateTimeFormatter DATE_DIR_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy/MM/dd");
-
-    /**
-     * 启动时创建上传根目录
-     */
     @PostConstruct
     public void init() {
-        try {
-            Path basePath = Paths.get(uploadPath).toAbsolutePath().normalize();
-            Files.createDirectories(basePath);
-            log.info("[文件服务] 初始化完成, 存储路径={}, URL前缀={}", basePath, urlPrefix);
-        } catch (IOException e) {
-            log.error("[文件服务] 创建上传目录失败: {}", uploadPath, e);
-            throw new ServiceException("文件服务初始化失败");
-        }
+        validateOssConfiguration();
+        log.info("[文件服务] 已启用阿里云 OSS 存储, bucket={}, endpoint={}",
+                fileStorageProperties.getOss().getBucket(),
+                fileStorageProperties.getOss().getEndpoint());
     }
 
     @Override
     public FileDTO upload(MultipartFile file) {
-        // ===== 1. 校验 =====
-        if (file.isEmpty()) {
+        if (file == null || file.isEmpty()) {
             throw new ClientException("上传文件不能为空");
         }
 
-        String originalName = file.getOriginalFilename();
-        if (originalName == null || originalName.isBlank()) {
-            originalName = "unnamed";
-        }
-
-        if (FileSecurityConstants.isDangerousFile(originalName)) {
+        String originalName = sanitizeOriginalName(file.getOriginalFilename());
+        if (!FileSecurityConstants.isAllowedFileType(originalName, file.getContentType())) {
             throw new ClientException("不支持的文件类型: " + originalName);
         }
 
-        String contentType = file.getContentType();
-
-        // ===== 2. 生成存储路径 =====
-        String extension = FileSecurityConstants.getExtension(originalName);
-        if (extension.isEmpty()) {
-            extension = inferExtensionFromContentType(contentType);
-            if (!extension.isEmpty()) {
-                originalName = originalName + extension;
-            }
-        }
+        String contentType = StringUtils.hasText(file.getContentType())
+                ? file.getContentType()
+                : "application/octet-stream";
+        String extension = resolveExtension(originalName, contentType);
         String storedName = UUID.randomUUID().toString().replace("-", "") + extension;
         String datePath = LocalDate.now().format(DATE_DIR_FORMAT);
 
-        try {
-            // ===== 3. 创建日期目录 =====
-            Path dirPath = Paths.get(uploadPath, datePath).toAbsolutePath().normalize();
-            Files.createDirectories(dirPath);
+        return uploadToOss(file, originalName, contentType, storedName, datePath);
+    }
 
-            // ===== 4. 写入磁盘（NIO Files.copy，不依赖 Servlet 临时文件） =====
-            Path filePath = dirPath.resolve(storedName);
-            try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, filePath, StandardCopyOption.REPLACE_EXISTING);
-            }
+    private FileDTO uploadToOss(MultipartFile file,
+                                String originalName,
+                                String contentType,
+                                String storedName,
+                                String datePath) {
+        FileStorageProperties.OssProperties oss = fileStorageProperties.getOss();
+        String objectKey = buildObjectKey(oss.getObjectPrefix(), datePath, storedName);
+        OSS ossClient = ossClientFactory.createClient(oss);
 
-            // ===== 5. 构建返回值 =====
-            String normalizedPrefix = urlPrefix.endsWith("/")
-                    ? urlPrefix.substring(0, urlPrefix.length() - 1)
-                    : urlPrefix;
-            String url = normalizedPrefix + "/" + datePath + "/" + storedName;
+        try (InputStream inputStream = file.getInputStream()) {
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentType(contentType);
+            metadata.setContentLength(file.getSize());
 
-            // 图片文件：preview 设为与 url 相同（vue-advanced-chat 用 preview 做缩略图）
-            // 视频文件：preview 暂为 null（未来 Phase 2 可用 FFmpeg 生成封面）
-            String preview = null;
-            if (contentType != null && contentType.toLowerCase().startsWith("image/")) {
-                preview = url;
-            }
+            ossClient.putObject(oss.getBucket(), objectKey, inputStream, metadata);
 
-            // audio 和 duration 不在上传接口设置：
-            //   上传接口不知道文件的用途（可能是语音也可能是音乐附件）
-            //   前端在发消息前根据 HTML5 Audio/Video API 获取 duration 并补充
-            //   VoiceMsgHandler.enrichFiles() 会兜底补 audio=true
-            FileDTO result = FileDTO.builder()
-                    .name(originalName)
-                    .size(file.getSize())
-                    .type(contentType != null ? contentType : "application/octet-stream")
-                    .url(url)
-                    .preview(preview)
-                    .build();
-
-            log.info("[文件上传成功] original={}, stored={}, size={}, type={}, url={}",
-                    originalName, storedName, file.getSize(), contentType, url);
-
+            String storageRef = ossAssetUrlService.buildStorageReference(objectKey);
+            String accessUrl = ossAssetUrlService.resolveAccessUrl(storageRef);
+            FileDTO result = buildResult(originalName, file.getSize(), contentType, storageRef, accessUrl);
+            log.info("[文件上传成功] original={}, objectKey={}, bucket={}",
+                    originalName, objectKey, oss.getBucket());
             return result;
-
         } catch (IOException e) {
-            log.error("[文件上传失败] name={}, error={}", originalName, e.getMessage(), e);
-            throw new ServiceException("文件上传失败，请重试");
+            log.error("[文件上传失败] name={}, objectKey={}", originalName, objectKey, e);
+            throw new ServiceException("文件上传失败，请稍后重试");
+        } finally {
+            ossClient.shutdown();
         }
     }
 
+    private FileDTO buildResult(String originalName, long size, String contentType,
+                                String storageRef, String accessUrl) {
+        String preview = contentType.toLowerCase().startsWith("image/") ? accessUrl : null;
+        return FileDTO.builder()
+                .name(originalName)
+                .size(size)
+                .type(contentType)
+                .url(storageRef)
+                .preview(preview)
+                .build();
+    }
+
+    private void validateOssConfiguration() {
+        FileStorageProperties.OssProperties oss = fileStorageProperties.getOss();
+        if (!StringUtils.hasText(oss.getEndpoint())
+                || !StringUtils.hasText(oss.getBucket())
+                || !StringUtils.hasText(oss.getAccessKeyId())
+                || !StringUtils.hasText(oss.getAccessKeySecret())) {
+            throw new ServiceException("OSS 存储配置不完整，请检查 endpoint、bucket 和访问凭证");
+        }
+    }
+
+    private String sanitizeOriginalName(String originalName) {
+        if (!StringUtils.hasText(originalName)) {
+            return "unnamed";
+        }
+        return Paths.get(originalName).getFileName().toString();
+    }
+
+    private String resolveExtension(String originalName, String contentType) {
+        String extension = FileSecurityConstants.getExtension(originalName);
+        if (StringUtils.hasText(extension)) {
+            return extension;
+        }
+        return inferExtensionFromContentType(contentType);
+    }
+
+    private String buildObjectKey(String objectPrefix, String datePath, String storedName) {
+        String normalizedPrefix = trimSlashes(objectPrefix);
+        if (!StringUtils.hasText(normalizedPrefix)) {
+            return datePath + "/" + storedName;
+        }
+        return normalizedPrefix + "/" + datePath + "/" + storedName;
+    }
+
+    private String trimSlashes(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String result = value.trim();
+        while (result.startsWith("/")) {
+            result = result.substring(1);
+        }
+        while (result.endsWith("/")) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result;
+    }
+
     private String inferExtensionFromContentType(String contentType) {
-        if (contentType == null || contentType.isBlank()) {
+        if (!StringUtils.hasText(contentType)) {
             return "";
         }
         String normalized = contentType.toLowerCase();
@@ -168,13 +172,14 @@ public class FileServiceImpl implements FileService {
             case "video/mp4" -> ".mp4";
             case "video/webm" -> ".webm";
             case "video/quicktime" -> ".mov";
-            case "audio/mpeg" -> ".mp3";
-            case "audio/wav", "audio/wave", "audio/x-wav" -> ".wav";
-            case "audio/webm" -> ".webm";
-            case "audio/ogg" -> ".ogg";
-            case "application/pdf" -> ".pdf";
             case "application/zip" -> ".zip";
-            case "text/plain" -> ".txt";
+            case "application/x-zip-compressed", "multipart/x-zip" -> ".zip";
+            case "application/x-rar-compressed", "application/vnd.rar" -> ".rar";
+            case "application/x-7z-compressed" -> ".7z";
+            case "application/gzip", "application/x-gzip" -> ".gz";
+            case "application/x-tar" -> ".tar";
+            case "application/x-bzip2" -> ".bz2";
+            case "application/x-xz" -> ".xz";
             default -> "";
         };
     }

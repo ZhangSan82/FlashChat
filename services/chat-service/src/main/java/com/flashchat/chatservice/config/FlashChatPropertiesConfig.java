@@ -9,8 +9,10 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({
         AuditProperties.class,
         RateLimitProperties.class,
+        FileStorageProperties.class,
         MailboxProperties.class,
-        MessageCryptoProperties.class
+        MessageCryptoProperties.class,
+        WebSocketProperties.class
 })
 public class FlashChatPropertiesConfig {
 }

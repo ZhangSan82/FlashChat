@@ -87,8 +87,13 @@ flashchat:
       failure-threshold: 5
       open-duration-ms: 30000
   file:
-    upload-path: ./uploads
-    url-prefix: http://localhost:8081/uploads
+    oss:
+      endpoint:
+      bucket:
+      public-base-url:
+      object-prefix: flashchat
+      access-key-id:
+      access-key-secret:
 
 # ==================== 日志级别 ====================
 logging:

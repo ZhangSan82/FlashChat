@@ -7,6 +7,7 @@ import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.userservice.cache.AccountCacheKeys;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.user.constant.UserTypeConstant;
 import com.flashchat.user.core.LoginUserInfoDTO;
 import com.flashchat.user.core.UserContext;
@@ -65,6 +66,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
     private CreditService  creditService;
 
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final OssAssetUrlService ossAssetUrlService;
     @Lazy
     @Resource
     private InviteCodeService inviteCodeService;
@@ -125,7 +127,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         StpUtil.getSession().set(LoginUserInfoDTO.SESSION_KEY, userInfo);
         log.info("[登录成功] accountId={}, loginId={}", account.getAccountId(), loginId);
         // 4. 构建带 token 的响应
-        return AuthRespDTO.from(account, StpUtil.getTokenValue());
+        return buildAuthResp(account, StpUtil.getTokenValue());
     }
 
     /**
@@ -153,7 +155,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                 .accountId(account.getAccountId())
                 .nickname(account.getNickname())
                 .avatarColor(account.getAvatarColor())
-                .avatarUrl(account.getAvatarUrl())
+                .avatarUrl(resolveAccessUrl(account.getAvatarUrl()))
                 .isRegistered(account.getIsRegistered() != null && account.getIsRegistered() == 1)
                 .build();
     }
@@ -270,6 +272,16 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
         return account.getAvatarColor();
     }
 
+    private AuthRespDTO buildAuthResp(AccountDO account, String token) {
+        AuthRespDTO resp = AuthRespDTO.from(account, token);
+        resp.setAvatarUrl(resolveAccessUrl(resp.getAvatarUrl()));
+        return resp;
+    }
+
+    private String resolveAccessUrl(String value) {
+        return ossAssetUrlService.resolveAccessUrl(value);
+    }
+
     @Override
     public MyAccountRespDTO getMyAccount() {
         Long loginId = UserContext.getRequiredLoginId();
@@ -283,7 +295,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
                 .accountId(account.getAccountId())
                 .nickname(account.getNickname())
                 .avatarColor(account.getAvatarColor())
-                .avatarUrl(account.getAvatarUrl())
+                .avatarUrl(resolveAccessUrl(account.getAvatarUrl()))
                 .email(maskEmail(account.getEmail()))
                 .credits(account.getCredits())
                 .isRegistered(account.registered())
