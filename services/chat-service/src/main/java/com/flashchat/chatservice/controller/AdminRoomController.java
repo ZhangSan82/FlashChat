@@ -1,5 +1,7 @@
 package com.flashchat.chatservice.controller;
 
+import com.flashchat.chatservice.dto.req.AdminRoomQueryReqDTO;
+import com.flashchat.chatservice.dto.resp.AdminRoomSummaryRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
 import com.flashchat.chatservice.service.admin.AdminRoomService;
@@ -7,6 +9,7 @@ import com.flashchat.convention.result.Result;
 import com.flashchat.convention.result.Results;
 import com.flashchat.user.core.UserContext;
 import com.flashchat.userservice.dto.req.AdminOperationReasonReqDTO;
+import com.flashchat.userservice.dto.resp.AdminPageRespDTO;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +34,13 @@ import java.util.List;
 public class AdminRoomController {
 
     private final AdminRoomService adminRoomService;
+
+    @GetMapping
+    public Result<AdminPageRespDTO<AdminRoomSummaryRespDTO>> searchRooms(@Valid AdminRoomQueryReqDTO request) {
+        Long operatorId = UserContext.getRequiredLoginId();
+        log.info("[admin room search] operator={}, keyword={}", operatorId, request.getKeyword());
+        return Results.success(adminRoomService.searchRooms(operatorId, request));
+    }
 
     @GetMapping("/{roomId}")
     public Result<RoomInfoRespDTO> getRoomDetail(@PathVariable("roomId") String roomId) {

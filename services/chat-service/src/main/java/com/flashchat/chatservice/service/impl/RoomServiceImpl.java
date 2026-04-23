@@ -28,6 +28,7 @@ import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.user.core.UserContext;
 import com.flashchat.userservice.dao.entity.AccountDO;
 import com.flashchat.userservice.dao.enums.CreditTypeEnum;
@@ -76,6 +77,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     private final RoomCacheIfAbsentHandler roomCacheIfAbsentHandler;
     private final StringRedisTemplate stringRedisTemplate;
     private final MessageContentCodec messageContentCodec;
+    private final OssAssetUrlService ossAssetUrlService;
     private static final long CACHE_TIMEOUT = 60000L;
     /** 公开房间列表缓存 TTL（秒） */
     private static final long PUBLIC_LIST_TTL_SECONDS = 30L;
@@ -259,7 +261,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .indexId(msg.getIndexId())
                 .senderId(msg.getSenderId())
                 .username(normalizePreviewUsername(msg.getUsername()))
-                .avatar(msg.getAvatar())
+                .avatar(resolveAccessUrl(msg.getAvatar()))
                 .content(content)
                 .timestamp(timestamp)
                 .build();
@@ -277,7 +279,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
                 .indexId(message.getId())
                 .senderId(message.getSenderId() == null ? "" : String.valueOf(message.getSenderId()))
                 .username(normalizePreviewUsername(message.getNickname()))
-                .avatar(message.getAvatarColor())
+                .avatar(resolveAccessUrl(message.getAvatarColor()))
                 .content(content)
                 .timestamp(toEpochMillis(message.getCreateTime()))
                 .build();
@@ -542,7 +544,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
             result.add(RoomMemberRespDTO.builder()
                     .accountId(id)
                     .nickname(nickname)
-                    .avatar(avatar)
+                    .avatar(resolveAccessUrl(avatar))
                     .role(dbMember.getRole())
                     .isHost(isHost)
                     .isMuted(isMuted)
@@ -603,6 +605,10 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
     /**
      *踢人
      */
+    private String resolveAccessUrl(String value) {
+        return ossAssetUrlService.resolveAccessUrl(value);
+    }
+
     @Override
     public void kickMember(RoomKickReqDTO request) {
         HostOperationContext ctx = validateHostOperation(request.getRoomId(), request.getTargetAccountId());
@@ -1226,7 +1232,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         return RoomInfoRespDTO.builder()
                 .roomId(room.getRoomId())
                 .title(room.getTitle())
-                .avatarUrl(room.getAvatarUrl())
+                .avatarUrl(resolveAccessUrl(room.getAvatarUrl()))
                 .status(room.getStatus())
                 .statusDesc(status != null ? status.getDesc() : "未知")
                 .maxMembers(room.getMaxMembers())
@@ -1302,6 +1308,7 @@ public class RoomServiceImpl extends ServiceImpl<RoomMapper, RoomDO> implements 
         }
         boolean allowed = trimmed.startsWith("http://")
                 || trimmed.startsWith("https://")
+                || ossAssetUrlService.isStorageReference(trimmed)
                 || trimmed.startsWith("/uploads/")
                 || trimmed.startsWith("data:image/");
         if (!allowed) {

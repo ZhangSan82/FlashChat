@@ -1,5 +1,7 @@
 package com.flashchat.chatservice.service.admin;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.channel.GameStateQueryService;
 import com.flashchat.channel.event.MemberKickedFromRoomEvent;
@@ -11,10 +13,13 @@ import com.flashchat.chatservice.dao.enums.RoomMemberRoleEnum;
 import com.flashchat.chatservice.dao.enums.RoomMemberStatusEnum;
 import com.flashchat.chatservice.dao.enums.RoomStatusEnum;
 import com.flashchat.chatservice.dao.mapper.RoomMapper;
+import com.flashchat.chatservice.dto.req.AdminRoomQueryReqDTO;
+import com.flashchat.chatservice.dto.resp.AdminRoomSummaryRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomInfoRespDTO;
 import com.flashchat.chatservice.dto.resp.RoomMemberRespDTO;
 import com.flashchat.chatservice.service.RoomMemberService;
 import com.flashchat.chatservice.service.RoomService;
+import com.flashchat.chatservice.service.SystemMessageService;
 import com.flashchat.chatservice.service.UnreadService;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.convention.exception.ClientException;
@@ -23,6 +28,7 @@ import com.flashchat.userservice.dao.entity.AdminOperationLogDO;
 import com.flashchat.userservice.dao.enums.AdminOperationTargetTypeEnum;
 import com.flashchat.userservice.dao.enums.AdminOperationTypeEnum;
 import com.flashchat.userservice.dto.req.AdminOperationReasonReqDTO;
+import com.flashchat.userservice.dto.resp.AdminPageRespDTO;
 import com.flashchat.userservice.service.admin.AdminAuthService;
 import com.flashchat.userservice.service.admin.AdminOperationLogService;
 import lombok.RequiredArgsConstructor;
@@ -43,9 +49,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminRoomServiceImpl implements AdminRoomService {
 
+    private static final String ROOM_VIOLATION_NOTICE = "该房间违规";
+
     private final AdminAuthService adminAuthService;
     private final AdminOperationLogService adminOperationLogService;
     private final RoomService roomService;
+    private final SystemMessageService systemMessageService;
     private final RoomMemberService roomMemberService;
     private final RoomMapper roomMapper;
     private final RoomChannelManager roomChannelManager;
@@ -53,6 +62,41 @@ public class AdminRoomServiceImpl implements AdminRoomService {
     private final GameStateQueryService gameStateQueryService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final MultistageCacheProxy multistageCacheProxy;
+
+    @Override
+    public AdminPageRespDTO<AdminRoomSummaryRespDTO> searchRooms(Long operatorId, AdminRoomQueryReqDTO request) {
+        adminAuthService.requireActiveAdmin(operatorId);
+
+        long pageNo = request.getPage() == null || request.getPage() < 1 ? 1L : request.getPage();
+        long size = request.getSize() == null || request.getSize() < 1 ? 20L : Math.min(request.getSize(), 100L);
+
+        LambdaQueryWrapper<RoomDO> wrapper = new LambdaQueryWrapper<>();
+        if (hasText(request.getKeyword())) {
+            String keyword = request.getKeyword().trim();
+            wrapper.and(q -> q.like(RoomDO::getRoomId, keyword)
+                    .or().like(RoomDO::getTitle, keyword));
+        }
+        if (request.getStatus() != null) {
+            wrapper.eq(RoomDO::getStatus, request.getStatus());
+        }
+        if (request.getIsPublic() != null) {
+            wrapper.eq(RoomDO::getIsPublic, request.getIsPublic());
+        }
+        wrapper.orderByDesc(RoomDO::getUpdateTime)
+                .orderByDesc(RoomDO::getCreateTime);
+
+        Page<RoomDO> result = roomMapper.selectPage(new Page<>(pageNo, size), wrapper);
+        List<AdminRoomSummaryRespDTO> records = result.getRecords().stream()
+                .map(this::toRoomSummaryResp)
+                .toList();
+
+        return AdminPageRespDTO.<AdminRoomSummaryRespDTO>builder()
+                .page(pageNo)
+                .size(size)
+                .total(result.getTotal())
+                .records(records)
+                .build();
+    }
 
     @Override
     public RoomInfoRespDTO getRoomDetail(Long operatorId, String roomId) {
@@ -70,7 +114,12 @@ public class AdminRoomServiceImpl implements AdminRoomService {
     public void closeRoom(Long operatorId, String roomId, AdminOperationReasonReqDTO request) {
         AccountDO operator = adminAuthService.requireActiveAdmin(operatorId);
         RoomDO room = requireOperableRoom(roomId);
-        roomService.doCloseRoom(roomId);
+        if (RoomStatusEnum.GRACE.getCode() == room.getStatus()) {
+            throw new ClientException("房间已进入宽限期，无需重复关闭");
+        }
+        // 管理员关闭房间时，不直接终结房间，而是强制进入宽限期并广播违规提示。
+        roomService.doForceGrace(roomId);
+        systemMessageService.sendToRoom(roomId, ROOM_VIOLATION_NOTICE);
         adminOperationLogService.record(buildLog(
                 operator,
                 AdminOperationTypeEnum.ROOM_CLOSE,
@@ -208,6 +257,24 @@ public class AdminRoomServiceImpl implements AdminRoomService {
         }
     }
 
+    private AdminRoomSummaryRespDTO toRoomSummaryResp(RoomDO room) {
+        Integer status = room.getStatus();
+        RoomStatusEnum statusEnum = status != null ? RoomStatusEnum.of(status) : null;
+        return AdminRoomSummaryRespDTO.builder()
+                .roomId(room.getRoomId())
+                .title(room.getTitle())
+                .status(status)
+                .statusDesc(statusEnum != null ? statusEnum.getDesc() : "未知")
+                .isPublic(room.getIsPublic())
+                .visibilityDesc(room.getIsPublic() != null && room.getIsPublic() == 1 ? "公开" : "私密")
+                .memberCount(room.getCurrentMembers())
+                .maxMembers(room.getMaxMembers())
+                .onlineCount(roomChannelManager.getOnlineCountInRoom(room.getRoomId()))
+                .createTime(room.getCreateTime())
+                .expireTime(room.getExpireTime())
+                .build();
+    }
+
     private AdminOperationLogDO buildLog(AccountDO operator,
                                          AdminOperationTypeEnum operationType,
                                          AdminOperationTargetTypeEnum targetType,
@@ -225,5 +292,9 @@ public class AdminRoomServiceImpl implements AdminRoomService {
                 .reason(reason)
                 .detailJson(detailJson)
                 .build();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }
