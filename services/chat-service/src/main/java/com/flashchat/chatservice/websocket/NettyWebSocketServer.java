@@ -2,6 +2,7 @@ package com.flashchat.chatservice.websocket;
 
 
 
+import com.flashchat.chatservice.config.WebSocketProperties;
 import com.flashchat.chatservice.service.RoomService;
 import com.flashchat.chatservice.websocket.handlers.HttpHeadersHandler;
 import com.flashchat.chatservice.websocket.handlers.NettyWebSocketServerHandler;
@@ -42,18 +43,20 @@ public class NettyWebSocketServer {
     //private final MemberService memberService;
     private final AccountService accountService;
     private final RoomService roomService;
+    private final WebSocketProperties webSocketProperties;
 
     @Qualifier("wsBusinessExecutor")
     private final ThreadPoolTaskExecutor wsBusinessExecutor;
 
+    // 旧常量保留给历史日志输出，实际 bind 端口已改为可配置。
     public static final int WEB_SOCKET_PORT = 8090;
     private NettyWebSocketServerHandler NETTY_WEB_SOCKET_SERVER_HANDLER;
 
 
     // 创建线程池执行器
-    private EventLoopGroup bossGroup = new NioEventLoopGroup(1);
+    private EventLoopGroup bossGroup;
    // private EventLoopGroup workerGroup = new NioEventLoopGroup(NettyRuntime.availableProcessors());
-    private EventLoopGroup workerGroup = new NioEventLoopGroup(2);
+    private EventLoopGroup workerGroup;
 
     /**
      * 启动 ws server
@@ -68,8 +71,11 @@ public class NettyWebSocketServer {
                     roomManager,
                     accountService,
                     roomService,
-                    wsBusinessExecutor
+                    wsBusinessExecutor,
+                    webSocketProperties
             );
+            bossGroup = new NioEventLoopGroup(webSocketProperties.getBossThreads());
+            workerGroup = new NioEventLoopGroup(webSocketProperties.getWorkerThreads());
             log.info("NETTY_WEB_SOCKET_SERVER_HANDLER初始化:{}",NETTY_WEB_SOCKET_SERVER_HANDLER);
             run();
 
@@ -83,6 +89,9 @@ public class NettyWebSocketServer {
      */
     @PreDestroy
     public void destroy() {
+        if (bossGroup == null || workerGroup == null) {
+            return;
+        }
         Future<?> future = bossGroup.shutdownGracefully();
         Future<?> future1 = workerGroup.shutdownGracefully();
         future.syncUninterruptibly();
@@ -130,7 +139,7 @@ public class NettyWebSocketServer {
                     }
                 });
         // 启动服务器，监听端口，阻塞直到启动成功
-        serverBootstrap.bind(WEB_SOCKET_PORT).sync();
+        serverBootstrap.bind(webSocketProperties.getPort()).sync();
 
         log.info("╔══════════════════════════════════════════╗");
         log.info("║  Netty WebSocket 服务器启动成功！          ║");

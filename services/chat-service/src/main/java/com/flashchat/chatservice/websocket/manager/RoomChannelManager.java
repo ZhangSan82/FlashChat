@@ -5,19 +5,24 @@ import com.flashchat.channel.ChannelPushService;
 import com.flashchat.channel.ChannelQueryService;
 import com.flashchat.channel.event.MemberOfflineEvent;
 import com.flashchat.channel.event.MemberOnlineEvent;
+import com.flashchat.chatservice.dao.entity.RoomMemberDO;
+import com.flashchat.chatservice.dao.enums.RoomMemberStatusEnum;
 import com.flashchat.chatservice.dto.enums.WsRespDTOTypeEnum;
 import com.flashchat.chatservice.dto.req.UserJoinMsgReqDTO;
 import com.flashchat.chatservice.dto.req.UserLeaveMsgReqDTO;
 import com.flashchat.chatservice.dto.resp.MemberInfoChangedRespDTO;
 import com.flashchat.chatservice.dto.resp.WsRespDTO;
+import com.flashchat.chatservice.service.RoomMemberService;
 import com.flashchat.chatservice.toolkit.ChannelAttrUtil;
 import com.flashchat.chatservice.toolkit.JsonUtil;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.convention.exception.ClientException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -25,6 +30,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 /**
  * 房间与用户连接管理器
  */
@@ -34,6 +41,8 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
 
     private final MeterRegistry meterRegistry;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final RoomMemberService roomMemberService;
+    private final OssAssetUrlService ossAssetUrlService;
     // ==================== 监控指标 ====================
     private final Counter broadcastCounter;
     private final Counter slowClientSkipCounter;
@@ -41,6 +50,9 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
     private final Timer broadcastSerializeTimer;
     private final Timer broadcastWriteTimer;
     private final Timer broadcastFlushTimer;
+    private final Timer broadcastWriteCompleteTimer;
+    private final Timer broadcastBatchCompleteTimer;
+    private final Counter broadcastWriteFailureCounter;
     // ==================== 用户连接映射 ====================
     /**
      * userId → Channel
@@ -77,9 +89,14 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
     private final ConcurrentHashMap<String, Set<Channel>> roomOnlineChannels =
             new ConcurrentHashMap<>();
 
-    public RoomChannelManager(MeterRegistry meterRegistry,ApplicationEventPublisher applicationEventPublisher) {
+    public RoomChannelManager(MeterRegistry meterRegistry,
+                              ApplicationEventPublisher applicationEventPublisher,
+                              RoomMemberService roomMemberService,
+                              OssAssetUrlService ossAssetUrlService) {
         this.meterRegistry = meterRegistry;
         this.applicationEventPublisher = applicationEventPublisher;
+        this.roomMemberService = roomMemberService;
+        this.ossAssetUrlService = ossAssetUrlService;
 
         // 动态 Gauge
         meterRegistry.gaugeMapSize("websocket.online.users", Tags.empty(), userChannels);
@@ -94,6 +111,9 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
         this.broadcastSerializeTimer = meterRegistry.timer("flashchat.broadcast.serialize.duration");
         this.broadcastWriteTimer = meterRegistry.timer("flashchat.broadcast.write.duration");
         this.broadcastFlushTimer = meterRegistry.timer("flashchat.broadcast.flush.duration");
+        this.broadcastWriteCompleteTimer = meterRegistry.timer("flashchat.broadcast.write.complete.duration");
+        this.broadcastBatchCompleteTimer = meterRegistry.timer("flashchat.broadcast.batch.complete.duration");
+        this.broadcastWriteFailureCounter = meterRegistry.counter("flashchat.broadcast.write.failure");
     }
 
     // ===========================================================
@@ -279,7 +299,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
                 WsRespDTO.of(roomId, WsRespDTOTypeEnum.USER_JOIN,
                         UserJoinMsgReqDTO.builder()
                                 .nickname(memberInfo.getNickname())
-                                .avatar(memberInfo.getAvatar())
+                                .avatar(resolveAccessUrl(memberInfo.getAvatar()))
                                 .isHost(memberInfo.isHost())
                                 .onlineCount(onlineCount)
                                 .build()),
@@ -447,7 +467,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
         MemberInfoChangedRespDTO payload = MemberInfoChangedRespDTO.builder()
                 .accountId(accountId)
                 .nickname(nickname)
-                .avatar(avatar)
+                .avatar(resolveAccessUrl(avatar))
                 .build();
 
         for (String roomId : new ArrayList<>(rooms)) {
@@ -495,6 +515,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
      */
     private void doBroadcast(Set<Channel> channels, WsRespDTO<?> resp, Channel excludeCh) {
         String json = broadcastSerializeTimer.record(() -> JsonUtil.toJson(resp));
+        List<BroadcastWriteSample> writeSamples = new ArrayList<>(channels.size());
 
         // 第一轮：write（不 flush），跳过不可写的慢客户端
         broadcastWriteTimer.record(() -> {
@@ -505,9 +526,27 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
                     slowClientSkipCounter.increment();
                     continue;
                 }
-                ch.write(new TextWebSocketFrame(json));
+                long writeIssuedAtNanos = System.nanoTime();
+                ChannelFuture writeFuture = ch.write(new TextWebSocketFrame(json));
+                writeSamples.add(new BroadcastWriteSample(writeFuture, writeIssuedAtNanos));
             }
         });
+
+        long batchStartAtNanos = System.nanoTime();
+        AtomicInteger pendingWrites = new AtomicInteger(writeSamples.size());
+        for (BroadcastWriteSample sample : writeSamples) {
+            sample.future().addListener(future -> {
+                long writeCompleteElapsedNanos = System.nanoTime() - sample.writeIssuedAtNanos();
+                broadcastWriteCompleteTimer.record(writeCompleteElapsedNanos, TimeUnit.NANOSECONDS);
+                if (!future.isSuccess()) {
+                    broadcastWriteFailureCounter.increment();
+                }
+                if (pendingWrites.decrementAndGet() == 0) {
+                    long batchElapsedNanos = System.nanoTime() - batchStartAtNanos;
+                    broadcastBatchCompleteTimer.record(batchElapsedNanos, TimeUnit.NANOSECONDS);
+                }
+            });
+        }
 
         // 第二轮：flush
         // 同一 EventLoop 上的多个 flush，第一个真正触发系统调用，后续无新数据时短路跳过
@@ -517,6 +556,13 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
                 ch.flush();
             }
         });
+    }
+
+    private record BroadcastWriteSample(ChannelFuture future, long writeIssuedAtNanos) {
+    }
+
+    private String resolveAccessUrl(String value) {
+        return ossAssetUrlService.resolveAccessUrl(value);
     }
 
 
@@ -855,7 +901,18 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
     public boolean isRoomMember(String roomId, Long accountId) {
         // 当前实现：offline 不移除 roomMembers，断线后仍返回 true，与持久化语义一致
         ConcurrentHashMap<Long, RoomMemberInfo> members = roomMembers.get(roomId);
-        return members != null && members.containsKey(accountId);
+        if (members != null && members.containsKey(accountId)) {
+            return true;
+        }
+        try {
+            RoomMemberDO roomMember = roomMemberService.getRoomMemberByRoomIdAndAccountId(roomId, accountId);
+            return roomMember != null
+                    && roomMember.getStatus() != null
+                    && roomMember.getStatus() == RoomMemberStatusEnum.ACTIVE.getCode();
+        } catch (Exception ex) {
+            log.warn("[房间成员校验-DB兜底失败] roomId={}, accountId={}", roomId, accountId, ex);
+            return false;
+        }
     }
 
     @Override

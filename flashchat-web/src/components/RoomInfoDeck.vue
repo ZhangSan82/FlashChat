@@ -299,13 +299,17 @@ watch(
   { immediate: true }
 )
 
-watch(resolvedShareUrl, async (url) => {
-  if (!url) {
-    qrDataUrl.value = ''
-    return
-  }
-  qrDataUrl.value = (await generateQRCodeDataUrl(url, 200)) || ''
-})
+watch(
+  resolvedShareUrl,
+  async (url) => {
+    if (!url) {
+      qrDataUrl.value = ''
+      return
+    }
+    qrDataUrl.value = (await generateQRCodeDataUrl(url, 200)) || ''
+  },
+  { immediate: true }
+)
 
 watch(
   () => props.visible,

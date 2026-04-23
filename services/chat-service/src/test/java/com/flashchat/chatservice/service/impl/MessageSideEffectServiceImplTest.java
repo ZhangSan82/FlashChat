@@ -78,7 +78,7 @@ class MessageSideEffectServiceImplTest {
      * 但断言调整为“不再触发 incrementUnread()”。
      */
     @Test
-    void dispatchUserMessageAcceptedShouldExecuteUserSideEffectsExceptUnreadIncrement() {
+    void dispatchUserMessageAcceptedShouldExecuteBroadcastAndTouchOnly() {
         when(mailbox.submit(eq("room-1"), anyString(), any(Runnable.class)))
                 .thenAnswer(invocation -> {
                     Runnable task = invocation.getArgument(2);
@@ -90,7 +90,7 @@ class MessageSideEffectServiceImplTest {
 
         messageSideEffectService.dispatchUserMessageAccepted("room-1", 1L, 100L, broadcastMsg);
 
-        verify(messageWindowService).addToWindow("room-1", 100L, broadcastMsg);
+        verify(messageWindowService, never()).addToWindow(anyString(), any(), any());
         verify(roomChannelManager).broadcastToRoom(eq("room-1"), any());
         verify(roomChannelManager).touchMember("room-1", 1L);
         verify(unreadService, never()).incrementUnread(anyString(), any());
@@ -238,7 +238,7 @@ class MessageSideEffectServiceImplTest {
      * 而 unread 因为已经退出发送副作用路径，所以不再产生计时样本。
      */
     @Test
-    void dispatchUserMessageAcceptedShouldRecordStepDurationMetrics() {
+    void dispatchUserMessageAcceptedShouldRecordBroadcastAndTouchStepDurationMetrics() {
         when(mailbox.submit(eq("room-1"), anyString(), any(Runnable.class)))
                 .thenAnswer(invocation -> {
                     Runnable task = invocation.getArgument(2);
@@ -250,7 +250,9 @@ class MessageSideEffectServiceImplTest {
 
         messageSideEffectService.dispatchUserMessageAccepted("room-1", 1L, 100L, broadcastMsg);
 
-        assertEquals(1L, meterRegistry.get("chat.side_effect.step.duration").tag("step", "window_add").timer().count());
+        assertEquals(0L, meterRegistry.find("chat.side_effect.step.duration").tag("step", "window_add").timer() == null
+                ? 0L
+                : meterRegistry.get("chat.side_effect.step.duration").tag("step", "window_add").timer().count());
         assertEquals(1L, meterRegistry.get("chat.side_effect.step.duration").tag("step", "broadcast").timer().count());
         assertEquals(1L, meterRegistry.get("chat.side_effect.step.duration").tag("step", "touch").timer().count());
         assertEquals(0L, meterRegistry.find("chat.side_effect.step.duration").tag("step", "unread").timer() == null

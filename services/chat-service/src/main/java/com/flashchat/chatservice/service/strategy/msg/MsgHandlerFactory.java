@@ -1,6 +1,7 @@
 package com.flashchat.chatservice.service.strategy.msg;
 
 import com.flashchat.chatservice.dao.enums.MessageTypeEnum;
+import com.flashchat.chatservice.dto.context.FileSecurityConstants;
 import com.flashchat.chatservice.dto.msg.FileDTO;
 import com.flashchat.convention.exception.ClientException;
 import lombok.extern.slf4j.Slf4j;
@@ -58,9 +59,20 @@ public class MsgHandlerFactory {
         if (files == null || files.isEmpty()) {
             type = MessageTypeEnum.TEXT;
         } else {
+            validateFiles(files);
             type = MessageTypeEnum.ofMimeType(files.get(0).getType());
         }
         return getHandlerByType(type.getType());
+    }
+
+    private static void validateFiles(List<FileDTO> files) {
+        for (FileDTO file : files) {
+            String fileName = file != null ? file.getName() : null;
+            String mimeType = file != null ? file.getType() : null;
+            if (!FileSecurityConstants.isAllowedFileType(fileName, mimeType)) {
+                throw new ClientException("当前仅支持图片、视频和压缩包");
+            }
+        }
     }
 
     /**

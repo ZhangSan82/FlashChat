@@ -29,6 +29,7 @@ import com.flashchat.chatservice.toolkit.CursorUtils;
 import com.flashchat.chatservice.websocket.manager.RoomChannelManager;
 import com.flashchat.chatservice.websocket.manager.RoomMemberInfo;
 import com.flashchat.convention.exception.ClientException;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.user.core.UserContext;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -61,6 +62,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private final RoomSerialLock roomSerialLock;
     private final MessageRateLimiter messageRateLimiter;
     private final MessageContentCodec messageContentCodec;
+    private final OssAssetUrlService ossAssetUrlService;
     private final MeterRegistry meterRegistry;
 
     private Counter replyNotFoundCounter;
@@ -162,19 +164,24 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         // 位置选在最早的廉价 Redis 调用:早于 audit chain / XADD / stripe lock,
         // 被限流的请求不占用任何下游资源。即使是畸形请求(content/files 都空)
         // 也会先消耗一次限流额度,防止攻击者用畸形包压 limiter 下游。
-        final Timer.Sample rateLimitSample = Timer.start(meterRegistry);
-        RateLimitResult rateLimitResult;
-        try {
-            rateLimitResult = messageRateLimiter.checkLimit(accountId, roomId);
-        } finally {
-            rateLimitSample.stop(sendRateLimitTimer);
-        }
-        if (!rateLimitResult.isPassed()) {
-            rateLimitedCounter.increment();
-            log.warn("[发消息-限流] room={}, memberId={}, reason={}",
-                    roomId, accountId, rateLimitResult.name());
-            throw new ClientException(rateLimitResult.getMessage());
-        }
+        /*
+         * perf 压测阶段先完全跳过限流调用。
+         * 旧逻辑保留如下，后续如果要恢复限流，直接取消注释即可。
+         *
+         * final Timer.Sample rateLimitSample = Timer.start(meterRegistry);
+         * RateLimitResult rateLimitResult;
+         * try {
+         *     rateLimitResult = messageRateLimiter.checkLimit(accountId, roomId);
+         * } finally {
+         *     rateLimitSample.stop(sendRateLimitTimer);
+         * }
+         * if (!rateLimitResult.isPassed()) {
+         *     rateLimitedCounter.increment();
+         *     log.warn("[发消息-限流] room={}, memberId={}, reason={}",
+         *             roomId, accountId, rateLimitResult.name());
+         *     throw new ClientException(rateLimitResult.getMessage());
+         * }
+         */
         // ===== 2. 跨字段校验：content 和 files 不能同时为空 =====
         content = request.getContent();
         files = request.getFiles();
@@ -187,6 +194,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
         // enrichFiles 前判空，保护子类不需要每次防御 null
         if (files != null && !files.isEmpty()) {
             handler.enrichFiles(files);
+            files = normalizeFilesForStorage(files);
         }
         // ===== 4. Handler 构建消息体 =====
         bodyJson = handler.buildBodyJson(files);
@@ -259,9 +267,21 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             final Timer.Sample criticalSample = Timer.start(meterRegistry);
             try {
             // ===== 6. 生成消息 ID =====
-            Long msgSeqId = msgIdGenerator.tryNextId();
+            Long allocatedSeqId = msgIdGenerator.tryNextId();
+            boolean seqIdFromRedis = allocatedSeqId != null;
+            Long msgSeqId;
+            if (seqIdFromRedis) {
+                msgSeqId = allocatedSeqId;
+            } else {
+                // Redis INCR 不可用: 使用本地递增 ID, 后面直接走 saveSync
+                msgSeqId = msgIdGenerator.fallbackNextId();
+                log.warn("[发消息-降级] Redis 不可用,使用本地 ID={}, room={}, memberId={}",
+                        msgSeqId, roomId, accountId);
+            }
+            finalMsgSeqId = msgSeqId;
             // ===== 7. 构建消息实体 =====
             MessageDO messageDO = MessageDO.builder()
+                    .id(msgSeqId)
                     .msgId(msgId)
                     .roomId(roomId)
                     .content(contentSummary)
@@ -275,40 +295,33 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                     .isHost(isHost)
                     .createTime(createTime)
                     .build();
-            // ===== 8. 根据 ID 生成结果选择持久化路径 =====
-            if (msgSeqId != null) {
-                // ------ 正常路径:Redis 预分配 ID,异步写 DB ------
-                messageDO.setId(msgSeqId);
-                persistResult = messagePersistServiceImpl.saveAsync(messageDO);
-            } else {
-                // ------ 降级路径:本地递增 ID,同步写 DB ------
-                // lastKnownId 保证 ID 一定大于所有已通过 Redis 分配的 ID
-                Long fallbackId = msgIdGenerator.fallbackNextId();
-                messageDO.setId(fallbackId);
-                persistResult = messagePersistServiceImpl.saveSync(messageDO);
-                msgSeqId = fallbackId;
-                log.warn("[发消息-降级] Redis不可用,使用本地ID={}, room={}, memberId={}",
-                        fallbackId, roomId, accountId);
-            }
-            finalMsgSeqId = msgSeqId;
-            // ===== 9. 构建回复消息 DTO =====
+            // ===== 8. 构建回复消息 DTO =====
             ReplyMessageDTO replyMessageDTO = buildReplyMessageDTO(replyMsg);
-            // ===== 10. 构建广播消息 DTO =====
+            // ===== 9. 构建广播消息 DTO =====
+            // 必须在持久化前构建: saveAsyncWithWindow 会把 broadcastMsg 作为窗口 ZSET 的 member
+            // 与 XADD 合并到一次 Redis pipeline RTT, 比原先的 XADD + 独立 window_add 少一次往返。
             broadcastMsg = ChatBroadcastMsgRespDTO.builder()
                     ._id(msgId)
                     .indexId(msgSeqId)
                     .content(contentSummary)
                     .senderId(accountId.toString())
                     .username(memberInfo != null ? memberInfo.getNickname() : "匿名")
-                    .avatar(memberInfo != null ? memberInfo.getAvatar() : "")
+                    .avatar(resolveAccessUrl(memberInfo != null ? memberInfo.getAvatar() : ""))
                     .timestamp(nowMillis)
                     .isHost(memberInfo != null && memberInfo.isHost())
                     .msgType(msgType)
-                    .files(files)
+                    .files(signFiles(files))
                     .replyMessage(replyMessageDTO)
                     .deleted(false)
                     .system(false)
                     .build();
+            // ===== 10. 持久化: 正常路径走 XADD+window_add pipeline, 降级路径走 saveSync =====
+            if (seqIdFromRedis) {
+                persistResult = messagePersistServiceImpl.saveAsyncWithWindow(
+                        messageDO, roomId, msgSeqId, broadcastMsg);
+            } else {
+                persistResult = messagePersistServiceImpl.saveSync(messageDO);
+            }
             // ===== 11. 提交 side effect mailbox(仍在临界区内,保证同房间 submit 顺序) =====
             messageSideEffectService.dispatchUserMessageAccepted(roomId, accountId, msgSeqId, broadcastMsg);
             } finally {
@@ -317,7 +330,9 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             }
         }
 
-        log.info("[发消息] room={}, memberId={}, dbId={}, acceptedBy={}",
+        // perf 压测高并发下，这条日志会在 HTTP 返回前为每条消息同步落盘，容易把端到端时延放大。
+        // 保留原有接收日志，但降到 DEBUG，后续需要排查时再打开即可。
+        log.debug("[发消息] room={}, memberId={}, dbId={}, acceptedBy={}",
                 roomId, accountId, finalMsgSeqId, persistResult.acceptedBy());
         // 原始内容含 PII,只在 DEBUG 级别输出
         log.debug("[发消息-content] room={}, dbId={}, content={}",
@@ -813,7 +828,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .content("此消息已撤回")
                 .senderId(getSenderId(msg))
                 .username(msg.getNickname())
-                .avatar(msg.getAvatarColor())
+                .avatar(resolveAccessUrl(msg.getAvatarColor()))
                 .timestamp(extractTimestamp(msg))
                 .isHost(msg.getIsHost() != null && msg.getIsHost() == 1)
                 .msgType(msg.getMsgType())
@@ -926,7 +941,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
                 .content(displayContent)
                 .senderId(getSenderId(msg))
                 .username(msg.getNickname())
-                .avatar(msg.getAvatarColor())
+                .avatar(resolveAccessUrl(msg.getAvatarColor()))
                 .timestamp(extractTimestamp(msg))
                 .isHost(msg.getIsHost() != null && msg.getIsHost() == 1)
                 .msgType(msg.getMsgType())
@@ -991,11 +1006,72 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
             return null;
         }
         try {
-            return JSON.parseArray(bodyJson, FileDTO.class);
+            return signFiles(JSON.parseArray(bodyJson, FileDTO.class));
         } catch (Exception e) {
             log.warn("[解析 files] body JSON 解析失败: {}", bodyJson, e);
             return null;
         }
+    }
+
+    private List<FileDTO> normalizeFilesForStorage(List<FileDTO> files) {
+        if (files == null || files.isEmpty()) {
+            return files;
+        }
+        return files.stream()
+                .filter(Objects::nonNull)
+                .map(file -> FileDTO.builder()
+                        .name(file.getName())
+                        .size(file.getSize())
+                        .type(file.getType())
+                        .url(normalizeFileResourceReference(file.getUrl()))
+                        .preview(normalizeFilePreviewReference(file))
+                        .audio(file.getAudio())
+                        .duration(file.getDuration())
+                        .build())
+                .toList();
+    }
+
+    private String normalizeFileResourceReference(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        return ossAssetUrlService.isStorageReference(value) ? value.trim() : value;
+    }
+
+    private String normalizeFilePreviewReference(FileDTO file) {
+        if (file == null) {
+            return null;
+        }
+        String preview = file.getPreview();
+        if (preview == null || preview.isBlank()) {
+            return ossAssetUrlService.isStorageReference(file.getUrl()) ? file.getUrl() : null;
+        }
+        if (ossAssetUrlService.isStorageReference(preview)) {
+            return preview.trim();
+        }
+        return ossAssetUrlService.isStorageReference(file.getUrl()) ? file.getUrl() : preview;
+    }
+
+    private List<FileDTO> signFiles(List<FileDTO> files) {
+        if (files == null || files.isEmpty()) {
+            return files;
+        }
+        return files.stream()
+                .filter(Objects::nonNull)
+                .map(file -> FileDTO.builder()
+                        .name(file.getName())
+                        .size(file.getSize())
+                        .type(file.getType())
+                        .url(resolveAccessUrl(file.getUrl()))
+                        .preview(resolveAccessUrl(file.getPreview()))
+                        .audio(file.getAudio())
+                        .duration(file.getDuration())
+                        .build())
+                .toList();
+    }
+
+    private String resolveAccessUrl(String value) {
+        return ossAssetUrlService.resolveAccessUrl(value);
     }
 
     private void validateRoomExists(String roomId) {

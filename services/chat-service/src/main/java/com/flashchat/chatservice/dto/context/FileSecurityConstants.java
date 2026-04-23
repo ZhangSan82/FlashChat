@@ -1,12 +1,16 @@
 package com.flashchat.chatservice.dto.context;
 
+import java.util.Locale;
 import java.util.Set;
 
 /**
- * 文件安全常量
- * 集中定义文件安全相关的常量和工具方法
- * 被 FileServiceImpl（上传拦截）和 FileMsgHandler（发消息拦截）共同引用
- * 一处定义，两处使用，避免黑名单不同步的安全缺口
+ * 文件安全常量。
+ * 当前系统仅允许三类附件：
+ * 1. 图片
+ * 2. 视频
+ * 3. 压缩包
+ *
+ * 这套规则会同时用于上传接口和消息发送校验，避免不同入口出现口径不一致。
  */
 public final class FileSecurityConstants {
 
@@ -14,8 +18,8 @@ public final class FileSecurityConstants {
     }
 
     /**
-     * 危险文件后缀黑名单（全小写，含点号）
-     * 这些后缀的文件可能在服务器上被执行，必须拦截
+     * 危险后缀黑名单。
+     * 即使后续白名单误配，这些可执行/脚本类后缀也必须明确拒绝。
      */
     public static final Set<String> BLOCKED_EXTENSIONS = Set.of(
             ".jsp", ".jspx", ".asp", ".aspx",
@@ -30,32 +34,63 @@ public final class FileSecurityConstants {
             ".vbs", ".wsf", ".hta"
     );
 
-    /**
-     * 检查文件名是否为危险文件
-     * 提取最后一个 "." 之后的部分作为后缀，大小写不敏感
-     * @param fileName 文件名（如 "report.jsp"）
-     * @return true=危险文件，应拦截
-     */
+    public static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic"
+    );
+
+    public static final Set<String> ALLOWED_VIDEO_EXTENSIONS = Set.of(
+            ".mp4", ".webm", ".mov", ".m4v"
+    );
+
+    public static final Set<String> ALLOWED_ARCHIVE_EXTENSIONS = Set.of(
+            ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"
+    );
+
+    public static final Set<String> ALLOWED_ARCHIVE_MIME_TYPES = Set.of(
+            "application/zip",
+            "application/x-zip-compressed",
+            "multipart/x-zip",
+            "application/x-rar-compressed",
+            "application/vnd.rar",
+            "application/x-7z-compressed",
+            "application/gzip",
+            "application/x-gzip",
+            "application/x-tar",
+            "application/x-bzip2",
+            "application/x-xz"
+    );
+
     public static boolean isDangerousFile(String fileName) {
-        if (fileName == null || fileName.isBlank()) {
-            return false;
-        }
-        int dotIndex = fileName.lastIndexOf('.');
-        if (dotIndex < 0 || dotIndex == fileName.length() - 1) {
-            return false;
-        }
-        String extension = fileName.substring(dotIndex).toLowerCase();
-        return BLOCKED_EXTENSIONS.contains(extension);
+        String extension = getExtension(fileName);
+        return !extension.isEmpty() && BLOCKED_EXTENSIONS.contains(extension);
     }
 
     /**
-     * 提取文件扩展名（含点号，小写）
-     * "photo.jpg"  → ".jpg"
-     * "file"       → ""
-     * ".gitignore" → ".gitignore"
-     * @param fileName 文件名
-     * @return 扩展名（含点号），无扩展名返回空字符串
+     * 是否为允许上传/发送的文件类型。
+     * 优先相信 MIME type；当 MIME type 缺失时，再退回扩展名判断。
      */
+    public static boolean isAllowedFileType(String fileName, String contentType) {
+        if (isDangerousFile(fileName)) {
+            return false;
+        }
+
+        String normalizedType = normalizeContentType(contentType);
+        if (!normalizedType.isEmpty()) {
+            if (normalizedType.startsWith("image/")) {
+                return true;
+            }
+            if (normalizedType.startsWith("video/")) {
+                return true;
+            }
+            return ALLOWED_ARCHIVE_MIME_TYPES.contains(normalizedType);
+        }
+
+        String extension = getExtension(fileName);
+        return ALLOWED_IMAGE_EXTENSIONS.contains(extension)
+                || ALLOWED_VIDEO_EXTENSIONS.contains(extension)
+                || ALLOWED_ARCHIVE_EXTENSIONS.contains(extension);
+    }
+
     public static String getExtension(String fileName) {
         if (fileName == null) {
             return "";
@@ -64,6 +99,13 @@ public final class FileSecurityConstants {
         if (dotIndex < 0 || dotIndex == fileName.length() - 1) {
             return "";
         }
-        return fileName.substring(dotIndex).toLowerCase();
+        return fileName.substring(dotIndex).toLowerCase(Locale.ROOT);
+    }
+
+    public static String normalizeContentType(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return "";
+        }
+        return contentType.trim().toLowerCase(Locale.ROOT);
     }
 }

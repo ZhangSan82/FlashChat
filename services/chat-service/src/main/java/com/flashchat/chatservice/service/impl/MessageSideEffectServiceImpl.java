@@ -135,8 +135,10 @@ public class MessageSideEffectServiceImpl implements MessageSideEffectService {
                                             Long senderId,
                                             Long msgSeqId,
                                             ChatBroadcastMsgRespDTO broadcastMsg) {
+        // 注意: 用户消息的 window_add 已在发送主链路中通过 XADD + EVAL pipeline 合并执行
+        // (见 MessagePersistServiceImpl#saveAsyncWithWindow), mailbox 不再重复写窗口,
+        // 避免一条消息被 ZADD 两次。系统消息仍沿用 safeAddToWindow(见下面 dispatchSystemMessageAccepted)。
         roomSideEffectMailbox.submit(roomId, "user-msg-" + msgSeqId, () -> {
-            safeAddToWindow(roomId, msgSeqId, broadcastMsg);
             safeBroadcastChat(roomId, broadcastMsg);
             safeTouchMember(roomId, senderId);
             /*

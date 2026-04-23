@@ -154,14 +154,15 @@ const form = reactive({
   duration: 'MIN_30',
   maxMembers: 50,
   isPublic: 0,
-  avatarUrl: ''
+  avatarUrl: '',
+  avatarPreviewUrl: ''
 })
 
 const canSubmit = computed(() => form.title.trim().length > 0 && form.maxMembers >= 2 && form.maxMembers <= 200)
 const selectedPricing = computed(() =>
   pricingOptions.value.find(item => item.name === form.duration) || pricingOptions.value[0] || null
 )
-const roomAvatarPreview = computed(() => form.avatarUrl || '')
+const roomAvatarPreview = computed(() => form.avatarPreviewUrl || '')
 
 watch(
   () => props.visible,
@@ -208,6 +209,7 @@ function resetForm() {
   form.maxMembers = 50
   form.isPublic = 0
   form.avatarUrl = ''
+  form.avatarPreviewUrl = ''
   avatarError.value = ''
 }
 
@@ -236,6 +238,7 @@ async function onAvatarSelected(event) {
   try {
     const result = await uploadFile(file)
     form.avatarUrl = result?.url || ''
+    form.avatarPreviewUrl = result?.preview || result?.url || ''
   } catch (error) {
     avatarError.value = error?.message || '上传失败'
   } finally {
@@ -246,6 +249,7 @@ async function onAvatarSelected(event) {
 
 function clearAvatar() {
   form.avatarUrl = ''
+  form.avatarPreviewUrl = ''
   avatarError.value = ''
 }
 </script>

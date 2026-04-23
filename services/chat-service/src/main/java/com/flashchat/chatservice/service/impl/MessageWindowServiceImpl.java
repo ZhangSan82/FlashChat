@@ -64,6 +64,13 @@ public class MessageWindowServiceImpl implements MessageWindowService {
      */
     private static final DefaultRedisScript<Long> REMOVE_SCRIPT;
 
+    /**
+     * XADD Stream + ZADD window + 条件 trim + 条件 expire 一次 RTT。
+     * 从 classpath:lua/xadd_window.lua 加载。Redisson 支持常规 eval/evalsha，
+     * 因此不走 executePipelined（它会拒绝 eval）。
+     */
+    private static final DefaultRedisScript<Long> XADD_WINDOW_SCRIPT;
+
     static {
         /*
         ADD_SCRIPT = new DefaultRedisScript<>();
@@ -82,6 +89,15 @@ public class MessageWindowServiceImpl implements MessageWindowService {
         REMOVE_SCRIPT = new DefaultRedisScript<>();
         REMOVE_SCRIPT.setLocation(new ClassPathResource("lua/window_remove_by_score.lua"));
         REMOVE_SCRIPT.setResultType(Long.class);
+
+        XADD_WINDOW_SCRIPT = new DefaultRedisScript<>();
+        XADD_WINDOW_SCRIPT.setLocation(new ClassPathResource("lua/xadd_window.lua"));
+        XADD_WINDOW_SCRIPT.setResultType(Long.class);
+    }
+
+    /** 给 {@link MessagePersistServiceImpl} 复用同一个 sha 缓存的合并脚本。 */
+    static DefaultRedisScript<Long> mergedXaddWindowScript() {
+        return XADD_WINDOW_SCRIPT;
     }
 
     private final StringRedisTemplate stringRedisTemplate;
@@ -227,6 +243,60 @@ public class MessageWindowServiceImpl implements MessageWindowService {
             log.warn("[窗口写入失败] room={}, dbId={}, 标记降级", roomId, dbId, e);
             degradedRooms.put(roomId, System.currentTimeMillis());
         }
+    }
+
+    // ==================== XADD + window_add 合并写支持 ====================
+
+    /**
+     * 为 {@link MessagePersistServiceImpl#saveAsyncWithWindow} 准备合并脚本所需的参数：
+     *   1. 在当前线程完成 JSON 序列化 / trim / expire 判定（更新 per-room writeState）；
+     *   2. 返回 {@link WindowAddStep} 字符串载荷，调用方直接通过
+     *      {@code stringRedisTemplate.execute(mergedXaddWindowScript(), List.of(streamKey, windowKey), args...)}
+     *      下发；Redisson 对常规 eval/evalsha 完全支持，不能放进 executePipelined。
+     * 成功时请调用 {@link #signalAddSuccess(String)} 清除降级标记；
+     * 失败时调用 {@link #signalAddFailure(String, Throwable)} 标记降级。
+     */
+    public WindowAddStep prepareAddStep(String roomId, Long dbId, ChatBroadcastMsgRespDTO msg) {
+        String windowKey = buildKey(roomId);
+        String json = record(windowAddSerializeTimer, () -> JSON.toJSONString(msg));
+
+        WindowWriteState writeState = windowWriteStates.computeIfAbsent(roomId, ignored -> new WindowWriteState());
+        boolean shouldTrim = writeState.shouldTrim(WINDOW_TRIM_INTERVAL);
+        boolean shouldRefreshTtl = writeState.shouldRefreshExpire(
+                currentTimeMillisSupplier.getAsLong(),
+                WINDOW_TTL_REFRESH_INTERVAL_MS);
+
+        return new WindowAddStep(
+                windowKey,
+                dbId.toString(),
+                json,
+                shouldTrim ? "1" : "0",
+                shouldRefreshTtl ? "1" : "0",
+                Integer.toString(WINDOW_SIZE),
+                Long.toString(WINDOW_TTL_SECONDS));
+    }
+
+    /** 合并写成功时清除房间的降级标记。 */
+    public void signalAddSuccess(String roomId) {
+        degradedRooms.remove(roomId);
+    }
+
+    /** 合并写失败时标记房间降级（5 分钟内窗口读走 DB）。 */
+    public void signalAddFailure(String roomId, Throwable error) {
+        log.warn("[窗口合并写失败] room={}, 标记降级", roomId, error);
+        degradedRooms.put(roomId, System.currentTimeMillis());
+    }
+
+    /**
+     * 合并写描述：调用方按顺序拼接 {@link #xaddWindowArgs(String, long)} 即可。
+     */
+    public record WindowAddStep(String windowKey,
+                                String scoreStr,
+                                String memberJson,
+                                String doTrimStr,
+                                String doExpireStr,
+                                String windowSizeStr,
+                                String ttlSecondsStr) {
     }
 
     // ==================== 读取 - 历史消息 ====================

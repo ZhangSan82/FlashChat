@@ -29,7 +29,9 @@ public class ChatController {
      */
     @PostMapping("/msg")
     public Result<ChatBroadcastMsgRespDTO> sendMsg(@Valid @RequestBody SendMsgReqDTO request) {
-        log.info("[发消息] roomId={}", request.getRoomId());
+        // perf 压测高频发送场景下，入口每请求 INFO 会放大同步日志写盘成本。
+        // 保留排查能力，但默认降到 DEBUG，避免污染端到端时延。
+        log.debug("[发消息] roomId={}", request.getRoomId());
 
         return Results.success(chatService.sendMsg(request));
 

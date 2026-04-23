@@ -35,12 +35,16 @@ class MessagePersistServiceImplTest {
     @Mock
     private MessageMapper messageMapper;
 
+    @Mock
+    private MessageWindowServiceImpl messageWindowService;
+
     private MessagePersistServiceImpl messagePersistService;
 
     @BeforeEach
     void setUp() {
         messagePersistService = new MessagePersistServiceImpl(
-                stringRedisTemplate, messageMapper, buildCodec(), new SimpleMeterRegistry());
+                stringRedisTemplate, messageMapper, buildCodec(),
+                messageWindowService, new SimpleMeterRegistry());
     }
 
     /**

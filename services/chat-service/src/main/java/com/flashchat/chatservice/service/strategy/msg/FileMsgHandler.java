@@ -8,20 +8,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Set;
-
-import static com.flashchat.chatservice.dto.context.FileSecurityConstants.BLOCKED_EXTENSIONS;
 
 /**
- * 文件消息处理器
- *
- * vue-advanced-chat 渲染条件：files[].type 不是 image/audio/video 开头
- * 渲染效果：文件名 + 大小 + 下载按钮
- * 关键字段：url（下载地址）、name（文件名）、size（文件大小）
- *
- * 安全策略：黑名单（拦截危险后缀，放行其他）
- *   引用 FileSecurityConstants 公共常量，与 FileServiceImpl 共用同一份黑名单
- *   双重防御：上传接口拦一次（FileServiceImpl），发消息时再拦一次（此处）
+ * 普通文件消息处理器。
+ * 当前系统仅允许压缩包走普通文件消息；
+ * 图片和视频分别由 Image / Video Handler 处理。
  */
 @Slf4j
 @Component
@@ -32,10 +23,6 @@ public class FileMsgHandler extends AbstractMsgHandler {
         return MessageTypeEnum.FILE;
     }
 
-    /**
-     * 文件消息校验（纯校验，不修改数据）
-     * 使用 FileSecurityConstants 公共黑名单，与 FileServiceImpl 保持一致
-     */
     @Override
     public void checkMsg(String content, List<FileDTO> files) {
         if (files == null || files.isEmpty()) {
@@ -46,8 +33,8 @@ public class FileMsgHandler extends AbstractMsgHandler {
             if (fileName == null || fileName.isBlank()) {
                 throw new ClientException("文件名不能为空");
             }
-            if (FileSecurityConstants.isDangerousFile(fileName)) {
-                throw new ClientException("不支持的文件类型: " + fileName);
+            if (!FileSecurityConstants.isAllowedFileType(fileName, file.getType())) {
+                throw new ClientException("当前仅支持图片、视频和压缩包");
             }
         }
     }

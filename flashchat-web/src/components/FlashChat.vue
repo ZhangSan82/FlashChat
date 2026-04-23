@@ -85,7 +85,7 @@
           show-search="true"
           show-add-room="true"
           show-files="true"
-          show-audio="true"
+          show-audio="false"
           show-emojis="true"
           show-reaction-emojis="true"
           show-new-messages-divider="true"
@@ -406,12 +406,19 @@ const memberActionConfirm = ref({
   member: null
 })
 
+const MOBILE_MESSAGE_LONG_PRESS_MS = 380
+
 let bound = false
 let cdTimer = null
 let expiryTimer = null
 let roomLoadSeq = 0
 let typingIdleTimer = null
 let typingRoomId = null
+let mobileMessageGestureCleanup = null
+let mobileLongPressTimer = null
+let mobileLongPressTriggered = false
+let activeMobileMessageCard = null
+let mobileMessageHintShown = false
 
 const curRoomRaw = computed(() =>
     chat.roomsRaw.value.find(r => r.roomId === (panelRoomId.value || chat.currentRoomId.value)) || null
@@ -601,7 +608,7 @@ const memberActionConfirmFacts = computed(() => {
 const memberActionConfirmPreview = computed(() =>
   memberActionConfirm.value.member?.username || '匿名成员'
 )
-const acceptFiles = 'image/*,audio/*,video/*,application/pdf,text/plain'
+const acceptFiles = 'image/*,video/*,.zip,.rar,.7z,.tar,.gz,.bz2,.xz'
 
 const themeStr = JSON.stringify({
   general: { color: '#211A14', colorSpinner: '#B67639', borderStyle: 'none', backgroundInput: '#F8F3EC', colorPlaceholder: '#948474', colorCaret: '#975A26', backgroundScrollIcon: 'rgba(255,253,249,0.96)' },
@@ -687,8 +694,133 @@ function injectShadowCSS() {
   el.shadowRoot.appendChild(style)
 }
 
+function cancelMobileLongPress() {
+  if (mobileLongPressTimer) {
+    clearTimeout(mobileLongPressTimer)
+    mobileLongPressTimer = null
+  }
+}
+
+function clearActiveMobileMessageCard() {
+  if (!activeMobileMessageCard) return
+  activeMobileMessageCard.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }))
+  activeMobileMessageCard = null
+}
+
+function activateMobileMessageCard(card) {
+  if (!card || card === activeMobileMessageCard) return
+  clearActiveMobileMessageCard()
+  activeMobileMessageCard = card
+  card.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    navigator.vibrate(10)
+  }
+}
+
+function isInteractiveMessageActionTarget(target) {
+  if (!(target instanceof Element)) return false
+  return Boolean(target.closest(
+    '.vac-message-actions-wrapper, .vac-options-container, .vac-menu-list, .vac-menu-option, .vac-emoji-picker, .vac-emoji-picker-container, .vac-message-reactions'
+  ))
+}
+
+function bindMobileMessageGestures() {
+  mobileMessageGestureCleanup?.()
+  mobileMessageGestureCleanup = null
+  clearActiveMobileMessageCard()
+
+  const shadowRoot = chatEl.value?.shadowRoot
+  if (!mobileViewport.value || !shadowRoot) return
+
+  const onTouchStart = event => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+
+    if (isInteractiveMessageActionTarget(target)) {
+      cancelMobileLongPress()
+      return
+    }
+
+    const card = target.closest('.vac-message-card')
+    if (!card) {
+      clearActiveMobileMessageCard()
+      return
+    }
+
+    mobileLongPressTriggered = false
+    cancelMobileLongPress()
+    mobileLongPressTimer = window.setTimeout(() => {
+      mobileLongPressTriggered = true
+      activateMobileMessageCard(card)
+      if (!mobileMessageHintShown) {
+        mobileMessageHintShown = true
+        showToast('长按已唤起消息操作，可继续点表情或更多菜单', 'info', 1800)
+      }
+    }, MOBILE_MESSAGE_LONG_PRESS_MS)
+  }
+
+  const onTouchMove = () => {
+    cancelMobileLongPress()
+  }
+
+  const onTouchEnd = () => {
+    cancelMobileLongPress()
+  }
+
+  const onTouchCancel = () => {
+    cancelMobileLongPress()
+  }
+
+  const onClick = event => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    if (isInteractiveMessageActionTarget(target)) return
+
+    const card = target.closest('.vac-message-card')
+    if (!card) {
+      clearActiveMobileMessageCard()
+      return
+    }
+
+    if (mobileLongPressTriggered) {
+      mobileLongPressTriggered = false
+      return
+    }
+
+    if (card !== activeMobileMessageCard) {
+      clearActiveMobileMessageCard()
+    }
+  }
+
+  const onDocumentPointerDown = event => {
+    const target = event.target
+    if (!(target instanceof Node)) return
+    if (event.composedPath?.().includes(chatEl.value)) return
+    clearActiveMobileMessageCard()
+  }
+
+  shadowRoot.addEventListener('touchstart', onTouchStart, { passive: true })
+  shadowRoot.addEventListener('touchmove', onTouchMove, { passive: true })
+  shadowRoot.addEventListener('touchend', onTouchEnd, { passive: true })
+  shadowRoot.addEventListener('touchcancel', onTouchCancel, { passive: true })
+  shadowRoot.addEventListener('click', onClick, true)
+  document.addEventListener('pointerdown', onDocumentPointerDown, true)
+
+  mobileMessageGestureCleanup = () => {
+    cancelMobileLongPress()
+    clearActiveMobileMessageCard()
+    shadowRoot.removeEventListener('touchstart', onTouchStart)
+    shadowRoot.removeEventListener('touchmove', onTouchMove)
+    shadowRoot.removeEventListener('touchend', onTouchEnd)
+    shadowRoot.removeEventListener('touchcancel', onTouchCancel)
+    shadowRoot.removeEventListener('click', onClick, true)
+    document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+  }
+}
+
 async function forceLoadRoom(rid, options = {}) {
   if (!rid || rid === '') return
+  clearActiveMobileMessageCard()
   if (typingRoomId && typingRoomId !== rid) {
     stopTyping(typingRoomId)
   }
@@ -937,6 +1069,81 @@ function handleTyping(detail) {
   }, 2000)
 }
 
+function openBrowserFileTarget(url, { fileName = '', download = false } = {}) {
+  if (typeof document === 'undefined') return false
+
+  const link = document.createElement('a')
+  link.href = url
+  link.rel = 'noopener noreferrer'
+  link.target = '_blank'
+
+  // 对跨域 OSS 链接，download 属性可能被浏览器忽略，但保留它能尽量提示下载意图。
+  if (download && fileName) {
+    link.download = fileName
+  }
+
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  return true
+}
+
+function resolveEventFilePayload(detail) {
+  if (!detail) return null
+
+  const nestedWrapper = detail?.file && typeof detail.file === 'object' ? detail.file : null
+  const nestedFile = nestedWrapper?.file && typeof nestedWrapper.file === 'object' ? nestedWrapper.file : null
+  const directFile = nestedFile || nestedWrapper
+  const detailAsFile = typeof detail?.url === 'string' || typeof detail?.preview === 'string' ? detail : null
+  const messageFiles = Array.isArray(detail?.message?.files) ? detail.message.files : []
+
+  if (directFile) return directFile
+  if (detailAsFile) return detailAsFile
+  if (messageFiles.length === 1) return messageFiles[0]
+
+  if (messageFiles.length > 1) {
+    const targetName = typeof detail?.file?.name === 'string' ? detail.file.name : ''
+    if (targetName) {
+      const matched = messageFiles.find(item => item?.name === targetName)
+      if (matched) return matched
+    }
+    return messageFiles[0]
+  }
+
+  return null
+}
+
+function handleOpenFile(detail) {
+  const file = resolveEventFilePayload(detail)
+  const actionSource = typeof detail?.action === 'string'
+    ? detail.action
+    : (typeof detail?.file?.action === 'string' ? detail.file.action : '')
+  const action = actionSource === 'download' ? 'download' : 'view'
+  const rawUrl = typeof file?.url === 'string'
+    ? file.url.trim()
+    : (typeof file?.preview === 'string' ? file.preview.trim() : '')
+
+  if (!rawUrl) {
+    console.warn('[FlashChat] open-file missing url', detail)
+    showToast('文件链接不存在，暂时无法打开', 'warning')
+    return
+  }
+
+  if (rawUrl.startsWith('oss://')) {
+    showToast('文件链接尚未转换为可访问地址，请刷新后重试', 'warning')
+    return
+  }
+
+  const opened = openBrowserFileTarget(rawUrl, {
+    fileName: typeof file?.name === 'string' ? file.name : '',
+    download: action === 'download'
+  })
+
+  if (!opened) {
+    showToast('当前环境不支持打开文件', 'warning')
+  }
+}
+
 // ---- 浜嬩欢缁戝畾 ----
 function openDeleteConfirm(message, roomId, mode = 'self') {
   deleteConfirm.value = {
@@ -1067,6 +1274,9 @@ function bindEvents() {
   })
   el.addEventListener('typing-message', (e) => {
     handleTyping(getDetail(e))
+  })
+  el.addEventListener('open-file', (e) => {
+    handleOpenFile(getDetail(e))
   })
   el.addEventListener('room-info', () => { openRoomInfoPanel(chat.currentRoomId.value) })
   el.addEventListener('add-room', () => { drawerOpen.value = true })
@@ -1416,6 +1626,7 @@ function mountChatSurface() {
     if (chatEl.value) {
       bindEvents()
       injectShadowCSS()
+      bindMobileMessageGestures()
       clearInterval(wid)
     }
   }, 100)
@@ -1435,16 +1646,28 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateH)
   clearInterval(cdTimer); clearInterval(expiryTimer)
   stopTyping()
+  mobileMessageGestureCleanup?.()
   ws.disconnect()
 })
 
 watch(() => chat.currentRoomId.value, (roomId) => {
   mobileSwipeRoomId.value = ''
+  clearActiveMobileMessageCard()
   game.enterRoom(roomId || '')
 })
 
 watch(mobileViewport, (isMobile) => {
   if (!isMobile) mobileSwipeRoomId.value = ''
+  if (!chatLibraryReady.value) return
+  nextTick(() => {
+    if (isMobile) {
+      bindMobileMessageGestures()
+    } else {
+      mobileMessageGestureCleanup?.()
+      mobileMessageGestureCleanup = null
+      clearActiveMobileMessageCard()
+    }
+  })
 })
 
 watch(panelOpen, (open) => {

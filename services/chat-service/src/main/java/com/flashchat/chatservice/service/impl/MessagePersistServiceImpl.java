@@ -2,6 +2,7 @@ package com.flashchat.chatservice.service.impl;
 
 import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
+import com.flashchat.chatservice.dto.resp.ChatBroadcastMsgRespDTO;
 import com.flashchat.chatservice.service.crypto.MessageContentCodec;
 import com.flashchat.chatservice.service.persist.PersistResult;
 import com.flashchat.chatservice.toolkit.JsonUtil;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.List;
 
 import static com.flashchat.chatservice.config.MessageStreamConfig.FIELD_PAYLOAD;
 import static com.flashchat.chatservice.config.MessageStreamConfig.STREAM_KEY;
@@ -48,20 +50,27 @@ public class MessagePersistServiceImpl {
     private final StringRedisTemplate stringRedisTemplate;
     private final MessageMapper messageMapper;
     private final MessageContentCodec messageContentCodec;
+    private final MessageWindowServiceImpl messageWindowService;
 
     private final Timer xaddTimer;
+    private final Timer xaddWindowMergedTimer;
     private final Counter xaddFailCounter;
     private final Counter fallbackCounter;
 
     public MessagePersistServiceImpl(StringRedisTemplate stringRedisTemplate,
                                      MessageMapper messageMapper,
                                      MessageContentCodec messageContentCodec,
+                                     MessageWindowServiceImpl messageWindowService,
                                      MeterRegistry meterRegistry) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.messageMapper = messageMapper;
         this.messageContentCodec = messageContentCodec;
+        this.messageWindowService = messageWindowService;
         this.xaddTimer = Timer.builder("chat.msg.xadd.duration")
                 .description("XADD 持久化握手耗时")
+                .register(meterRegistry);
+        this.xaddWindowMergedTimer = Timer.builder("chat.msg.xadd_window.merged.duration")
+                .description("XADD + window_add 合并 Lua 脚本单次 RTT 耗时")
                 .register(meterRegistry);
         this.xaddFailCounter = Counter.builder("chat.msg.xadd.fail")
                 .description("XADD 失败次数(触发降级 saveSync)")
@@ -116,6 +125,64 @@ public class MessagePersistServiceImpl {
             xaddFailCounter.increment();
             log.warn("[XADD 失败，降级同步写 DB] msgId={}, dbId={}, error={}",
                     messageDO.getMsgId(), messageDO.getId(), e.getMessage());
+            return saveSync(messageDO);
+        }
+    }
+
+    /**
+     * XADD 与 window_add 合并写入：一次 Redis RTT 完成持久化 Stream 写入 +
+     * 滑动窗口 ZSET 更新（含按需 trim / expire）。
+     * <p>
+     * 实现方式：单条 Lua 脚本 {@code lua/xadd_window.lua}，通过
+     * {@link StringRedisTemplate#execute} 常规 eval/evalsha 下发。
+     * 不走 {@code executePipelined}—— Redisson 的 Spring Data 桥在 pipeline session
+     * 内调用 eval 会抛 {@code UnsupportedOperationException}，线上历史教训。
+     * <p>
+     * 失败路径：脚本执行抛出（连接异常 / Redis 故障）时降级为 saveSync
+     * （DB 直写）+ 标记窗口降级。窗口降级后后续读会走 DB 分页，5 分钟后自动恢复。
+     * <p>
+     * 单实例 Redis：脚本一次触及 stream_key 和 window_key 两个键；若未来上 Cluster，
+     * 需要 hash-tag 把两个 key 固定到同一 slot，或拆回独立调用。
+     *
+     * @param messageDO    消息实体，id + createTime 已由调用方设置
+     * @param roomId       房间 ID（与 broadcastMsg 所属房间一致）
+     * @param dbId         消息全局递增 ID（即 msgSeqId），用作 ZSET 的 score
+     * @param broadcastMsg 广播 DTO，序列化后作为 ZSET member
+     */
+    public PersistResult saveAsyncWithWindow(MessageDO messageDO,
+                                             String roomId,
+                                             Long dbId,
+                                             ChatBroadcastMsgRespDTO broadcastMsg) {
+        String payload = JsonUtil.toJson(messageDO);
+        MessageWindowServiceImpl.WindowAddStep windowStep =
+                messageWindowService.prepareAddStep(roomId, dbId, broadcastMsg);
+
+        Timer.Sample sample = Timer.start();
+        try {
+            stringRedisTemplate.execute(
+                    MessageWindowServiceImpl.mergedXaddWindowScript(),
+                    List.of(STREAM_KEY, windowStep.windowKey()),
+                    FIELD_PAYLOAD,
+                    payload,
+                    Long.toString(STREAM_MAX_LEN),
+                    windowStep.scoreStr(),
+                    windowStep.memberJson(),
+                    windowStep.doTrimStr(),
+                    windowStep.doExpireStr(),
+                    windowStep.windowSizeStr(),
+                    windowStep.ttlSecondsStr());
+
+            sample.stop(xaddWindowMergedTimer);
+            messageWindowService.signalAddSuccess(roomId);
+            log.debug("[消息入 Stream+Window 合并] msgId={}, dbId={}, room={}",
+                    messageDO.getMsgId(), dbId, roomId);
+            return PersistResult.acceptedByStream(messageDO.getMsgId(), dbId);
+        } catch (Exception e) {
+            sample.stop(xaddWindowMergedTimer);
+            xaddFailCounter.increment();
+            log.warn("[XADD+Window 合并脚本失败，降级 saveSync] msgId={}, dbId={}, room={}, error={}",
+                    messageDO.getMsgId(), dbId, roomId, e.getMessage());
+            messageWindowService.signalAddFailure(roomId, e);
             return saveSync(messageDO);
         }
     }

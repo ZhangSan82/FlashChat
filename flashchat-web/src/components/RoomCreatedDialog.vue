@@ -81,13 +81,17 @@ watch(
   { immediate: true }
 )
 
-watch(resolvedShareUrl, async url => {
-  if (!url) {
-    qrDataUrl.value = ''
-    return
-  }
-  qrDataUrl.value = (await generateQRCodeDataUrl(url, 240)) || ''
-})
+watch(
+  resolvedShareUrl,
+  async url => {
+    if (!url) {
+      qrDataUrl.value = ''
+      return
+    }
+    qrDataUrl.value = (await generateQRCodeDataUrl(url, 240)) || ''
+  },
+  { immediate: true }
+)
 
 async function ensureShareUrl() {
   const existing = props.room?.shareUrl || props.room?._raw?.shareUrl || ''

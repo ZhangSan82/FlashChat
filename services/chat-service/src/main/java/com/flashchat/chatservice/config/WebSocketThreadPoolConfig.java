@@ -1,6 +1,7 @@
 package com.flashchat.chatservice.config;
 
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,15 +20,18 @@ import java.util.concurrent.ThreadPoolExecutor;
  */
 @Slf4j
 @Configuration
+@RequiredArgsConstructor
 public class WebSocketThreadPoolConfig {
+
+    private final WebSocketProperties webSocketProperties;
 
     @Bean("wsBusinessExecutor")
     public ThreadPoolTaskExecutor wsBusinessExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(256);
-        executor.setKeepAliveSeconds(60);
+        executor.setCorePoolSize(webSocketProperties.getBusinessCorePoolSize());
+        executor.setMaxPoolSize(webSocketProperties.getBusinessMaxPoolSize());
+        executor.setQueueCapacity(webSocketProperties.getBusinessQueueCapacity());
+        executor.setKeepAliveSeconds(webSocketProperties.getBusinessKeepAliveSeconds());
         executor.setThreadNamePrefix("ws-biz-");
 
         // 优雅关闭：等待队列中的任务执行完再关闭
@@ -41,7 +45,9 @@ public class WebSocketThreadPoolConfig {
 
         executor.initialize();
         log.info("[WS线程池] 初始化完成, core={}, max={}, queue={}",
-                executor.getCorePoolSize(), executor.getMaxPoolSize(), 256);
+                executor.getCorePoolSize(),
+                executor.getMaxPoolSize(),
+                webSocketProperties.getBusinessQueueCapacity());
         return executor;
     }
 
