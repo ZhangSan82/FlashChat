@@ -179,6 +179,24 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, AccountDO>
     }
 
     @Override
+    public AccountDO getByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new ClientException("邮箱不能为空");
+        }
+        String normalized = email.trim().toLowerCase();
+        AccountDO account = this.lambdaQuery()
+                .eq(AccountDO::getEmail, normalized)
+                .one();
+        if (account == null) {
+            throw new ClientException("邮箱未注册");
+        }
+        if (account.getStatus() != null && account.getStatus() == AccountStatusEnum.BANNED.getCode()) {
+            throw new ClientException("账号已被封禁");
+        }
+        return account;
+    }
+
+    @Override
     public AccountDO getAccountByDbId(Long id) {
         if (id == null) {
             return null;

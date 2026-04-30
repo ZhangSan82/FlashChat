@@ -13,7 +13,10 @@
 import { ref, readonly } from 'vue'
 import { loadToken } from '@/utils/storage'
 
-const WS_BASE = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:8090`
+const WS_BASE = import.meta.env.VITE_WS_URL
+    || (typeof window !== 'undefined' && window.location.protocol === 'https:'
+        ? `wss://${window.location.host}/ws`
+        : `ws://${window.location.hostname}:8090`)
 
 /**
  * 后端 WsRespDTOTypeEnum 对齐

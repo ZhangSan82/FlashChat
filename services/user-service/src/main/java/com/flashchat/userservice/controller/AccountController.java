@@ -67,6 +67,42 @@ public class AccountController {
     }
 
     /**
+     * 邮箱 + 密码登录
+     * <p>
+     * 仅限已注册（绑定邮箱 + 设了密码）的用户。邮箱查找失败、密码错误、账号封禁均抛 ClientException。
+     * 日志中不打印完整邮箱，避免 PII 外泄。
+     */
+    @PostMapping("/login-by-email")
+    public Result<AuthRespDTO> loginByEmail(@Valid @RequestBody EmailLoginReqDTO request) {
+        log.info("[邮箱登录] email={}", maskEmailForLog(request.getEmail()));
+        AccountDO account = accountService.getByEmail(request.getEmail());
+        if (!account.hasPassword()) {
+            throw new ClientException("该账号未设置密码，无法使用邮箱登录");
+        }
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            throw new ClientException("请输入密码");
+        }
+        if (!bCryptPasswordEncoder.matches(request.getPassword(), account.getPassword())) {
+            throw new ClientException("密码错误");
+        }
+        int userType = account.registered()
+                ? UserTypeConstant.USER
+                : UserTypeConstant.MEMBER;
+        return Results.success(accountService.doLogin(account, userType));
+    }
+
+    private static String maskEmailForLog(String email) {
+        if (email == null || email.isBlank()) {
+            return "-";
+        }
+        int at = email.indexOf('@');
+        if (at <= 1) {
+            return "***";
+        }
+        return email.charAt(0) + "***" + email.substring(at);
+    }
+
+    /**
      * 登出
      */
     @PostMapping("/logout")

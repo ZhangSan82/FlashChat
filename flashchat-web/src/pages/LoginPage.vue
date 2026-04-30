@@ -86,22 +86,71 @@
               <span>账号登录</span>
             </div>
             <h1 class="lg-title">欢迎回来</h1>
-            <p class="lg-subtitle">使用账号 ID 与密码登录,继续你的对话</p>
+            <p class="lg-subtitle">{{ loginMethod === 'email' ? '使用邮箱与密码登录,继续你的对话' : '使用账号 ID 与密码登录,继续你的对话' }}</p>
           </div>
 
-          <div class="lg-grp">
-            <label class="lg-label" for="lg-account">账号 ID</label>
-            <input
-              id="lg-account"
-              v-model="form.accountId"
-              type="text"
-              placeholder="如 FC-8A3D7K"
-              class="lg-input lg-input-mono"
-              autocomplete="username"
-              @focus="isInputFocused = true"
-              @blur="isInputFocused = false"
-            />
+          <div class="lg-method" role="tablist" aria-label="登录方式">
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="loginMethod === 'accountId'"
+              class="lg-method-tab"
+              :class="{ 'is-active': loginMethod === 'accountId' }"
+              @click="switchMethod('accountId')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <path d="M7 10h4M7 14h8" />
+              </svg>
+              账号 ID
+            </button>
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="loginMethod === 'email'"
+              class="lg-method-tab"
+              :class="{ 'is-active': loginMethod === 'email' }"
+              @click="switchMethod('email')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 6h16v12H4z" />
+                <path d="m4 7 8 6 8-6" />
+              </svg>
+              邮箱
+            </button>
+            <span class="lg-method-glider" :data-method="loginMethod" aria-hidden="true"></span>
           </div>
+
+          <transition name="lg-swap" mode="out-in">
+            <div v-if="loginMethod === 'email'" key="email" class="lg-grp">
+              <label class="lg-label" for="lg-email">邮箱</label>
+              <input
+                id="lg-email"
+                v-model.trim="form.email"
+                type="email"
+                placeholder="you@example.com"
+                class="lg-input"
+                autocomplete="email"
+                inputmode="email"
+                @focus="isInputFocused = true"
+                @blur="isInputFocused = false"
+                @keyup.enter="doLogin"
+              />
+            </div>
+            <div v-else key="accountId" class="lg-grp">
+              <label class="lg-label" for="lg-account">账号 ID</label>
+              <input
+                id="lg-account"
+                v-model="form.accountId"
+                type="text"
+                placeholder="如 FC-8A3D7K"
+                class="lg-input lg-input-mono"
+                autocomplete="username"
+                @focus="isInputFocused = true"
+                @blur="isInputFocused = false"
+              />
+            </div>
+          </transition>
 
           <div class="lg-grp">
             <label class="lg-label" for="lg-pw">密码</label>
@@ -170,7 +219,7 @@
 <script setup>
 import { reactive, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { login } from '@/api/account'
+import { login, loginByEmail } from '@/api/account'
 import { saveToken } from '@/utils/storage'
 import { useAuth } from '@/composables/useAuth'
 import AnimatedCharacters from '@/components/AnimatedCharacters.vue'
@@ -179,11 +228,36 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
 
-const form = reactive({ accountId: '', password: '' })
+const LOGIN_METHOD_KEY = 'flashchat.login.method'
+const initialMethod = (() => {
+  try {
+    const saved = localStorage.getItem(LOGIN_METHOD_KEY)
+    return saved === 'email' ? 'email' : 'accountId'
+  } catch {
+    return 'accountId'
+  }
+})()
+
+const loginMethod = ref(initialMethod)
+const form = reactive({ accountId: '', email: '', password: '' })
 const error = ref('')
 const submitting = ref(false)
 const showPassword = ref(false)
 const isInputFocused = ref(false)
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function switchMethod(method) {
+  if (method !== 'email' && method !== 'accountId') return
+  if (loginMethod.value === method) return
+  loginMethod.value = method
+  error.value = ''
+  try {
+    localStorage.setItem(LOGIN_METHOD_KEY, method)
+  } catch {
+    // storage unavailable — ignore
+  }
+}
 
 const quickEntryRoomId = computed(() => {
   const redirect = route.query.redirect
@@ -194,13 +268,24 @@ const quickEntryRoomId = computed(() => {
 
 async function doLogin() {
   error.value = ''
-  const accountId = form.accountId.trim()
-  if (!accountId) { error.value = '请输入账号 ID'; return }
+
   if (!form.password) { error.value = '请输入密码'; return }
+
+  let request
+  if (loginMethod.value === 'email') {
+    const email = form.email.trim().toLowerCase()
+    if (!email) { error.value = '请输入邮箱'; return }
+    if (!EMAIL_PATTERN.test(email)) { error.value = '邮箱格式不正确'; return }
+    request = loginByEmail({ email, password: form.password })
+  } else {
+    const accountId = form.accountId.trim()
+    if (!accountId) { error.value = '请输入账号 ID'; return }
+    request = login({ accountId, password: form.password })
+  }
 
   submitting.value = true
   try {
-    const resp = await login({ accountId, password: form.password })
+    const resp = await request
     saveToken(resp.token)
     auth.onAuthRefreshed(resp)
 
@@ -211,7 +296,10 @@ async function doLogin() {
       router.replace('/')
     }
   } catch (e) {
-    error.value = e.message || '登录失败,请检查账号和密码'
+    const fallback = loginMethod.value === 'email'
+      ? '登录失败,请检查邮箱和密码'
+      : '登录失败,请检查账号和密码'
+    error.value = e.message || fallback
   } finally {
     submitting.value = false
   }
@@ -386,6 +474,91 @@ function goRegister() {
   text-align: center;
   margin: 0;
   line-height: 1.55;
+}
+
+/* ── method toggle (accountId / email) ── */
+.lg-method {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 4px;
+  border: 1px solid var(--fc-border);
+  border-radius: 12px;
+  background: var(--fc-bg);
+}
+
+.lg-method-tab {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--fc-text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: color var(--fc-duration-normal) var(--fc-ease-in-out);
+}
+
+.lg-method-tab svg {
+  opacity: 0.7;
+  transition: opacity var(--fc-duration-normal) var(--fc-ease-in-out);
+}
+
+.lg-method-tab.is-active {
+  color: var(--fc-text);
+}
+
+.lg-method-tab.is-active svg {
+  opacity: 1;
+  color: var(--fc-accent-strong);
+}
+
+.lg-method-glider {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 9px;
+  background: var(--fc-surface);
+  box-shadow:
+    0 2px 6px rgba(33, 26, 20, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: transform var(--fc-duration-normal) var(--fc-ease-out);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.lg-method-glider[data-method='email'] {
+  transform: translateX(calc(100% + 4px));
+}
+
+/* field swap motion */
+.lg-swap-enter-active,
+.lg-swap-leave-active {
+  transition:
+    opacity var(--fc-duration-normal) var(--fc-ease-in-out),
+    transform var(--fc-duration-normal) var(--fc-ease-in-out);
+}
+
+.lg-swap-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.lg-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .lg-grp { margin-bottom: 18px; }

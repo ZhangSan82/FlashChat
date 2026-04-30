@@ -2,6 +2,7 @@ package com.flashchat.gameservice.engine;
 
 import com.flashchat.channel.ChannelPushService;
 import com.flashchat.channel.event.GameEndedNotifyEvent;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.gameservice.ai.AiContextAssembler;
 import com.flashchat.gameservice.ai.AiPlayerService;
 import com.flashchat.gameservice.ai.model.AiDescribeInput;
@@ -41,6 +42,7 @@ public class WhoIsSpyEngine {
     private final ApplicationEventPublisher eventPublisher;
     private final AiContextAssembler aiContextAssembler;
     private final AiPlayerService aiPlayerService;
+    private final OssAssetUrlService ossAssetUrlService;
 
     @Qualifier("aiPlayerExecutor")
     private final ExecutorService aiPlayerExecutor;
@@ -68,7 +70,7 @@ public class WhoIsSpyEngine {
                     .accountId(pdo.getAccountId())
                     .playerType(PlayerTypeEnum.of(pdo.getPlayerType()))
                     .nickname(pdo.getNickname())
-                    .avatar(pdo.getAvatar())
+                    .avatar(ossAssetUrlService.resolveAccessUrl(pdo.getAvatar()))
                     .role(isSpy ? GameRoleEnum.SPY : GameRoleEnum.CIVILIAN)
                     .word(isSpy ? wordPair.getWordB() : wordPair.getWordA())
                     .playerOrder(i + 1)
@@ -177,9 +179,9 @@ public class WhoIsSpyEngine {
             return;
         }
         processSkippedDisconnected(ctx, skippedDisconnected);
-        if (allHumansGone(ctx)) {
+        if (noAliveHumansRemaining(ctx)) {
             log.warn("[Engine] 所有真人掉线 gameId={}", ctx.getGameId());
-            endGame(ctx, null, EndReasonEnum.ALL_DISCONNECTED);
+            endGame(ctx, null, EndReasonEnum.NO_HUMANS_LEFT);
         } else {
             enterVotingPhase(ctx);
         }
@@ -473,10 +475,10 @@ public class WhoIsSpyEngine {
         endData.put("civilianWord", ctx.getCivilianWord());
         endData.put("spyWord", ctx.getSpyWord());
         endData.put("playerRoles", playerRoles);
-        channelPushService.broadcastToRoom(ctx.getRoomId(), GameWsEventType.GAME_ENDED, endData);
+        broadcastToPlayers(ctx, GameWsEventType.GAME_ENDED, endData);
         // 结束时补齐最终胜负和玩家状态，保证历史查询可以直接走 DB
         gamePersistService.persistGameEnd(ctx, winner, reason);
-        String summary = buildGameSummary(ctx, winner);
+        String summary = GameTextSanitizer.normalize(buildGameSummary(ctx, winner));
         eventPublisher.publishEvent(new GameEndedNotifyEvent(
                 this, ctx.getRoomId(), ctx.getGameId(),
                 summary, winner != null ? winner.getCode() : null));
@@ -738,9 +740,9 @@ public class WhoIsSpyEngine {
             return;
         }
         // 先检查异常终止条件（全人类掉线）
-        if (allHumansGone(ctx)) {
+        if (noAliveHumansRemaining(ctx)) {
             log.warn("[Engine] 判定后推进检测到所有真人离线，终止游戏 gameId={}", ctx.getGameId());
-            endGame(ctx, null, EndReasonEnum.ALL_DISCONNECTED);
+            endGame(ctx, null, EndReasonEnum.NO_HUMANS_LEFT);
             return;
         }
         // 再检查胜负
@@ -793,7 +795,7 @@ public class WhoIsSpyEngine {
     /**
      * 检查是否所有真人玩家都不在 ALIVE 状态（全掉线或全淘汰）
      */
-    private boolean allHumansGone(GameContext ctx) {
+    private boolean noAliveHumansRemaining(GameContext ctx) {
         return ctx.getAlivePlayers().stream()
                 .filter(GamePlayerInfo::isHuman)
                 .noneMatch(p -> p.getStatus() == PlayerStatusEnum.ALIVE);

@@ -1,5 +1,6 @@
 <template>
   <div class="invites-page">
+    <PageNoticeToast :notice="notice" />
     <div class="invites-shell">
       <header class="invites-top">
         <div class="invites-toolbar">
@@ -10,9 +11,6 @@
             <span>返回房间列表</span>
           </button>
 
-          <transition name="invites-notice-fade">
-            <div v-if="notice" class="invites-notice">{{ notice }}</div>
-          </transition>
         </div>
 
         <div class="invites-overview">
@@ -117,7 +115,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import PageNoticeToast from '@/components/PageNoticeToast.vue'
 import { useAuth } from '@/composables/useAuth'
+import { usePageNotice } from '@/composables/usePageNotice'
 import { getInviteCodes, getMyAccount } from '@/api/account'
 
 const router = useRouter()
@@ -126,7 +126,7 @@ const auth = useAuth()
 const account = ref(null)
 const codes = ref([])
 const loading = ref(false)
-const notice = ref('')
+const { notice, showNotice } = usePageNotice(1800)
 
 const sortedCodes = computed(() =>
   [...codes.value].sort((a, b) => Number(a.used) - Number(b.used) || String(a.code).localeCompare(String(b.code)))
@@ -149,7 +149,7 @@ async function loadPage() {
     account.value = accountResp
     codes.value = Array.isArray(codesResp) ? codesResp : []
   } catch (error) {
-    showNotice(error?.message || '邀请码加载失败')
+    showNotice(error?.message || '邀请码加载失败', 'error')
   } finally {
     loading.value = false
   }
@@ -167,17 +167,8 @@ async function copyText(value) {
     document.execCommand('copy')
     document.body.removeChild(input)
   }
-  showNotice('已复制')
+  showNotice('已复制', 'success')
 }
-
-function showNotice(text) {
-  notice.value = text
-  window.clearTimeout(showNotice.timer)
-  showNotice.timer = window.setTimeout(() => {
-    notice.value = ''
-  }, 1800)
-}
-showNotice.timer = null
 
 function goRoomList() {
   router.push({ name: 'Chat', query: { view: 'rooms' } })
@@ -286,27 +277,6 @@ function formatDateTime(value) {
   opacity: 0.55;
   cursor: not-allowed;
   box-shadow: none;
-}
-
-.invites-notice {
-  padding: 9px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
-  background: rgba(255, 255, 255, 0.84);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fc-text);
-}
-
-.invites-notice-fade-enter-active,
-.invites-notice-fade-leave-active {
-  transition: opacity var(--fc-duration-normal) var(--fc-ease-in-out), transform var(--fc-duration-normal) var(--fc-ease-in-out);
-}
-
-.invites-notice-fade-enter-from,
-.invites-notice-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
 }
 
 .invites-overview {
@@ -547,8 +517,6 @@ function formatDateTime(value) {
   .invites-copy-btn,
   .invites-refresh,
   .invites-item,
-  .invites-notice-fade-enter-active,
-  .invites-notice-fade-leave-active,
   .invites-spinner {
     transition: none;
     animation: none !important;
@@ -581,7 +549,6 @@ function formatDateTime(value) {
     align-items: stretch;
   }
 
-  .invites-notice,
   .invites-copy-main,
   .invites-copy-btn,
   .invites-refresh {

@@ -2,7 +2,7 @@ import { check, sleep } from 'k6';
 import ws from 'k6/ws';
 import { Counter, Trend } from 'k6/metrics';
 
-import { config, randomMessage, randomRoomTitle } from './config.js';
+import { config, randomMessage, randomRoomTitle, randomSuffix } from './config.js';
 import { businessFailures, getJson, getPlainJson, getPlainText, postJson, postWrappedJson } from './api.js';
 
 export const wsConnectFailures = new Counter('ws_connect_failures');
@@ -133,12 +133,21 @@ export function getCreditBalance(token) {
 
 export function prepareRegisteredUser() {
   const initial = autoRegister();
-  checkLogin(initial.token);
-  setPassword(initial.token, config.defaultPassword);
-  logout(initial.token);
-  const relogin = login(initial.accountId, config.defaultPassword);
-  getMyAccount(relogin.token);
-  return { ...relogin, password: config.defaultPassword };
+  const upgraded = postJson(
+    '/api/FlashChat/v1/account/upgrade',
+    {
+      password: config.defaultPassword,
+      confirmPassword: config.defaultPassword,
+      email: `perf-${Date.now()}-${randomSuffix()}@flashchat.test`,
+    },
+    initial.token,
+    {
+      tags: { name: 'account_upgrade' },
+      tag: 'account_upgrade',
+    },
+  );
+  getMyAccount(upgraded.token);
+  return { ...upgraded, password: config.defaultPassword };
 }
 
 export function createRoom(token, options = {}) {

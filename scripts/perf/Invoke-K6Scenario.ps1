@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("smoke", "baseline", "ws", "mixed", "stress", "breaking", "room-hotspot", "ten-room")]
+    [ValidateSet("smoke", "baseline", "ws", "mixed", "stress", "breaking", "room-hotspot", "ten-room", "room-send-receive")]
     [string]$Scenario,
     [string]$BaseUrl = "http://localhost:8081",
     [string]$WsUrl = "ws://localhost:8090",
@@ -348,6 +348,7 @@ $scriptMap = @{
     breaking = "perf\k6\breaking.js"
     "room-hotspot" = "perf\k6\room-hotspot.js"
     "ten-room" = "perf\k6\ten-room.js"
+    "room-send-receive" = "perf\k6\room-send-receive.js"
 }
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"

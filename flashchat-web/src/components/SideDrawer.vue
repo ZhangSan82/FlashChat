@@ -137,6 +137,25 @@
               </span>
             </button>
 
+            <button class="dr-item" type="button" @click="$emit('action', 'feedback')">
+              <span class="dr-item-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  <path d="M8 9h8" />
+                  <path d="M8 13h5" />
+                </svg>
+              </span>
+              <span class="dr-item-copy">
+                <strong>意见反馈</strong>
+                <small>提交 Bug、建议和使用体验问题</small>
+              </span>
+              <span class="dr-item-arrow" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </span>
+            </button>
+
             <button class="dr-item" type="button" @click="$emit('action', 'profile')">
               <span class="dr-item-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -195,7 +214,17 @@
             </span>
           </button>
 
-          <div class="dr-foot">Private rooms · quiet conversations</div>
+          <div class="dr-foot">
+            <span>Private rooms · quiet conversations</span>
+            <a
+              class="dr-source-link"
+              href="https://github.com/ZhangSan82/FlashChat.git"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              GitHub 源码
+            </a>
+          </div>
         </aside>
       </div>
     </transition>
@@ -500,8 +529,24 @@ defineEmits(['close', 'action'])
   letter-spacing: 0.1em;
 }
 
+.dr-source-link {
+  display: inline-flex;
+  margin-top: 8px;
+  color: var(--fc-accent-strong);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  transition: color var(--fc-duration-normal) var(--fc-ease-in-out), opacity var(--fc-duration-normal) var(--fc-ease-in-out);
+}
+
+.dr-source-link:hover {
+  color: var(--fc-accent);
+  text-decoration: underline;
+}
+
 .dr-close:focus-visible,
-.dr-item:focus-visible {
+.dr-item:focus-visible,
+.dr-source-link:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--fc-focus-ring);
 }

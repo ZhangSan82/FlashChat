@@ -26,6 +26,16 @@ const request = axios.create({
 // ==================== 请求拦截器 ====================
 request.interceptors.request.use(
     (config) => {
+        const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData
+        if (isFormData && config.headers) {
+            if (typeof config.headers.delete === 'function') {
+                config.headers.delete('Content-Type')
+            } else {
+                delete config.headers['Content-Type']
+                delete config.headers['content-type']
+            }
+        }
+
         const token = loadToken()
         if (token) {
             config.headers['satoken'] = token

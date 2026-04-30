@@ -1,5 +1,7 @@
 <template>
   <div class="credits-page">
+    <PageNoticeToast :notice="notice" />
+
     <div class="credits-shell">
       <header class="credits-top">
         <div class="credits-toolbar">
@@ -10,9 +12,6 @@
             <span>返回房间列表</span>
           </button>
 
-          <transition name="credits-notice-fade">
-            <div v-if="notice" class="credits-notice" :class="`is-${notice.type}`">{{ notice.text }}</div>
-          </transition>
         </div>
 
         <div class="credits-overview">
@@ -41,7 +40,7 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 3l2.7 5.47 6.03.88-4.36 4.25 1.03 6-5.4-2.84-5.4 2.84 1.03-6L3.27 9.35l6.03-.88L12 3z" />
                 </svg>
-                <span>{{ checkedIn ? '今日已签到' : (checkingIn ? '签到中...' : '签到 +10') }}</span>
+                <span>{{ checkedIn ? '今日已签到' : (checkingIn ? '签到中...' : '签到 +50') }}</span>
               </button>
 
               <button class="credits-refresh" type="button" :disabled="loading" @click="loadAll(true)">
@@ -118,7 +117,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import PageNoticeToast from '@/components/PageNoticeToast.vue'
 import { useAuth } from '@/composables/useAuth'
+import { usePageNotice } from '@/composables/usePageNotice'
 import { dailyCheckIn, getCreditBalance, getCreditTransactions, getMyAccount } from '@/api/account'
 
 const router = useRouter()
@@ -133,7 +134,7 @@ const checkedIn = ref(false)
 const page = ref(1)
 const size = 20
 const hasMore = ref(true)
-const notice = ref(null)
+const { notice, showNotice } = usePageNotice(2200)
 
 const balanceDisplay = computed(() => (balance.value == null ? '—' : `${balance.value}`))
 
@@ -192,7 +193,7 @@ async function handleCheckIn() {
     const result = await dailyCheckIn()
     if (result === true) {
       markCheckedIn()
-      showNotice('签到成功', 'success')
+      showNotice('签到成功 +50 积分', 'success')
       await loadAll(true)
     } else {
       markCheckedIn()
@@ -228,15 +229,6 @@ function markCheckedIn() {
 function goRoomList() {
   router.push({ name: 'Chat', query: { view: 'rooms' } })
 }
-
-function showNotice(text, type = 'info') {
-  notice.value = { text, type }
-  window.clearTimeout(showNotice.timer)
-  showNotice.timer = window.setTimeout(() => {
-    notice.value = null
-  }, 2200)
-}
-showNotice.timer = null
 
 function formatDateTime(value) {
   if (!value) return '—'
@@ -336,31 +328,6 @@ function formatDateTime(value) {
   opacity: 0.55;
   cursor: not-allowed;
   box-shadow: none;
-}
-
-.credits-notice {
-  padding: 9px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(77, 52, 31, 0.08);
-  background: rgba(255, 255, 255, 0.84);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fc-text);
-}
-
-.credits-notice.is-success { color: var(--fc-success); }
-.credits-notice.is-error { color: var(--fc-danger); }
-.credits-notice.is-info { color: var(--fc-text); }
-
-.credits-notice-fade-enter-active,
-.credits-notice-fade-leave-active {
-  transition: opacity var(--fc-duration-normal) var(--fc-ease-in-out), transform var(--fc-duration-normal) var(--fc-ease-in-out);
-}
-
-.credits-notice-fade-enter-from,
-.credits-notice-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
 }
 
 .credits-overview {
@@ -600,8 +567,6 @@ function formatDateTime(value) {
   .credits-sign,
   .credits-refresh,
   .credits-item,
-  .credits-notice-fade-enter-active,
-  .credits-notice-fade-leave-active,
   .credits-spinner {
     transition: none;
     animation: none !important;
@@ -634,7 +599,6 @@ function formatDateTime(value) {
     align-items: stretch;
   }
 
-  .credits-notice,
   .credits-sign,
   .credits-refresh {
     width: 100%;

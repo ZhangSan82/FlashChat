@@ -46,6 +46,13 @@ public interface AccountService extends IService<AccountDO> {
     AccountDO getByAccountId(String accountId);
 
     /**
+     * 通过邮箱查询账号完整实体
+     * <p>
+     * 用于邮箱登录场景。未命中抛 ClientException，封禁账号直接拒绝。
+     */
+    AccountDO getByEmail(String email);
+
+    /**
      * 通过数据库主键 ID 查询（带缓存）
      */
     AccountDO getAccountByDbId(Long id);

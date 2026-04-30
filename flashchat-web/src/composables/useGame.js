@@ -1,5 +1,7 @@
 import { reactive } from 'vue'
 import * as gameApi from '@/api/game'
+import { buildEndedResultFromHistory, buildRoundResultsFromHistory } from '@/utils/gameHistory'
+import { normalizeGameText } from '@/utils/gameText'
 
 export const GAME_WS_TYPE = Object.freeze({
   GAME_CREATED: 20,
@@ -73,7 +75,7 @@ function normalizePlayers(players = []) {
   return [...(players || [])]
     .map(player => ({
       accountId: player?.accountId ?? null,
-      nickname: player?.nickname || '匿名玩家',
+      nickname: normalizeGameText(player?.nickname || '匿名玩家'),
       avatar: player?.avatar || '',
       playerType: player?.playerType || 'HUMAN',
       aiProvider: player?.aiProvider || '',
@@ -81,7 +83,7 @@ function normalizePlayers(players = []) {
       status: player?.status || 'ALIVE',
       playerOrder: player?.playerOrder ?? null,
       role: player?.role || player?.revealedRole || '',
-      word: player?.word || ''
+      word: normalizeGameText(player?.word || '')
     }))
     .sort((left, right) => {
       const leftOrder = left.playerOrder ?? Number.MAX_SAFE_INTEGER
@@ -94,8 +96,8 @@ function normalizePlayers(players = []) {
 function normalizeDescriptions(descriptions = []) {
   return [...(descriptions || [])].map(item => ({
     speakerAccountId: item?.speakerAccountId ?? null,
-    speakerNickname: item?.speakerNickname || '匿名玩家',
-    content: item?.content || '',
+    speakerNickname: normalizeGameText(item?.speakerNickname || '匿名玩家'),
+    content: normalizeGameText(item?.content || ''),
     isSkipped: Boolean(item?.isSkipped),
     roundNumber: Number(item?.roundNumber || 0)
   }))
@@ -105,7 +107,7 @@ function normalizeVoteTargets(targets = [], selfAccountId = null) {
   return [...(targets || [])]
     .map(target => ({
       accountId: target?.accountId ?? null,
-      nickname: target?.nickname || '匿名玩家',
+      nickname: normalizeGameText(target?.nickname || '匿名玩家'),
       status: target?.status || 'ALIVE'
     }))
     .filter(target => selfAccountId == null || String(target.accountId) !== String(selfAccountId))
@@ -116,7 +118,7 @@ function normalizeRoundResults(roundResults = []) {
     .map(item => ({
       roundNumber: Number(item?.roundNumber || 0),
       eliminatedAccountId: item?.eliminatedAccountId ?? null,
-      eliminatedNickname: item?.eliminatedNickname || '',
+      eliminatedNickname: normalizeGameText(item?.eliminatedNickname || ''),
       eliminatedRole: item?.eliminatedRole || '',
       isTie: Boolean(item?.isTie)
     }))
@@ -144,7 +146,7 @@ function normalizeVoteResult(data) {
   return {
     roundNumber: Number(data?.roundNumber || 0),
     eliminatedAccountId: data?.eliminatedAccountId ?? null,
-    eliminatedNickname: data?.eliminatedNickname || '',
+    eliminatedNickname: normalizeGameText(data?.eliminatedNickname || ''),
     eliminatedRole: data?.eliminatedRole || '',
     isTie: Boolean(data?.isTie),
     voteDetails: Object.entries(data?.voteDetails || {}).map(([targetAccountId, votes]) => ({
@@ -170,8 +172,8 @@ function normalizeEndedResult(data) {
     gameId: data?.gameId || '',
     winnerSide: data?.winnerSide || '',
     endReason: data?.endReason || '',
-    civilianWord: data?.civilianWord || '',
-    spyWord: data?.spyWord || '',
+    civilianWord: normalizeGameText(data?.civilianWord || ''),
+    spyWord: normalizeGameText(data?.spyWord || ''),
     playerRoles: normalizePlayers(data?.playerRoles || [])
   }
 }
@@ -393,10 +395,10 @@ export function useGame({ getCurrentRoomId, getMemberId, getIdentity } = {}) {
       currentPhase: payload.currentPhase || null,
       currentRound: Number(payload.currentRound || 0),
       myRole: payload.myRole || '',
-      myWord: payload.myWord || '',
+      myWord: normalizeGameText(payload.myWord || ''),
       myVoted: Boolean(payload.myVoted),
       currentSpeakerAccountId: payload.currentSpeakerAccountId ?? null,
-      currentSpeakerNickname: payload.currentSpeakerNickname || '',
+      currentSpeakerNickname: normalizeGameText(payload.currentSpeakerNickname || ''),
       currentSpeakerOrder: payload.currentSpeakerOrder ?? null,
       turnDeadline: payload.turnDeadline ?? null,
       timerRemaining: state.session.timerRemaining,
@@ -495,6 +497,71 @@ export function useGame({ getCurrentRoomId, getMemberId, getIdentity } = {}) {
     }
   }
 
+  function getEndedNotice(result = {}) {
+    if (result?.winnerSide === 'SPY') return '卧底获胜'
+    if (result?.winnerSide === 'CIVILIAN') return '平民获胜'
+    if (result?.endReason === 'NO_HUMANS_LEFT') return '真人玩家已全部出局，本局结束'
+    if (result?.endReason === 'ALL_DISCONNECTED') return '所有真人玩家离线，本局结束'
+    if (result?.endReason === 'CANCELLED') return '本局已取消'
+    return '本局已结束'
+  }
+
+  function getEndedNoticeTone(result = {}) {
+    if (result?.winnerSide) return 'success'
+    if (result?.endReason === 'ALL_DISCONNECTED') return 'warning'
+    return 'info'
+  }
+
+  function applyEndedResult(result, { history = state.session.history, silent = false } = {}) {
+    if (!result?.gameId) return
+
+    clearRoomActiveIfMatches(result.gameId)
+    clearPersistedSession(result.gameId)
+    clearVoteResultDisplay()
+    stopCountdown()
+
+    state.session.result = result
+    state.session.history = history
+    state.session.gameStatus = 'ENDED'
+    state.session.currentPhase = null
+    state.session.currentSpeakerAccountId = null
+    state.session.currentSpeakerNickname = ''
+    state.session.currentSpeakerOrder = null
+    state.session.turnDeadline = null
+    state.session.descriptions = []
+    state.session.votableTargets = []
+    state.session.voteResult = null
+    state.session.myVoted = false
+    state.session.aiThinkingAccountId = null
+    state.session.players = upsertPlayers(state.session.players, result.playerRoles, { replaceAll: true })
+
+    if (history?.rounds) {
+      state.session.roundResults = buildRoundResultsFromHistory(history.rounds)
+    }
+
+    state.collapsed = false
+
+    if (!silent) {
+      setNotice(getEndedNotice(result), getEndedNoticeTone(result))
+    }
+  }
+
+  async function recoverEndedSession(roomId = state.currentRoomId, { silent = true } = {}) {
+    const gameId = state.session.gameId
+    const sessionRoomId = state.session.roomId || roomId
+    if (!gameId || state.session.result || !sessionRoomId) return false
+    if (roomId && String(sessionRoomId) !== String(roomId)) return false
+
+    try {
+      const history = await gameApi.getGameHistory(gameId)
+      if (!history?.gameId) return false
+      applyEndedResult(buildEndedResultFromHistory(history), { history, silent })
+      return true
+    } catch {
+      return false
+    }
+  }
+
   function isRecoveryError(message = '') {
     return String(message).includes('恢复') || String(message).includes('不支持')
   }
@@ -525,9 +592,12 @@ export function useGame({ getCurrentRoomId, getMemberId, getIdentity } = {}) {
         if (normalized.gameStatus === 'PLAYING') {
           await restoreGameState(normalized.gameId, { silent: true })
         }
-      } else if (!normalized && !state.session.gameId && !state.session.result) {
-        resetSession()
-        clearPersistedSession()
+      } else if (!normalized) {
+        const recoveredEndedSession = await recoverEndedSession(roomId, { silent })
+        if (!recoveredEndedSession && !state.session.gameId && !state.session.result) {
+          resetSession()
+          clearPersistedSession()
+        }
       }
 
       return normalized
@@ -902,7 +972,7 @@ export function useGame({ getCurrentRoomId, getMemberId, getIdentity } = {}) {
   function handleRoleAssigned(data) {
     ensureSessionPresence({ gameId: state.roomActiveInfo?.gameId, roomId: state.roomActiveInfo?.roomId, gameStatus: 'PLAYING' })
     state.session.myRole = data?.role || ''
-    state.session.myWord = data?.word || ''
+    state.session.myWord = normalizeGameText(data?.word || '')
   }
 
   function handleRoundTransition(roundNumber) {
@@ -924,7 +994,7 @@ export function useGame({ getCurrentRoomId, getMemberId, getIdentity } = {}) {
     state.session.gameStatus = 'PLAYING'
     state.session.currentPhase = phase
     state.session.currentSpeakerAccountId = data?.currentSpeakerAccountId ?? null
-    state.session.currentSpeakerNickname = data?.currentSpeakerNickname || ''
+    state.session.currentSpeakerNickname = normalizeGameText(data?.currentSpeakerNickname || '')
     state.session.currentSpeakerOrder = data?.currentSpeakerOrder ?? null
     state.session.aiThinkingAccountId = phase === 'DESCRIBING' && data?.type === GAME_WS_TYPE.GAME_AI_THINKING
       ? data?.currentSpeakerAccountId ?? null
@@ -942,8 +1012,8 @@ export function useGame({ getCurrentRoomId, getMemberId, getIdentity } = {}) {
     state.session.currentPhase = 'DESCRIBING'
     const description = {
       speakerAccountId: data.speakerAccountId,
-      speakerNickname: data.speakerNickname,
-      content: data.content || '',
+      speakerNickname: normalizeGameText(data.speakerNickname || ''),
+      content: normalizeGameText(data.content || ''),
       isSkipped: Boolean(data.isSkipped),
       roundNumber: Number(data.roundNumber || state.session.currentRound || 0)
     }
@@ -1041,14 +1111,8 @@ export function useGame({ getCurrentRoomId, getMemberId, getIdentity } = {}) {
       return
     }
 
-    state.session.result = normalizeEndedResult(data)
-    state.session.gameStatus = 'ENDED'
-    state.session.currentPhase = null
-    clearVoteResultDisplay()
-    state.session.players = upsertPlayers(state.session.players, state.session.result.playerRoles, { replaceAll: false })
-    stopCountdown()
-    state.collapsed = false
-    setNotice(state.session.result.winnerSide === 'SPY' ? '卧底获胜' : '平民获胜', 'success')
+    applyEndedResult(normalizeEndedResult(data), { silent: true })
+    setNotice(getEndedNotice(state.session.result), getEndedNoticeTone(state.session.result))
   }
 
   function handleCancelled(data) {

@@ -37,7 +37,7 @@
                         <circle cx="12" cy="13" r="4"/>
                       </svg>
                     </div>
-                    <input ref="fileInput" type="file" accept="image/*" class="pp-file-hidden" @change="onFileSelected" />
+                    <input ref="fileInput" type="file" :accept="IMAGE_FILE_ACCEPT" class="pp-file-hidden" @change="onFileSelected" />
                   </div>
                   <p v-if="uploading" class="pp-upload-hint">上传中...</p>
 
@@ -122,7 +122,7 @@
                   <button class="pp-act-btn" type="button" @click="doCheckIn" :disabled="checkedIn">
                     <span class="pp-act-icon">{{ checkedIn ? '✅' : '📅' }}</span>
                     <span class="pp-act-text">{{ checkedIn ? '今日已签到' : '每日签到' }}</span>
-                    <span class="pp-act-badge" v-if="!checkedIn">+10</span>
+                    <span class="pp-act-badge" v-if="!checkedIn">+50</span>
                   </button>
 
                   <button class="pp-act-btn" type="button" @click="$emit(profile.hasPassword ? 'change-password' : 'set-password')">
@@ -134,6 +134,17 @@
                     <span class="pp-act-icon">⬆️</span>
                     <span class="pp-act-text">升级为注册用户</span>
                     <span class="pp-act-hint">解锁创建房间等功能</span>
+                  </button>
+
+                  <button class="pp-act-btn" type="button" @click="$emit('feedback')">
+                    <span class="pp-act-icon pp-act-svg" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M5 5.75A2.75 2.75 0 0 1 7.75 3h8.5A2.75 2.75 0 0 1 19 5.75v6.5A2.75 2.75 0 0 1 16.25 15H11l-4.4 3.3A1 1 0 0 1 5 17.5V15.1A2.75 2.75 0 0 1 3 12.45v-6.7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                        <path d="M8 7.75h8M8 11h5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                      </svg>
+                    </span>
+                    <span class="pp-act-text">意见反馈</span>
+                    <span class="pp-act-hint">提交 Bug、建议和体验问题</span>
                   </button>
 
                   <div class="pp-act-divider"></div>
@@ -162,11 +173,12 @@ import { ref, reactive, watch } from 'vue'
 import { useAuth } from '@/composables/useAuth'
 import { getMyAccount, updateProfile, dailyCheckIn } from '@/api/account'
 import { uploadFile } from '@/api/file'
+import { IMAGE_FILE_ACCEPT, validateImageFile } from '@/utils/fileUpload'
 
 const props = defineProps({ visible: Boolean })
 const emit = defineEmits([
   'close', 'set-password', 'change-password',
-  'upgrade', 'logout', 'delete-account', 'profile-updated'
+  'upgrade', 'feedback', 'logout', 'delete-account', 'profile-updated'
 ])
 
 const auth = useAuth()
@@ -255,6 +267,9 @@ function clearCustomAvatar() {
 
 // ★ FIX: 头像上传
 function triggerUpload() {
+  if (uploading.value) return
+  editError.value = ''
+  if (fileInput.value) fileInput.value.value = ''
   fileInput.value?.click()
 }
 
@@ -263,7 +278,13 @@ async function onFileSelected(e) {
   if (!file) return
 
   // 前端校验
-  if (!file.type.startsWith('image/')) {
+  const validationError = validateImageFile(file)
+  if (validationError) {
+    editError.value = validationError
+    if (fileInput.value) fileInput.value.value = ''
+    return
+  }
+  if (false && !file.type.startsWith('image/')) {
     editError.value = '请选择图片文件'
     return
   }
@@ -330,7 +351,7 @@ async function doCheckIn() {
     const result = await dailyCheckIn()
     if (result === true) {
       markCheckedIn() // ★ FIX: 持久化到 sessionStorage
-      showToast('签到成功 +10 积分', 'success')
+      showToast('签到成功 +50 积分', 'success')
       await fetchProfile()
     } else {
       markCheckedIn()
@@ -512,12 +533,7 @@ function formatDate(dt) {
 }
 
 .pp-file-hidden {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-  width: 100%;
-  height: 100%;
+  display: none;
 }
 
 .pp-upload-hint,
@@ -726,6 +742,11 @@ function formatDate(dt) {
   border-radius: 14px;
   background: var(--fc-bg);
   font-size: 17px;
+}
+
+.pp-act-svg svg {
+  width: 18px;
+  height: 18px;
 }
 
 .pp-act-text {

@@ -97,7 +97,7 @@
                 <input
                   ref="avatarInputRef"
                   type="file"
-                  accept="image/*"
+                  :accept="IMAGE_FILE_ACCEPT"
                   class="info-file-hidden"
                   @change="onRoomAvatarSelected"
                 />
@@ -248,6 +248,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { getShareUrl } from '@/api/room'
 import { uploadFile } from '@/api/file'
 import { formatCountdown, calcProgress, getCountdownColor } from '@/utils/formatter'
+import { IMAGE_FILE_ACCEPT, validateImageFile } from '@/utils/fileUpload'
 import { generateQRCodeDataUrl } from '@/utils/qrcode'
 import { getRoomDisplayName, getRoomVisualUrl } from '@/utils/roomVisual'
 
@@ -450,6 +451,7 @@ async function copyShareUrl() {
 function triggerRoomAvatarUpload() {
   if (avatarUploading.value) return
   avatarUploadError.value = ''
+  if (avatarInputRef.value) avatarInputRef.value.value = ''
   avatarInputRef.value?.click()
 }
 
@@ -458,7 +460,13 @@ async function onRoomAvatarSelected(event) {
   if (!file) return
   avatarUploadError.value = ''
 
-  if (!file.type?.startsWith('image/')) {
+  const validationError = validateImageFile(file)
+  if (validationError) {
+    avatarUploadError.value = validationError
+    if (avatarInputRef.value) avatarInputRef.value.value = ''
+    return
+  }
+  if (false && !file.type?.startsWith('image/')) {
     avatarUploadError.value = '请选择图片文件'
     if (avatarInputRef.value) avatarInputRef.value.value = ''
     return

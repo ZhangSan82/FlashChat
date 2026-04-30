@@ -40,6 +40,17 @@ export function login(data) {
 }
 
 /**
+ * 邮箱 + 密码登录
+ * 无需 token（在 SaToken 放行列表中）
+ * 仅限已注册（绑定邮箱 + 设了密码）的用户
+ * @param {{ email: string, password: string }} data
+ * @returns {Promise<AuthRespDTO>}
+ */
+export function loginByEmail(data) {
+    return request.post('/account/login-by-email', data)
+}
+
+/**
  * 登出当前用户
  * @returns {Promise<void>}
  */

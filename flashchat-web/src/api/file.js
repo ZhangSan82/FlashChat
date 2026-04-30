@@ -7,8 +7,5 @@ export function uploadFile(file, filename = '') {
     } else {
         fd.append('file', file)
     }
-    return request.post('/file/upload', fd, {
-        headers: { 'Content-Type': undefined },
-        timeout: 30000
-    })
+    return request.post('/file/upload', fd, { timeout: 30000 })
 }

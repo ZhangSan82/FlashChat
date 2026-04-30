@@ -79,6 +79,21 @@ public class OssAssetUrlService {
         }
     }
 
+    public String normalizeStorageReference(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        if (!properties.isConfigured()) {
+            return value;
+        }
+
+        String objectKey = extractResolvableObjectKey(value);
+        if (!StringUtils.hasText(objectKey)) {
+            return value;
+        }
+        return buildStorageReference(objectKey);
+    }
+
     private String trimSlashes(String value) {
         if (!StringUtils.hasText(value)) {
             return "";

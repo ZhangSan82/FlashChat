@@ -72,7 +72,7 @@
                 <div class="sheet-avatar-hint">建议 1:1 图片，不超过 5MB</div>
                 <div v-if="avatarError" class="sheet-avatar-error">{{ avatarError }}</div>
               </div>
-              <input ref="fileInput" type="file" accept="image/*" class="sheet-file-hidden" @change="onAvatarSelected" />
+              <input ref="fileInput" type="file" :accept="IMAGE_FILE_ACCEPT" class="sheet-file-hidden" @change="onAvatarSelected" />
             </div>
 
             <div class="sheet-grid">
@@ -124,6 +124,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { getRoomPricing } from '@/api/room'
 import { uploadFile } from '@/api/file'
+import { IMAGE_FILE_ACCEPT, validateImageFile } from '@/utils/fileUpload'
 
 const props = defineProps({
   visible: { type: Boolean, default: false }
@@ -215,6 +216,8 @@ function resetForm() {
 
 function triggerAvatarUpload() {
   if (avatarUploading.value) return
+  avatarError.value = ''
+  if (fileInput.value) fileInput.value.value = ''
   fileInput.value?.click()
 }
 
@@ -223,7 +226,13 @@ async function onAvatarSelected(event) {
   if (!file) return
   avatarError.value = ''
 
-  if (!file.type?.startsWith('image/')) {
+  const validationError = validateImageFile(file)
+  if (validationError) {
+    avatarError.value = validationError
+    if (fileInput.value) fileInput.value.value = ''
+    return
+  }
+  if (false && !file.type?.startsWith('image/')) {
     avatarError.value = '请选择图片文件'
     if (fileInput.value) fileInput.value.value = ''
     return

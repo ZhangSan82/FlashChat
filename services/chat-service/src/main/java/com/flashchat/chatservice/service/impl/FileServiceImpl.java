@@ -41,14 +41,19 @@ public class FileServiceImpl implements FileService {
 
     @PostConstruct
     public void init() {
-        validateOssConfiguration();
+        FileStorageProperties.OssProperties oss = fileStorageProperties.getOss();
+        if (!isOssConfigured(oss)) {
+            log.warn("[文件服务] OSS 配置缺失，文件上传功能已禁用；调用 upload 时将返回 503。"
+                    + " 如需启用，请在 .env 中填写 FLASHCHAT_OSS_* 环境变量");
+            return;
+        }
         log.info("[文件服务] 已启用阿里云 OSS 存储, bucket={}, endpoint={}",
-                fileStorageProperties.getOss().getBucket(),
-                fileStorageProperties.getOss().getEndpoint());
+                oss.getBucket(), oss.getEndpoint());
     }
 
     @Override
     public FileDTO upload(MultipartFile file) {
+        validateOssConfiguration();
         if (file == null || file.isEmpty()) {
             throw new ClientException("上传文件不能为空");
         }
@@ -110,12 +115,15 @@ public class FileServiceImpl implements FileService {
                 .build();
     }
 
+    private boolean isOssConfigured(FileStorageProperties.OssProperties oss) {
+        return StringUtils.hasText(oss.getEndpoint())
+                && StringUtils.hasText(oss.getBucket())
+                && StringUtils.hasText(oss.getAccessKeyId())
+                && StringUtils.hasText(oss.getAccessKeySecret());
+    }
+
     private void validateOssConfiguration() {
-        FileStorageProperties.OssProperties oss = fileStorageProperties.getOss();
-        if (!StringUtils.hasText(oss.getEndpoint())
-                || !StringUtils.hasText(oss.getBucket())
-                || !StringUtils.hasText(oss.getAccessKeyId())
-                || !StringUtils.hasText(oss.getAccessKeySecret())) {
+        if (!isOssConfigured(fileStorageProperties.getOss())) {
             throw new ServiceException("OSS 存储配置不完整，请检查 endpoint、bucket 和访问凭证");
         }
     }
@@ -168,7 +176,9 @@ public class FileServiceImpl implements FileService {
             case "image/gif" -> ".gif";
             case "image/webp" -> ".webp";
             case "image/bmp" -> ".bmp";
-            case "image/heic" -> ".heic";
+            case "image/heic", "image/x-heic" -> ".heic";
+            case "image/heif", "image/x-heif" -> ".heif";
+            case "image/avif" -> ".avif";
             case "video/mp4" -> ".mp4";
             case "video/webm" -> ".webm";
             case "video/quicktime" -> ".mov";

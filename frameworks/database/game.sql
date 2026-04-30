@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS t_game_player (
     ai_provider     VARCHAR(20)  NULL COMMENT 'AI厂商',
     ai_persona      VARCHAR(30)  NULL COMMENT 'AI性格',
     nickname        VARCHAR(50)  NOT NULL COMMENT '显示名',
-    avatar          VARCHAR(200) NULL COMMENT '头像',
+    avatar          VARCHAR(4096) NULL COMMENT '头像',
     role            VARCHAR(15)  NULL COMMENT 'CIVILIAN/SPY/BLANK',
     word            VARCHAR(50)  NULL COMMENT '分配词语',
     status          VARCHAR(15)  NOT NULL DEFAULT 'ALIVE' COMMENT 'ALIVE/ELIMINATED/DISCONNECTED',

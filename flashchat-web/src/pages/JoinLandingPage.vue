@@ -104,6 +104,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import * as roomApi from '@/api/room'
 import { formatCountdown } from '@/utils/formatter'
+import { rememberRoomEntryMode } from '@/utils/roomEntryMode'
 import { getRoomDisplayName, getRoomVisualUrl } from '@/utils/roomVisual'
 
 const props = defineProps({
@@ -213,6 +214,7 @@ async function doJoin() {
 
   try {
     await roomApi.joinRoom({ roomId: props.roomId })
+    rememberRoomEntryMode(props.roomId)
     sessionStorage.setItem('fc_last_room', props.roomId)
     router.push('/')
   } catch (e) {

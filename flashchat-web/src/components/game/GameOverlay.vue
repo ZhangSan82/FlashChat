@@ -361,6 +361,7 @@ const winnerLabel = computed(() => session.value.result?.winnerSide === 'SPY' ? 
 const endReasonLabel = computed(() => {
   const reason = session.value.result?.endReason
   if (reason === 'ALL_DISCONNECTED') return '所有真人玩家离线，系统终止了本局。'
+  if (reason === 'NO_HUMANS_LEFT') return '最后一位真人玩家已出局，本局提前结束。'
   if (reason === 'CANCELLED') return '房主在等待阶段取消了这局游戏。'
   return '可以查看角色公开和逐轮回放。'
 })

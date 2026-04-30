@@ -1,6 +1,7 @@
-import { autoRegister, createRoom, joinRoom, roomMembers } from './flow.js';
+import { autoRegister, createRoom, joinRoom, prepareRegisteredUser, roomMembers } from './flow.js';
 import { randomSuffix } from './config.js';
 import {
+  canAcceptRoomOnShard,
   createEmptyShardCounts,
   formatShardCounts,
   shardForRoomId,
@@ -223,6 +224,8 @@ export function setupTenRoomTopology(options = {}) {
   const maxEmptyShards = Number(options.maxEmptyShards || 0);
   const roomDuration = options.roomDuration || 'DAY_3';
   const fixedTopology = options.fixedTopology || null;
+  const smartShardSelection = __ENV.TEN_ROOM_SMART_SHARD_SELECTION === 'true';
+  const shardCandidateLimit = Number(__ENV.TEN_ROOM_SHARD_CANDIDATE_LIMIT || Math.max(roomCount * 6, 80));
 
   const normalizedFixedTopology = normalizeFixedTopology(options, fixedTopology);
   if (canReuseFixedTopology(normalizedFixedTopology, options)) {
@@ -242,6 +245,7 @@ export function setupTenRoomTopology(options = {}) {
 
   const rooms = [];
   const shardCounts = createEmptyShardCounts(shardCount);
+  let rejectedRoomCreations = 0;
 
   // 旧方案是在这里 create -> 算 shard -> 不合格就 closeRoom() 重建。
   // 那样会制造真实废房间、窗口删除和延时任务噪音，污染正式压测。
@@ -250,7 +254,9 @@ export function setupTenRoomTopology(options = {}) {
   // 2. 分布不达标则整轮失败，由外层脚本重置环境后重跑
   // 3. 只有通过 guard，才继续补齐 guest
   for (let roomIndex = 0; roomIndex < roomCount; roomIndex += 1) {
-    const host = autoRegister();
+    const host = __ENV.TEN_ROOM_REGISTER_HOSTS === 'false'
+      ? autoRegister()
+      : prepareRegisteredUser();
     const room = createRoom(host.token, {
       duration: roomDuration,
       isPublic: 1,
@@ -258,11 +264,20 @@ export function setupTenRoomTopology(options = {}) {
       title: buildRoomTitle(roomTitlePrefix, roomIndex),
     });
     const shard = shardForRoomId(room.roomId, shardCount);
+    if (smartShardSelection && !canAcceptRoomOnShard(shardCounts, shard, roomCount)) {
+      rejectedRoomCreations += 1;
+      roomIndex -= 1;
+      if (roomIndex + rejectedRoomCreations + 1 >= shardCandidateLimit) {
+        break;
+      }
+      continue;
+    }
+
     shardCounts[shard] += 1;
 
     rooms.push({
-      index: roomIndex,
-      key: buildRoomKey(roomIndex),
+      index: rooms.length,
+      key: buildRoomKey(rooms.length),
       roomId: room.roomId,
       shard,
       host,
@@ -270,9 +285,15 @@ export function setupTenRoomTopology(options = {}) {
     });
   }
 
+  if (rooms.length < roomCount) {
+    throw new Error(
+      `TEN_ROOM_SMART_SHARD_SELECTION_EXHAUSTED selectedRooms=${rooms.length} roomCount=${roomCount} candidates=${rooms.length + rejectedRoomCreations} candidateLimit=${shardCandidateLimit} shardLayout=${formatShardCounts(shardCounts)}`,
+    );
+  }
+
   const shardLayout = validateShardLayout(shardCounts, options);
   console.log(
-    `[ten-room-init] shardCount=${shardCount}, shardLayout=${formatShardCounts(shardCounts)}, activeShardCount=${shardLayout.activeShardCount}, emptyShardCount=${shardLayout.emptyShardCount}, actualMaxRoomsPerShard=${shardLayout.actualMaxRoomsPerShard}, maxRoomsPerShard=${maxRoomsPerShard}, minActiveShards=${minActiveShards}, maxEmptyShards=${maxEmptyShards}`,
+    `[ten-room-init] shardCount=${shardCount}, shardLayout=${formatShardCounts(shardCounts)}, activeShardCount=${shardLayout.activeShardCount}, emptyShardCount=${shardLayout.emptyShardCount}, actualMaxRoomsPerShard=${shardLayout.actualMaxRoomsPerShard}, maxRoomsPerShard=${maxRoomsPerShard}, minActiveShards=${minActiveShards}, maxEmptyShards=${maxEmptyShards}, smartShardSelection=${smartShardSelection}, rejectedRoomCreations=${rejectedRoomCreations}`,
   );
 
   if (!shardLayout.ok) {
@@ -302,8 +323,8 @@ export function setupTenRoomTopology(options = {}) {
     activeShardCount: shardLayout.activeShardCount,
     maxEmptyShards,
     emptyShardCount: shardLayout.emptyShardCount,
-    rejectedRoomCreations: 0,
-    topologySource: 'fresh-build',
+    rejectedRoomCreations,
+    topologySource: smartShardSelection ? 'smart-shard-selection' : 'fresh-build',
     rooms,
   };
 }

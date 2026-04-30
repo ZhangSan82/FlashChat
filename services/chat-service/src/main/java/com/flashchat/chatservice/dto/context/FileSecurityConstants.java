@@ -35,7 +35,7 @@ public final class FileSecurityConstants {
     );
 
     public static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(
-            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic"
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif", ".avif"
     );
 
     public static final Set<String> ALLOWED_VIDEO_EXTENSIONS = Set.of(

@@ -55,7 +55,7 @@
       },
       "targets": [
         {
-          "expr": "process_cpu_usage{application=\"flashchat-aggregation-local-perf\"} * 100",
+          "expr": "process_cpu_usage{job=~\"flashchat-local-perf|flashchat-remote\"} * 100",
           "refId": "A"
         }
       ],
@@ -96,7 +96,7 @@
       },
       "targets": [
         {
-          "expr": "process_resident_memory_bytes{application=\"flashchat-aggregation-local-perf\"}",
+          "expr": "process_resident_memory_bytes{job=~\"flashchat-local-perf|flashchat-remote\"}",
           "refId": "A"
         }
       ],
@@ -137,7 +137,7 @@
       },
       "targets": [
         {
-          "expr": "sum(jvm_memory_used_bytes{application=\"flashchat-aggregation-local-perf\",area=\"heap\"})",
+          "expr": "sum(jvm_memory_used_bytes{job=~\"flashchat-local-perf|flashchat-remote\",area=\"heap\"})",
           "refId": "A"
         }
       ],
@@ -178,7 +178,7 @@
       },
       "targets": [
         {
-          "expr": "websocket_online_users{application=\"flashchat-aggregation-local-perf\"}",
+          "expr": "websocket_online_users{job=~\"flashchat-local-perf|flashchat-remote\"}",
           "refId": "A"
         }
       ],
@@ -205,7 +205,7 @@
       "id": 5,
       "targets": [
         {
-          "expr": "sum(rate(http_server_requests_seconds_count{application=\"flashchat-aggregation-local-perf\",uri!~\"/actuator.*\"}[1m]))",
+          "expr": "sum(rate(http_server_requests_seconds_count{job=~\"flashchat-local-perf|flashchat-remote\",uri!~\"/actuator.*\"}[1m]))",
           "refId": "A"
         }
       ],
@@ -232,11 +232,11 @@
       "id": 6,
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"flashchat-aggregation-local-perf\",uri!~\"/actuator.*\"}[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=~\"flashchat-local-perf|flashchat-remote\",uri!~\"/actuator.*\"}[1m]))) or max_over_time(http_server_requests_seconds_max{job=~\"flashchat-local-perf|flashchat-remote\",uri!~\"/actuator.*\"}[1m])",
           "refId": "A"
         }
       ],
-      "title": "HTTP P95",
+      "title": "HTTP P95 / Max",
       "type": "timeseries"
     },
     {
@@ -259,12 +259,12 @@
       "id": 7,
       "targets": [
         {
-          "expr": "hikaricp_connections_active{application=\"flashchat-aggregation-local-perf\"}",
+          "expr": "hikaricp_connections_active{job=~\"flashchat-local-perf|flashchat-remote\"}",
           "legendFormat": "active",
           "refId": "A"
         },
         {
-          "expr": "hikaricp_connections_pending{application=\"flashchat-aggregation-local-perf\"}",
+          "expr": "hikaricp_connections_pending{job=~\"flashchat-local-perf|flashchat-remote\"}",
           "legendFormat": "pending",
           "refId": "B"
         }
@@ -292,11 +292,11 @@
       "id": 8,
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(flashchat_broadcast_duration_seconds_bucket{application=\"flashchat-aggregation-local-perf\"}[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(flashchat_broadcast_duration_seconds_bucket{job=~\"flashchat-local-perf|flashchat-remote\"}[1m]))) or max_over_time(flashchat_broadcast_duration_seconds_max{job=~\"flashchat-local-perf|flashchat-remote\"}[1m])",
           "refId": "A"
         }
       ],
-      "title": "Broadcast P95",
+      "title": "Broadcast P95 / Max",
       "type": "timeseries"
     },
     {
@@ -319,7 +319,7 @@
       "id": 9,
       "targets": [
         {
-          "expr": "sum(chat_mailbox_backlog{application=\"flashchat-aggregation-local-perf\"})",
+          "expr": "sum(chat_mailbox_backlog{job=~\"flashchat-local-perf|flashchat-remote\"})",
           "refId": "A"
         }
       ],
@@ -346,11 +346,11 @@
       "id": 10,
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(chat_mailbox_task_duration_seconds_bucket{application=\"flashchat-aggregation-local-perf\"}[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(chat_mailbox_task_duration_seconds_bucket{job=~\"flashchat-local-perf|flashchat-remote\"}[1m]))) or max_over_time(chat_mailbox_task_duration_seconds_max{job=~\"flashchat-local-perf|flashchat-remote\"}[1m])",
           "refId": "A"
         }
       ],
-      "title": "Mailbox Task P95",
+      "title": "Mailbox Task P95 / Max",
       "type": "timeseries"
     },
     {
@@ -373,7 +373,7 @@
       "id": 11,
       "targets": [
         {
-          "expr": "sum(rate(chat_stripe_lock_timeout_total{application=\"flashchat-aggregation-local-perf\"}[5m]))",
+          "expr": "sum(rate(chat_stripe_lock_timeout_total{job=~\"flashchat-local-perf|flashchat-remote\"}[5m]))",
           "refId": "A"
         }
       ],
@@ -400,12 +400,12 @@
       "id": 12,
       "targets": [
         {
-          "expr": "sum(rate(chat_msg_xadd_fail_total{application=\"flashchat-aggregation-local-perf\"}[5m]))",
+          "expr": "sum(rate(chat_msg_xadd_fail_total{job=~\"flashchat-local-perf|flashchat-remote\"}[5m]))",
           "legendFormat": "xadd_fail",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(chat_msg_persist_fallback_total{application=\"flashchat-aggregation-local-perf\"}[5m]))",
+          "expr": "sum(rate(chat_msg_persist_fallback_total{job=~\"flashchat-local-perf|flashchat-remote\"}[5m]))",
           "legendFormat": "persist_fallback",
           "refId": "B"
         }
@@ -433,7 +433,7 @@
       "id": 13,
       "targets": [
         {
-          "expr": "sum(rate(cache_redis_degradation_total{application=\"flashchat-aggregation-local-perf\"}[5m]))",
+          "expr": "sum(rate(cache_redis_degradation_total{job=~\"flashchat-local-perf|flashchat-remote\"}[5m]))",
           "refId": "A"
         }
       ],

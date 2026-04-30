@@ -21,7 +21,10 @@ public enum EndReasonEnum {
     /** 全员掉线：所有真人玩家断线超时，游戏自动终止 */
     ALL_DISCONNECTED("ALL_DISCONNECTED", "全员掉线"),
 
-    ERROR("ERROR","创建错误"),
+    /** 真人玩家已全部出局，剩余局面只包含 AI */
+    NO_HUMANS_LEFT("NO_HUMANS_LEFT", "真人玩家已全部出局"),
+
+    ERROR("ERROR", "创建错误"),
 
     /** 手动取消：创建者在 WAITING 阶段取消游戏 */
     CANCELLED("CANCELLED", "手动取消");

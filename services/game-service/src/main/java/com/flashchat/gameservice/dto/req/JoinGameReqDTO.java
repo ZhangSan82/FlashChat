@@ -23,6 +23,6 @@ public class JoinGameReqDTO {
     /**
      * 头像（URL 或颜色值）
      */
-    @Size(max = 200, message = "头像 URL 过长")
+    @Size(max = 4096, message = "头像 URL 过长")
     private String avatar;
 }

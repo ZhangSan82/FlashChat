@@ -121,6 +121,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
     private static final int MAX_EMOJI_PER_USER_PER_MSG = 5;
     /** CAS 重试次数上限（乐观锁冲突时） */
     private static final int REACTION_CAS_MAX_RETRY = 3;
+    private static final int FIRST_JOIN_LIMIT = 50;
 
     /**
      * 历史查询包含的消息状态
@@ -1138,14 +1139,15 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper,MessageDO> implem
      */
     private CursorPageBaseResp<ChatBroadcastMsgRespDTO> getNewMessagesForFirstJoin(
             String roomId, RoomMemberDO roomMember, Long acctId) {
-        final int FIRST_JOIN_LIMIT = 100;
 
         // 1. 优先走窗口
         List<ChatBroadcastMsgRespDTO> latest = messageWindowService.getLatestFromWindow(roomId, FIRST_JOIN_LIMIT);
 
-        // 2. 窗口不可用 → DB 兜底最近 N 条
-        if (latest == null) {
-            log.debug("[首次加入-降级DB] room={}, acctId={}", roomId, acctId);
+        // 2. 窗口不可用 (null) 或 窗口空 (key 过期/被清理) → DB 兜底最近 N 条
+        //    空列表不代表房间无消息，必须查 DB 确认，否则首次加入的用户可能看到空房间
+        if (latest == null || latest.isEmpty()) {
+            log.debug("[首次加入-降级DB] room={}, acctId={}, windowNull={}",
+                    roomId, acctId, latest == null);
             CursorPageBaseResp<MessageDO> page = CursorUtils.getAfterCursor(
                     this, null, FIRST_JOIN_LIMIT,
                     wrapper -> wrapper

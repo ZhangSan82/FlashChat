@@ -19,6 +19,7 @@ public class SaTokenConfiguration implements WebMvcConfigurer {
                     .notMatch(
                             "/api/FlashChat/v1/account/auto-register",
                             "/api/FlashChat/v1/account/login",
+                            "/api/FlashChat/v1/account/login-by-email",
                             "/api/FlashChat/v1/feedback",
                             "/api/FlashChat/v1/room/public",
                             "/api/FlashChat/v1/room/public/**",

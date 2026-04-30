@@ -5,6 +5,7 @@ import com.flashchat.channel.ChannelPushService;
 import com.flashchat.channel.event.MemberKickedFromRoomEvent;
 import com.flashchat.channel.event.MemberOfflineEvent;
 import com.flashchat.channel.event.MemberOnlineEvent;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.gameservice.constant.GameWsEventType;
 import com.flashchat.gameservice.dao.entity.GamePlayerDO;
 import com.flashchat.gameservice.dao.enums.EndReasonEnum;
@@ -59,6 +60,7 @@ public class GameEventListener {
     private final GameTurnTimer gameTurnTimer;
     private final ChannelPushService channelPushService;
     private final WhoIsSpyEngine whoIsSpyEngine;
+    private final OssAssetUrlService ossAssetUrlService;
 
     /**
      * 成员掉线。
@@ -264,7 +266,7 @@ public class GameEventListener {
         payload.put("gameId", gameId);
         payload.put("accountId", accountId);
         payload.put("nickname", playerRecord != null ? playerRecord.getNickname() : "");
-        payload.put("avatar", playerRecord != null ? playerRecord.getAvatar() : "");
+        payload.put("avatar", playerRecord != null ? ossAssetUrlService.resolveAccessUrl(playerRecord.getAvatar()) : "");
         payload.put("playerType", playerRecord != null ? playerRecord.getPlayerType() : null);
         payload.put("playerCount", playerCount);
         return payload;

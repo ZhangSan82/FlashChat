@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.gameservice.config.GameConfig;
 import com.flashchat.gameservice.dao.entity.GameDescriptionDO;
 import com.flashchat.gameservice.dao.entity.GamePlayerDO;
@@ -75,6 +76,7 @@ public class GamePlayServiceImpl extends ServiceImpl<GamePlayerMapper, GamePlaye
     private final GameContextManager gameContextManager;
     private final GameActionLockManager gameActionLockManager;
     private final WhoIsSpyEngine whoIsSpyEngine;
+    private final OssAssetUrlService ossAssetUrlService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -418,7 +420,7 @@ public class GamePlayServiceImpl extends ServiceImpl<GamePlayerMapper, GamePlaye
         return GamePlayerRespDTO.builder()
                 .accountId(player.getAccountId())
                 .nickname(player.getNickname())
-                .avatar(player.getAvatar())
+                .avatar(resolvePlayerAvatar(player.getAvatar()))
                 .playerType(player.getPlayerType())
                 .aiProvider(player.getAiProvider())
                 .aiPersona(player.getAiPersona())
@@ -431,7 +433,7 @@ public class GamePlayServiceImpl extends ServiceImpl<GamePlayerMapper, GamePlaye
         return GamePlayerRespDTO.builder()
                 .accountId(player.getAccountId())
                 .nickname(player.getNickname())
-                .avatar(player.getAvatar())
+                .avatar(resolvePlayerAvatar(player.getAvatar()))
                 .playerType(player.getPlayerType() != null ? player.getPlayerType().getCode() : null)
                 .aiProvider(player.getAiProvider() != null ? player.getAiProvider().getCode() : null)
                 .aiPersona(player.getAiPersona() != null ? player.getAiPersona().getCode() : null)
@@ -444,7 +446,7 @@ public class GamePlayServiceImpl extends ServiceImpl<GamePlayerMapper, GamePlaye
         return GameResultRespDTO.PlayerResultDTO.builder()
                 .accountId(player.getAccountId())
                 .nickname(player.getNickname())
-                .avatar(player.getAvatar())
+                .avatar(resolvePlayerAvatar(player.getAvatar()))
                 .playerType(player.getPlayerType())
                 .role(player.getRole())
                 .word(player.getWord())
@@ -540,5 +542,9 @@ public class GamePlayServiceImpl extends ServiceImpl<GamePlayerMapper, GamePlaye
             throw new ClientException(message);
         }
         return value.trim();
+    }
+
+    private String resolvePlayerAvatar(String value) {
+        return ossAssetUrlService.resolveAccessUrl(value);
     }
 }

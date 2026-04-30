@@ -1,6 +1,8 @@
 package com.flashchat.gameservice.engine;
 
 import com.flashchat.channel.ChannelPushService;
+import com.flashchat.channel.event.GameEndedNotifyEvent;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.gameservice.ai.AiContextAssembler;
 import com.flashchat.gameservice.ai.AiPlayerService;
 import com.flashchat.gameservice.ai.model.AiDescribeInput;
@@ -12,6 +14,7 @@ import com.flashchat.gameservice.timer.GameTurnTimer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,12 +61,16 @@ class WhoIsSpyEngineTest {
     private AiPlayerService aiPlayerService;
 
     @Mock
+    private OssAssetUrlService ossAssetUrlService;
+
+    @Mock
     private ExecutorService aiPlayerExecutor;
 
     private WhoIsSpyEngine engine;
 
     @BeforeEach
     void setUp() {
+        lenient().when(ossAssetUrlService.resolveAccessUrl(any())).thenAnswer(invocation -> invocation.getArgument(0));
         engine = new WhoIsSpyEngine(
                 channelPushService,
                 gameContextManager,
@@ -71,6 +79,7 @@ class WhoIsSpyEngineTest {
                 eventPublisher,
                 aiContextAssembler,
                 aiPlayerService,
+                ossAssetUrlService,
                 aiPlayerExecutor
         );
     }
@@ -322,6 +331,69 @@ class WhoIsSpyEngineTest {
         GameContext.DescriptionRecord record = ctx.getCurrentRoundDescriptions().get(0);
         assertThat(record.getPlayerId()).isEqualTo(501L);
         assertThat(record.isSkipped()).isTrue();
+    }
+
+    @Test
+    void enterVotingPhase_shouldEndGameWhenLastHumanIsEliminated() {
+        GameContext ctx = newContext("game-no-humans-left");
+        GamePlayerInfo aiCivilianOne = buildAiPlayer(601L, -1L, 1, GameRoleEnum.CIVILIAN, PlayerStatusEnum.ALIVE);
+        GamePlayerInfo aiSpy = buildAiPlayer(602L, -2L, 2, GameRoleEnum.SPY, PlayerStatusEnum.ALIVE);
+        GamePlayerInfo humanCivilian = buildHumanPlayer(603L, 3L, 3, GameRoleEnum.CIVILIAN, PlayerStatusEnum.ALIVE);
+        GamePlayerInfo aiCivilianTwo = buildAiPlayer(604L, -3L, 4, GameRoleEnum.CIVILIAN, PlayerStatusEnum.ALIVE);
+        preparePlayers(ctx, aiCivilianOne, aiSpy, humanCivilian, aiCivilianTwo);
+        ctx.setCivilianWord("程序员");
+        ctx.setSpyWord("测试员");
+        ctx.startNewRound();
+        ctx.getCurrentPhase().set(RoundPhaseEnum.DESCRIBING);
+        ctx.castVote(601L, 603L);
+        ctx.castVote(602L, 603L);
+        ctx.castVote(603L, 602L);
+
+        when(aiContextAssembler.buildVoteInput(any(GameContext.class), any(GamePlayerInfo.class))).thenAnswer(invocation -> {
+            GamePlayerInfo aiPlayer = invocation.getArgument(1);
+            return AiVoteInput.builder()
+                    .gameId(ctx.getGameId())
+                    .aiPlayerId(aiPlayer.getPlayerId())
+                    .provider(aiPlayer.getAiProvider())
+                    .persona(aiPlayer.getAiPersona())
+                    .role(aiPlayer.getRole())
+                    .word(aiPlayer.getWord())
+                    .roundNumber(ctx.getCurrentRound().get())
+                    .candidates(List.of())
+                    .build();
+        });
+        when(aiPlayerService.generateVoteTarget(any(AiVoteInput.class))).thenReturn(603L);
+        runSubmittedTasksImmediately();
+        runPostVoteDelayImmediately();
+
+        engine.enterVotingPhase(ctx);
+
+        assertThat(ctx.getGameStatus().get()).isEqualTo(GameStatusEnum.ENDED);
+        assertThat(humanCivilian.getStatus()).isEqualTo(PlayerStatusEnum.ELIMINATED);
+        verify(gamePersistService).persistRoundResult(ctx, 603L, false);
+        verify(gamePersistService).persistGameEnd(ctx, null, EndReasonEnum.NO_HUMANS_LEFT);
+        verify(gameContextManager).remove(ctx.getGameId());
+    }
+
+    @Test
+    void endGame_shouldPublishReadableSummaryWhenWordsAreMojibake() {
+        GameContext ctx = newContext("game-summary-readable");
+        GamePlayerInfo civilian = buildHumanPlayer(701L, 7L, 1, GameRoleEnum.CIVILIAN, PlayerStatusEnum.ALIVE);
+        GamePlayerInfo spy = buildAiPlayer(702L, -7L, 2, GameRoleEnum.SPY, PlayerStatusEnum.ALIVE);
+        preparePlayers(ctx, civilian, spy);
+        ctx.setCivilianWord("\u00E7\u00A8\u2039\u00E5\u00BA\u008F\u00E5\u2018\u02DC");
+        ctx.setSpyWord("\u00E6\u00B5\u2039\u00E8\u00AF\u2022\u00E5\u2018\u02DC");
+
+        engine.endGame(ctx, WinnerSideEnum.CIVILIAN, EndReasonEnum.NORMAL);
+
+        ArgumentCaptor<GameEndedNotifyEvent> eventCaptor = ArgumentCaptor.forClass(GameEndedNotifyEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getSummaryMessage())
+                .contains("\u8C01\u662F\u5367\u5E95\u6E38\u620F\u7ED3\u675F")
+                .contains("\u5E73\u6C11")
+                .contains("\u83B7\u80DC")
+                .contains("\u7A0B\u5E8F\u5458")
+                .contains("\u6D4B\u8BD5\u5458");
     }
 
     private void runSubmittedTasksImmediately() {

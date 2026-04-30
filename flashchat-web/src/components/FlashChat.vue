@@ -2,11 +2,11 @@
   <div class="fc-root">
     <div v-if="!authReady" class="fc-loading">
       <div class="fc-pulse"></div>
-      <p v-if="!initFailed" class="fc-load-text">姝ｅ湪杩炴帴 FlashChat...</p>
+      <p v-if="!initFailed" class="fc-load-text">正在连接 FlashChat...</p>
       <div v-else class="fc-load-fail">
-        <p class="fc-load-text fc-danger">杩炴帴澶辫触</p>
+        <p class="fc-load-text fc-danger">连接失败</p>
         <p class="fc-load-hint">请确认后端服务已经启动，并检查 `8081` 端口。</p>
-        <button class="fc-retry" @click="retryInit">閲嶆柊杩炴帴</button>
+        <button class="fc-retry" @click="retryInit">重新连接</button>
       </div>
     </div>
 
@@ -193,6 +193,7 @@
         @close="profileOpen = false"
         @set-password="openPasswordDialog('set')"
         @change-password="openPasswordDialog('change')"
+        @feedback="openFeedbackCenter('profile_panel')"
         @upgrade="profileOpen = false; upgradeDlg = true"
         @logout="doLogout"
         @delete-account="doDeleteAccount"
@@ -267,6 +268,21 @@
         :pending="memberActionConfirm.pending"
         @close="closeMemberActionConfirm"
         @confirm="confirmMemberAction"
+    />
+
+    <ActionConfirmDialog
+        :visible="logoutConfirm.visible"
+        tone="muted"
+        kicker="Sign Out"
+        title="确定退出登录？"
+        text="退出后当前会话将断开，再次使用需要重新登录。房间状态和本地缓存不会受影响。"
+        :facts="['当前会话的 WebSocket 连接将断开', '登录 token 会立即失效', '重新登录即可恢复房间列表和消息']"
+        primary-text="退出登录"
+        pending-text="正在退出..."
+        secondary-text="留在这里"
+        :pending="logoutConfirm.pending"
+        @close="closeLogoutConfirm"
+        @confirm="confirmLogout"
     />
 
     <!-- Toast -->
@@ -404,6 +420,10 @@ const memberActionConfirm = ref({
   roomId: '',
   action: '',
   member: null
+})
+const logoutConfirm = ref({
+  visible: false,
+  pending: false
 })
 
 const MOBILE_MESSAGE_LONG_PRESS_MS = 380
@@ -825,7 +845,8 @@ async function forceLoadRoom(rid, options = {}) {
     stopTyping(typingRoomId)
   }
   const isReset = options.reset === true
-  const requestId = isReset ? ++roomLoadSeq : roomLoadSeq
+  // 无论是否 reset 都自增 seq，保证每个并发请求都能被正确判定新旧
+  const requestId = ++roomLoadSeq
   if (isReset) curMembers.value = []
 
   const [members] = await Promise.all([
@@ -833,12 +854,36 @@ async function forceLoadRoom(rid, options = {}) {
     chat.loadMessages(rid, { reset: isReset })
   ])
 
-  if ((isReset && requestId !== roomLoadSeq) || chat.currentRoomId.value !== rid) return
+  // 过期请求 或 当前房间已切走 → 放弃覆盖状态
+  if (requestId !== roomLoadSeq || chat.currentRoomId.value !== rid) return
   curMembers.value = members || []
   if (panelRoomId.value === rid) {
     panelMembers.value = members || []
   }
   chat.refreshRoomCountdowns()
+  maybeWarnOnRoomEnter(rid)
+}
+
+// 进入房间时主动提醒，补漏 ROOM_EXPIRING/GRACE WS 推送错过的情况
+const _enteredRoomWarned = new Set()
+function maybeWarnOnRoomEnter(roomId) {
+  if (!roomId) return
+  const state = chat.getRoomState(roomId)
+  if (!state) return
+  // 对同一房间同一状态只提醒一次
+  const warnKey = `${roomId}:${state.kind}`
+  if (_enteredRoomWarned.has(warnKey)) return
+
+  if (state.kind === 'grace') {
+    _enteredRoomWarned.add(warnKey)
+    showToast(state.detail || '房间已到期，进入宽限期', 'warning', 4200)
+  } else if (state.kind === 'expiring') {
+    _enteredRoomWarned.add(warnKey)
+    showToast(state.detail || '房间即将到期', 'warning', 4200)
+  } else if (state.kind === 'closed') {
+    _enteredRoomWarned.add(warnKey)
+    showToast('房间已关闭，只能查看历史消息', 'warning', 4200)
+  }
 }
 
 async function switchToGameRoom(roomId) {
@@ -1317,8 +1362,36 @@ function onDrawerAction(act) {
   else if (act === 'public') router.push('/room/public')
   else if (act === 'credits') router.push('/credits')
   else if (act === 'invites') router.push('/invites')
+  else if (act === 'feedback') openFeedbackCenter('drawer')
   else if (act === 'profile') profileOpen.value = true
   else if (act === 'logout') doLogout()
+}
+
+function resolveFeedbackSourcePage() {
+  const routeName = String(route.name || '')
+  if (routeName === 'Chat') {
+    return chat.currentRoomId.value ? 'chat_room' : 'chat_room_list'
+  }
+  if (routeName === 'PublicRooms') return 'public_lobby'
+  if (routeName === 'Credits') return 'credits_center'
+  if (routeName === 'Invites') return 'invite_center'
+  if (routeName === 'AdminControl') return 'admin_control'
+  return routeName ? routeName.toLowerCase() : 'flashchat_frontend'
+}
+
+function openFeedbackCenter(sourceScene = 'manual_entry') {
+  // 同 tab 跳转,避免 window.open + noopener 在 Edge 等浏览器下新 tab 渲染失败,
+  // 用户用浏览器返回键即可回到当前页面,WS 会自动重连。
+  const target = {
+    name: 'FeedbackCenter',
+    query: {
+      sourcePage: resolveFeedbackSourcePage(),
+      sourceScene
+    }
+  }
+  drawerOpen.value = false
+  profileOpen.value = false
+  router.push(target).catch(() => {})
 }
 
 function showRoomList() {
@@ -1482,12 +1555,27 @@ function onUpgraded(resp) {
 }
 
 // 鈽?鐧诲嚭
-async function doLogout() {
-  if (!confirm('确定退出登录？')) return
-  await auth.logout()
-  stopTyping()
-  ws.disconnect()
-  window.location.reload()
+function doLogout() {
+  logoutConfirm.value = { visible: true, pending: false }
+}
+
+function closeLogoutConfirm() {
+  if (logoutConfirm.value.pending) return
+  logoutConfirm.value.visible = false
+}
+
+async function confirmLogout() {
+  if (logoutConfirm.value.pending) return
+  logoutConfirm.value.pending = true
+  try {
+    await auth.logout()
+    stopTyping()
+    ws.disconnect()
+    window.location.reload()
+  } catch (e) {
+    logoutConfirm.value.pending = false
+    showToast(e?.message || '退出失败，请重试', 'error')
+  }
 }
 
 // 鈽?娉ㄩ攢璐﹀彿
@@ -1575,11 +1663,15 @@ async function doInit() {
     })
     ws.on(WS_TYPE.ROOM_GRACE, (d, r) => {
       chat.onRoomGrace(d, r)
+      // 宽限期开始不再允许发消息，停止 typing 广播
+      if (r && typingRoomId === r) stopTyping(r)
       showToast('房间已到期，现在进入 5 分钟宽限期', 'warning', 4200)
     })
     ws.on(WS_TYPE.ROOM_CLOSED, (d, r) => {
       chat.onRoomClosed(d, r)
       if (r && panelRoomId.value === r) closeRoomInfoPanel()
+      // 当前房间被关闭：停止 typing 广播，避免"正在输入"残留提示
+      if (r && typingRoomId === r) stopTyping(r)
       showToast('房间已关闭')
     })
     ws.on(WS_TYPE.SYSTEM_MSG, d => { if (typeof d === 'string') showToast(d) })

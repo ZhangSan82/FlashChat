@@ -21,13 +21,17 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -493,7 +497,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
         if (channels == null || channels.isEmpty()) return;
 
         broadcastCounter.increment();
-        broadcastTimer.record(() -> doBroadcast(channels, resp, null));
+        broadcastTimer.record(() -> doBroadcastOptimized(channels, resp, null));
     }
 
     /**
@@ -506,59 +510,132 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
         broadcastCounter.increment();
         broadcastTimer.record(() -> {
             Channel excludeCh = (excludeUserId != null) ? userChannels.get(excludeUserId) : null;
-            doBroadcast(channels, resp, excludeCh);
+            doBroadcastOptimized(channels, resp, excludeCh);
         });
     }
 
-    /**
-     * 广播核心逻辑（write + flush 两轮遍历）
-     */
-    private void doBroadcast(Set<Channel> channels, WsRespDTO<?> resp, Channel excludeCh) {
+    private void doBroadcastOptimized(Set<Channel> channels, WsRespDTO<?> resp, Channel excludeCh) {
         String json = broadcastSerializeTimer.record(() -> JsonUtil.toJson(resp));
-        List<BroadcastWriteSample> writeSamples = new ArrayList<>(channels.size());
+        Map<EventLoop, List<Channel>> channelsByEventLoop = new LinkedHashMap<>();
+        int plannedWrites = 0;
 
-        // 第一轮：write（不 flush），跳过不可写的慢客户端
-        broadcastWriteTimer.record(() -> {
+        for (Channel ch : channels) {
+            if (ch == excludeCh) continue;
+            if (!ch.isActive()) continue;
+            if (!ch.isWritable()) {
+                slowClientSkipCounter.increment();
+                continue;
+            }
+            channelsByEventLoop.computeIfAbsent(ch.eventLoop(), ignored -> new ArrayList<>()).add(ch);
+            plannedWrites++;
+        }
+
+        if (plannedWrites == 0) {
+            return;
+        }
+
+        ByteBuf payload = Unpooled.copiedBuffer(json, StandardCharsets.UTF_8);
+        long batchStartAtNanos = System.nanoTime();
+        AtomicInteger pendingWrites = new AtomicInteger(plannedWrites);
+
+        try {
+            for (Map.Entry<EventLoop, List<Channel>> entry : channelsByEventLoop.entrySet()) {
+                EventLoop eventLoop = entry.getKey();
+                List<Channel> eventLoopChannels = entry.getValue();
+                ByteBuf eventLoopPayload = payload.retainedDuplicate();
+                long eventLoopQueuedAtNanos = System.nanoTime();
+                try {
+                    eventLoop.execute(() -> writeBroadcastOnEventLoop(
+                            eventLoopChannels,
+                            eventLoopPayload,
+                            eventLoopQueuedAtNanos,
+                            batchStartAtNanos,
+                            pendingWrites));
+                } catch (RuntimeException ex) {
+                    eventLoopPayload.release();
+                    completeFailedBroadcastGroup(eventLoopChannels.size(), pendingWrites, batchStartAtNanos);
+                    log.warn("[BroadcastEventLoopSubmitFailed] channels={}", eventLoopChannels.size(), ex);
+                }
+            }
+        } finally {
+            payload.release();
+        }
+    }
+
+    private void writeBroadcastOnEventLoop(List<Channel> channels,
+                                           ByteBuf payload,
+                                           long eventLoopQueuedAtNanos,
+                                           long batchStartAtNanos,
+                                           AtomicInteger pendingWrites) {
+        try {
+            Timer.Sample writeSample = Timer.start(meterRegistry);
             for (Channel ch : channels) {
-                if (ch == excludeCh) continue;
-                if (!ch.isActive()) continue;
-                if (!ch.isWritable()) {
-                    slowClientSkipCounter.increment();
+                if (!ch.isActive()) {
+                    completeBroadcastWrite(pendingWrites, batchStartAtNanos);
                     continue;
                 }
-                long writeIssuedAtNanos = System.nanoTime();
-                ChannelFuture writeFuture = ch.write(new TextWebSocketFrame(json));
-                writeSamples.add(new BroadcastWriteSample(writeFuture, writeIssuedAtNanos));
+                if (!ch.isWritable()) {
+                    slowClientSkipCounter.increment();
+                    completeBroadcastWrite(pendingWrites, batchStartAtNanos);
+                    continue;
+                }
+                writeBroadcastFrame(ch, payload, eventLoopQueuedAtNanos, batchStartAtNanos, pendingWrites);
             }
-        });
+            writeSample.stop(broadcastWriteTimer);
 
-        long batchStartAtNanos = System.nanoTime();
-        AtomicInteger pendingWrites = new AtomicInteger(writeSamples.size());
-        for (BroadcastWriteSample sample : writeSamples) {
-            sample.future().addListener(future -> {
-                long writeCompleteElapsedNanos = System.nanoTime() - sample.writeIssuedAtNanos();
+            Timer.Sample flushSample = Timer.start(meterRegistry);
+            for (Channel ch : channels) {
+                if (ch.isActive()) {
+                    ch.flush();
+                }
+            }
+            flushSample.stop(broadcastFlushTimer);
+        } finally {
+            payload.release();
+        }
+    }
+
+    private void writeBroadcastFrame(Channel ch,
+                                     ByteBuf payload,
+                                     long eventLoopQueuedAtNanos,
+                                     long batchStartAtNanos,
+                                     AtomicInteger pendingWrites) {
+        TextWebSocketFrame frame = new TextWebSocketFrame(payload.retainedDuplicate());
+        try {
+            ChannelFuture writeFuture = ch.write(frame);
+            frame = null;
+            writeFuture.addListener(future -> {
+                long writeCompleteElapsedNanos = System.nanoTime() - eventLoopQueuedAtNanos;
                 broadcastWriteCompleteTimer.record(writeCompleteElapsedNanos, TimeUnit.NANOSECONDS);
                 if (!future.isSuccess()) {
                     broadcastWriteFailureCounter.increment();
                 }
-                if (pendingWrites.decrementAndGet() == 0) {
-                    long batchElapsedNanos = System.nanoTime() - batchStartAtNanos;
-                    broadcastBatchCompleteTimer.record(batchElapsedNanos, TimeUnit.NANOSECONDS);
-                }
+                completeBroadcastWrite(pendingWrites, batchStartAtNanos);
             });
-        }
-
-        // 第二轮：flush
-        // 同一 EventLoop 上的多个 flush，第一个真正触发系统调用，后续无新数据时短路跳过
-        broadcastFlushTimer.record(() -> {
-            for (Channel ch : channels) {
-                if (ch == excludeCh) continue;
-                ch.flush();
+        } catch (RuntimeException ex) {
+            if (frame != null) {
+                frame.release();
             }
-        });
+            broadcastWriteFailureCounter.increment();
+            completeBroadcastWrite(pendingWrites, batchStartAtNanos);
+            log.warn("[BroadcastWriteFailed] channel={}", ch.id(), ex);
+        }
     }
 
-    private record BroadcastWriteSample(ChannelFuture future, long writeIssuedAtNanos) {
+    private void completeFailedBroadcastGroup(int failedWrites,
+                                              AtomicInteger pendingWrites,
+                                              long batchStartAtNanos) {
+        for (int i = 0; i < failedWrites; i++) {
+            broadcastWriteFailureCounter.increment();
+            completeBroadcastWrite(pendingWrites, batchStartAtNanos);
+        }
+    }
+
+    private void completeBroadcastWrite(AtomicInteger pendingWrites, long batchStartAtNanos) {
+        if (pendingWrites.decrementAndGet() == 0) {
+            long batchElapsedNanos = System.nanoTime() - batchStartAtNanos;
+            broadcastBatchCompleteTimer.record(batchElapsedNanos, TimeUnit.NANOSECONDS);
+        }
     }
 
     private String resolveAccessUrl(String value) {
@@ -740,7 +817,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
         if (onlineChannels != null && !onlineChannels.isEmpty()) {
             broadcastCounter.increment();
             broadcastTimer.record(() ->
-                    doBroadcast(onlineChannels,
+                    doBroadcastOptimized(onlineChannels,
                             WsRespDTO.of(roomId, WsRespDTOTypeEnum.ROOM_CLOSED, "房间已关闭"),
                             null));
         }

@@ -223,6 +223,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 import { listPublicRooms, joinRoom, getRoomMembers, previewRoom as fetchRoomPreview } from '@/api/room'
 import { formatCountdown, getCountdownColor } from '@/utils/formatter'
+import { rememberRoomEntryMode } from '@/utils/roomEntryMode'
 import { getRoomDisplayName, getRoomVisualUrl } from '@/utils/roomVisual'
 import { getRoomPreviewMessages } from '@/utils/roomPreviewCache'
 import { resolveBackendAvatar } from '@/utils/avatar'
@@ -485,6 +486,7 @@ async function doJoinRoom() {
 
   try {
     await joinRoom({ roomId: previewRoom.value.roomId })
+    rememberRoomEntryMode(previewRoom.value.roomId)
     sessionStorage.setItem('fc_last_room', previewRoom.value.roomId)
     router.push('/')
   } catch (e) {
@@ -1457,4 +1459,3 @@ function statusClass(status) {
   }
 }
 </style>
-

@@ -17,6 +17,15 @@
 
       <div class="wp-left-footer">
         <span>FlashChat v1.0</span>
+        <span class="wp-left-footer-dot">·</span>
+        <a
+          class="wp-source-link"
+          href="https://github.com/ZhangSan82/FlashChat.git"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GitHub 源码
+        </a>
       </div>
 
       <!-- decorative blurs -->
@@ -71,6 +80,17 @@
         <p class="wp-register-hint">
           没有账号？
           <a class="wp-register-link" @click.prevent="goRegister">注册账号</a>
+        </p>
+
+        <p class="wp-source-hint">
+          <a
+            class="wp-source-link"
+            href="https://github.com/ZhangSan82/FlashChat.git"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            查看 GitHub 源码
+          </a>
         </p>
 
         <!-- error -->
@@ -188,9 +208,26 @@ function goRegister() {
 .wp-left-footer {
   position: relative;
   z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   color: rgba(255,255,255,0.5);
   letter-spacing: 0.08em;
+}
+
+.wp-left-footer-dot {
+  color: rgba(255,255,255,0.32);
+}
+
+.wp-source-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--fc-duration-normal, 250ms) ease, opacity var(--fc-duration-normal, 250ms) ease;
+}
+
+.wp-source-link:hover {
+  color: rgba(255,255,255,0.86);
 }
 
 .wp-left-blur {
@@ -328,6 +365,19 @@ function goRegister() {
   text-decoration: underline;
 }
 
+.wp-source-hint {
+  display: none;
+  text-align: center;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--fc-text-muted, #A89A8B);
+}
+
+.wp-source-hint .wp-source-link:hover {
+  color: var(--fc-accent);
+  text-decoration: underline;
+}
+
 /* ── spinner ── */
 .wp-spinner {
   width: 18px;
@@ -417,5 +467,7 @@ function goRegister() {
   }
 
   .wp-register-hint { margin-top: 20px; }
+
+  .wp-source-hint { display: block; }
 }
 </style>

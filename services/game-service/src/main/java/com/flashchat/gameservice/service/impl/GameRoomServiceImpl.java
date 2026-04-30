@@ -8,6 +8,7 @@ import com.flashchat.channel.ChannelPushService;
 import com.flashchat.channel.ChannelQueryService;
 import com.flashchat.convention.exception.ClientException;
 import com.flashchat.convention.exception.ServiceException;
+import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.gameservice.config.GameConfig;
 import com.flashchat.gameservice.constant.GameWsEventType;
 import com.flashchat.gameservice.dao.entity.GamePlayerDO;
@@ -71,6 +72,7 @@ public class GameRoomServiceImpl extends ServiceImpl<GameRoomMapper, GameRoomDO>
     private final GameActionLockManager gameActionLockManager;
     private final ChannelQueryService channelQueryService;
     private final ChannelPushService channelPushService;
+    private final OssAssetUrlService ossAssetUrlService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -78,7 +80,7 @@ public class GameRoomServiceImpl extends ServiceImpl<GameRoomMapper, GameRoomDO>
         Long creatorId = UserContext.getRequiredLoginId();
         String roomId = normalizeRequiredText(request.getRoomId(), "房间 ID 不能为空");
         String nickname = normalizeRequiredText(request.getNickname(), "昵称不能为空");
-        String avatar = normalizeOptionalText(request.getAvatar());
+        String avatar = normalizePlayerAvatar(request.getAvatar());
 
         // 只有聊天房间成员才允许在该房间创建游戏
         ensureRoomMember(roomId, creatorId);
@@ -145,7 +147,7 @@ public class GameRoomServiceImpl extends ServiceImpl<GameRoomMapper, GameRoomDO>
         Long accountId = UserContext.getRequiredLoginId();
         String gameId = normalizeRequiredText(request.getGameId(), "游戏 ID 不能为空");
         String nickname = normalizeRequiredText(request.getNickname(), "昵称不能为空");
-        String avatar = normalizeOptionalText(request.getAvatar());
+        String avatar = normalizePlayerAvatar(request.getAvatar());
         ensureNotInOtherGame(accountId, gameId);
         String lockKey = "game:" + gameId;
         try (GameActionLockManager.LockHandle lockHandle = gameActionLockManager.lock(lockKey)) {
@@ -558,7 +560,7 @@ public class GameRoomServiceImpl extends ServiceImpl<GameRoomMapper, GameRoomDO>
         return GamePlayerRespDTO.builder()
                 .accountId(player.getAccountId())
                 .nickname(player.getNickname())
-                .avatar(player.getAvatar())
+                .avatar(resolvePlayerAvatar(player.getAvatar()))
                 .playerType(player.getPlayerType())
                 .aiProvider(player.getAiProvider())
                 .aiPersona(player.getAiPersona())
@@ -655,7 +657,7 @@ public class GameRoomServiceImpl extends ServiceImpl<GameRoomMapper, GameRoomDO>
         payload.put("gameId", gameId);
         payload.put("accountId", player.getAccountId());
         payload.put("nickname", player.getNickname());
-        payload.put("avatar", player.getAvatar());
+        payload.put("avatar", resolvePlayerAvatar(player.getAvatar()));
         payload.put("playerType", player.getPlayerType());
         payload.put("playerCount", playerCount);
         return payload;
@@ -749,6 +751,18 @@ public class GameRoomServiceImpl extends ServiceImpl<GameRoomMapper, GameRoomDO>
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? "" : trimmed;
+    }
+
+    private String normalizePlayerAvatar(String value) {
+        String normalized = normalizeOptionalText(value);
+        if (normalized.isEmpty() || normalized.startsWith("#")) {
+            return normalized;
+        }
+        return ossAssetUrlService.normalizeStorageReference(normalized);
+    }
+
+    private String resolvePlayerAvatar(String value) {
+        return ossAssetUrlService.resolveAccessUrl(value);
     }
 
 }

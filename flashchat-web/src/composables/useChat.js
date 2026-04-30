@@ -4,6 +4,8 @@ import * as roomApi from '@/api/room'
 import { uploadFile } from '@/api/file'
 import { formatTime, formatDate, formatCountdownShort } from '@/utils/formatter'
 import { resolveAvatar, resolveBackendAvatar } from '@/utils/avatar'
+import { normalizeGameText } from '@/utils/gameText'
+import { ROOM_ENTRY_MODE_NEW, rememberRoomEntryMode, resolveInitialMessageLoadMode } from '@/utils/roomEntryMode'
 import { appendRoomPreviewMessage, setRoomPreviewMessages, updateRoomPreviewTopContent } from '@/utils/roomPreviewCache'
 
 /**
@@ -63,8 +65,12 @@ export function useChat(getMemberId, getCurrentUser) {
             ])
             roomsRaw.value = list || []
             Object.assign(unreadMap, unreads || {})
+            // 首次拉到房间列表后，根据当前时间预先推进一次状态
+            advanceRoomStatusByTime()
             rooms.value = roomsRaw.value.map(r => transformRoom(r))
             roomsLoaded.value = true
+            // 确保定时器已启动（loadRooms 可能在 WS 重连后被再次调用，幂等）
+            startLifecycleWatcher()
 
             const targetRoomId = preferredRoomId || sessionStorage.getItem('fc_last_room')
             if (targetRoomId && roomsRaw.value.find(r => r.roomId === targetRoomId)) {
@@ -205,8 +211,59 @@ export function useChat(getMemberId, getCurrentUser) {
         }
     }
 
+    // 用于驱动 getRoomState/countdown 这类依赖"当前时间"的 computed 按秒刷新
+    // 任何只依赖 roomsRaw 的 computed 不会感知 tick；需要它的显式订阅 void lifecycleTick.value
+    const lifecycleTick = ref(0)
+
     function refreshRoomCountdowns() {
+        lifecycleTick.value++
         rooms.value = roomsRaw.value.map(r => transformRoom(r))
+    }
+
+    // 定时按 expireTime/graceEndTime 把 room.status 自动推进，
+    // 避免 WS 丢事件时 status 滞后（比如断线期间房间过期）
+    function advanceRoomStatusByTime() {
+        const now = Date.now()
+        let dirty = false
+        for (const room of roomsRaw.value) {
+            const expireAt = parseRoomTime(room.expireTime)
+            const graceEnd = resolveRoomGraceEnd(room)
+            const status = Number(room.status ?? 0)
+
+            if (status < 4 && graceEnd != null && graceEnd <= now) {
+                room.status = 4
+                room.statusDesc = '已关闭'
+                dirty = true
+            } else if (status < 3 && expireAt != null && expireAt <= now) {
+                room.status = 3
+                room.statusDesc = '宽限期'
+                if (!room.graceEndTime) {
+                    room.graceEndTime = new Date(expireAt + ROOM_GRACE_PERIOD_MS).toISOString()
+                }
+                dirty = true
+            } else if (status < 2 && expireAt != null
+                    && expireAt - now > 0 && expireAt - now <= ROOM_GRACE_PERIOD_MS) {
+                room.status = 2
+                room.statusDesc = room.statusDesc || '即将到期'
+                dirty = true
+            }
+        }
+        return dirty
+    }
+
+    let lifecycleTimerId = null
+    function startLifecycleWatcher() {
+        if (lifecycleTimerId) return
+        lifecycleTimerId = setInterval(() => {
+            advanceRoomStatusByTime()
+            refreshRoomCountdowns()
+        }, 10_000)
+    }
+    function stopLifecycleWatcher() {
+        if (lifecycleTimerId) {
+            clearInterval(lifecycleTimerId)
+            lifecycleTimerId = null
+        }
     }
 
     function getMessageIndexId(message) {
@@ -401,15 +458,24 @@ export function useChat(getMemberId, getCurrentUser) {
     async function fetchHistoryPage(roomId, cursor, pageSize, requestId) {
         let resp = await chatApi.getHistoryMessages(roomId, cursor, pageSize)
 
+        // 跳过连续的"空页"直到拿到数据 / 到顶 / 没 cursor
+        // 加硬上限防止后端 cursor 循环时前端失控空转
+        const SKIP_EMPTY_PAGE_LIMIT = 5
+        let skipped = 0
+        const seenCursors = new Set()
         while (
             resp &&
             (resp.list?.length || 0) === 0 &&
             resp.isLast === false &&
-            resp.cursor
+            resp.cursor &&
+            !seenCursors.has(resp.cursor) &&
+            skipped < SKIP_EMPTY_PAGE_LIMIT
         ) {
             if (requestId !== messageLoadSeq || currentRoomId.value !== roomId) {
                 return null
             }
+            seenCursors.add(resp.cursor)
+            skipped++
             resp = await chatApi.getHistoryMessages(roomId, resp.cursor, pageSize)
         }
 
@@ -431,8 +497,17 @@ export function useChat(getMemberId, getCurrentUser) {
 
         try {
             const cursor = msgCursorMap[roomId] || null
-            const resp = await fetchHistoryPage(roomId, cursor, 20, requestId)
-            if (requestId !== messageLoadSeq || currentRoomId.value !== roomId) return
+            const loadMode = resolveInitialMessageLoadMode({
+                roomId,
+                reset: shouldReset
+            })
+            const resp = loadMode === ROOM_ENTRY_MODE_NEW
+                ? await chatApi.getNewMessages(roomId)
+                : await fetchHistoryPage(roomId, cursor, 20, requestId)
+            const stillCurrent = requestId === messageLoadSeq && currentRoomId.value === roomId
+            if (!stillCurrent) return
+
+            // resp 为空：视为已经到顶，停止 loader
             if (!resp) { messagesLoaded.value = true; return }
 
             const newMsgs = (resp.list || []).map(msg => transformMessage(msg, roomId))
@@ -460,12 +535,23 @@ export function useChat(getMemberId, getCurrentUser) {
             else delete msgCursorMap[roomId]
 
             syncMessagesWithRoomUsers(roomId)
-            messagesLoaded.value = resp.isLast !== false || ordered.length === 0
+
+            // messagesLoaded 对应 vue-advanced-chat 的 "no more history" 语义：
+            // - resp.isLast === true：后端明确到顶 → true（停止上拉 spinner）
+            // - 无 cursor：没有下一页 → true（防止死循环翻页）
+            // - 本次返回为空：没有更多数据 → true
+            // 其余（isLast 未提供 / 还有下一页）→ false，允许继续上拉
+            messagesLoaded.value =
+                resp.isLast === true ||
+                !resp.cursor ||
+                ordered.length === 0
             await doAck(roomId)
         } catch (e) {
-            if (requestId !== messageLoadSeq || currentRoomId.value !== roomId) return
             console.error('[Chat] 加载消息失败', e)
-            messagesLoaded.value = true
+            // 无条件停止 loader，避免中心转圈无限残留；过期请求也得让 UI 可用
+            if (currentRoomId.value === roomId) {
+                messagesLoaded.value = true
+            }
         }
     }
 
@@ -592,6 +678,7 @@ export function useChat(getMemberId, getCurrentUser) {
         const currentMemberId = getMemberId()
         const isSelf = currentMemberId && senderId === String(currentMemberId)
         const roomUser = isSelf ? null : getRoomUserDisplay(roomId, senderId)
+        const content = msg.system ? normalizeGameText(msg.content || '') : (msg.content || '')
         const usernameDisplay = isSelf
             ? getCurrentUserName()
             : (roomUser?.username || msg.username || '匿名')
@@ -602,7 +689,7 @@ export function useChat(getMemberId, getCurrentUser) {
         return {
             _id: msg._id || `msg-${msg.indexId || Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             indexId: msg.indexId,
-            content: msg.content || '',
+            content,
             senderId: senderId,
             username: usernameDisplay,
             avatar: avatarDisplay,
@@ -1107,6 +1194,7 @@ export function useChat(getMemberId, getCurrentUser) {
 
     async function joinRoom(roomId) {
         const room = await roomApi.joinRoom({ roomId })
+        rememberRoomEntryMode(room?.roomId || roomId)
         await loadRooms(room?.roomId || roomId)
         return room
     }
@@ -1210,7 +1298,7 @@ export function useChat(getMemberId, getCurrentUser) {
         const currentMemberId = getMemberId()
         const isSelf = currentMemberId && senderId === String(currentMemberId)
         const roomUser = isSelf ? null : getRoomUserDisplay(roomId, senderId)
-        const content = msg.content || ''
+        const content = msg.system ? normalizeGameText(msg.content || '') : (msg.content || '')
         const recalled = Boolean(msg.deleted) && isRecallPlaceholder(content)
         const deleted = Boolean(msg.deleted) && !recalled
         const usernameDisplay = isSelf
@@ -1286,7 +1374,7 @@ export function useChat(getMemberId, getCurrentUser) {
         const currentMemberId = getMemberId()
         const isSelf = currentMemberId && senderId === String(currentMemberId)
         const roomUser = isSelf ? null : getRoomUserDisplay(roomId, senderId)
-        const content = msg.content || ''
+        const content = msg.system ? normalizeGameText(msg.content || '') : (msg.content || '')
         const deleted = Boolean(msg.deleted)
         const usernameDisplay = isSelf
             ? getCurrentUserName()
@@ -1452,6 +1540,8 @@ export function useChat(getMemberId, getCurrentUser) {
     }
 
     function getRoomState(roomId = currentRoomId.value) {
+        // 订阅 lifecycleTick：定时器每 10s 递增一次，驱动 banner 倒计时文案更新
+        void lifecycleTick.value
         const room = getRoomRaw(roomId)
         if (!roomId || !room) {
             return {
@@ -1472,7 +1562,21 @@ export function useChat(getMemberId, getCurrentUser) {
         const status = Number(room.status ?? 0)
         const selfMuted = isCurrentUserMuted(roomId)
 
-        if (status === 4) {
+        // 时间兜底：
+        // 前端 status 受 WS 推送驱动，断线/丢事件时可能滞后。
+        // 这里根据 expireTime / graceEndTime 纯客户端重算 effectiveStatus，
+        // 取 status 和 timeStatus 中"更严重"的一级，永不误判为 active。
+        let effectiveStatus = status
+        if (status < 4 && graceEndAt != null && graceEndAt <= now) {
+            effectiveStatus = 4 // 宽限期已结束 → 视为关闭
+        } else if (status < 3 && expireAt != null && expireAt <= now) {
+            effectiveStatus = 3 // 到期时间已过 → 视为宽限期
+        } else if (status < 2 && expireRemaining != null && expireRemaining > 0
+                && expireRemaining <= ROOM_GRACE_PERIOD_MS) {
+            effectiveStatus = 2 // 到期前 5 分钟内 → 视为即将到期
+        }
+
+        if (effectiveStatus === 4) {
             return {
                 kind: 'closed',
                 canSend: false,
@@ -1483,16 +1587,19 @@ export function useChat(getMemberId, getCurrentUser) {
             }
         }
 
-        if (status === 3) {
+        if (effectiveStatus === 3) {
+            const fallbackGrace = graceRemaining != null
+                ? graceRemaining
+                : (expireAt != null ? expireAt + ROOM_GRACE_PERIOD_MS - now : null)
             return {
                 kind: 'grace',
                 canSend: false,
                 title: '房间进入宽限期',
-                detail: graceRemaining != null && graceRemaining > 0
-                    ? `现在只能查看消息，${formatInlineCountdown(graceRemaining)} 后正式关闭。`
+                detail: fallbackGrace != null && fallbackGrace > 0
+                    ? `现在只能查看消息，${formatInlineCountdown(fallbackGrace)} 后正式关闭。`
                     : '现在只能查看消息，宽限期结束后会正式关闭。',
                 blockReason: '房间已到期，当前处于宽限期，只能查看消息',
-                countdownMs: graceRemaining
+                countdownMs: fallbackGrace
             }
         }
 
@@ -1507,7 +1614,7 @@ export function useChat(getMemberId, getCurrentUser) {
             }
         }
 
-        if ((status === 2) || (expireRemaining != null && expireRemaining > 0 && expireRemaining <= ROOM_GRACE_PERIOD_MS)) {
+        if (effectiveStatus === 2) {
             return {
                 kind: 'expiring',
                 canSend: true,
@@ -1678,6 +1785,7 @@ export function useChat(getMemberId, getCurrentUser) {
         loadRooms, loadMessages, loadRoomUsers: loadRoomUsersWithState, sendMessage: sendMessageWithGuard,
         createRoom, joinRoom, leaveRoom, closeRoom,
         doAck, refreshRoomCountdowns, refreshAllRoomUsers,
+        startLifecycleWatcher, stopLifecycleWatcher,
         isCurrentUserHost, isCurrentUserMuted, getRoomState, canRecallMessage, canDeleteMessage,
         hideMessageForSelf, recallMessage, deleteMessage, deleteMessageForAll, toggleReaction, onTypingStatus,
         kickMember, muteMember, unmuteMember,
