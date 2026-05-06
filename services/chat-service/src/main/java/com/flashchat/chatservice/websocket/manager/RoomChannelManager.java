@@ -132,6 +132,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
         // 1. 如果该用户已有旧连接（比如刷新页面），关闭旧连接
         Channel oldChannel = userChannels.put(userId, channel);
         if (oldChannel != null && oldChannel != channel) {
+            removeChannelFromAllRooms(userId, oldChannel);
             channelUserIndex.remove(oldChannel);
             oldChannel.close();
             log.info("[用户重连] userId={}, 关闭旧连接", userId);
