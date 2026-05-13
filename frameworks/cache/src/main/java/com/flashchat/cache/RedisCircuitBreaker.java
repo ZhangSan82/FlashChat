@@ -98,9 +98,10 @@ public class RedisCircuitBreaker {
         this.openDurationMs = openDurationMs;
 
         if (meterRegistry != null) {
-            this.tripCounter = meterRegistry.counter("cache.circuit_breaker.trip");
-            this.recoverCounter = meterRegistry.counter("cache.circuit_breaker.recover");
-            this.probeFailCounter = meterRegistry.counter("cache.circuit_breaker.probe_fail");
+            // 指标命名风格统一为点分隔(与 cache.local.lock.wait / cache.pending.repair.* 等保持一致)
+            this.tripCounter = meterRegistry.counter("cache.circuit.breaker.trip");
+            this.recoverCounter = meterRegistry.counter("cache.circuit.breaker.recover");
+            this.probeFailCounter = meterRegistry.counter("cache.circuit.breaker.probe.fail");
         } else {
             this.tripCounter = null;
             this.recoverCounter = null;

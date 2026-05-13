@@ -18,13 +18,30 @@ public class LocalCacheManager {
      * 使用独立类型，调试时可读性更好
      */
     private static final class NullValueMarker {
+
+        private final boolean degraded;
+
+        private NullValueMarker(boolean degraded) {
+            this.degraded = degraded;
+        }
+
         @Override
         public String toString() {
-            return "LocalCache.NULL_VALUE";
+            return degraded ? "LocalCache.DEGRADED_NULL_VALUE" : "LocalCache.NULL_VALUE";
         }
     }
 
-    public static final Object NULL_VALUE = new NullValueMarker();
+    private static final class DegradedValueMarker {
+
+        private final Object value;
+
+        private DegradedValueMarker(Object value) {
+            this.value = value;
+        }
+    }
+
+    public static final Object NULL_VALUE = new NullValueMarker(false);
+    private static final Object DEGRADED_NULL_VALUE = new NullValueMarker(true);
 
     // ==================== key 前缀常量 ====================
     // 注意：roomMember 前缀比 room 更长，routeCache 中必须先匹配 roomMember
@@ -63,7 +80,8 @@ public class LocalCacheManager {
             return null;
         }
         Cache<String, Object> cache = routeCache(key);
-        return cache != null ? cache.getIfPresent(key) : null;
+        Object value = cache != null ? cache.getIfPresent(key) : null;
+        return unwrapValue(value);
     }
 
     // ==================== 写操作 ====================
@@ -99,6 +117,21 @@ public class LocalCacheManager {
         }
     }
 
+    /**
+     * 写入 Redis 异常期间的本地降级值。
+     * <p>
+     * 降级值使用更短 TTL，只用于挡住短时间热点请求，不承担长期一致性职责。
+     */
+    public void putDegradedValue(String key, Object value) {
+        if (!available) {
+            return;
+        }
+        Cache<String, Object> cache = routeCache(key);
+        if (cache != null) {
+            cache.put(key, value == null ? DEGRADED_NULL_VALUE : new DegradedValueMarker(value));
+        }
+    }
+
     // ==================== 删除操作 ====================
 
     /**
@@ -118,7 +151,19 @@ public class LocalCacheManager {
     // ==================== 判断方法 ====================
 
     public static boolean isNullValue(Object value) {
-        return value == NULL_VALUE;
+        return value instanceof NullValueMarker;
+    }
+
+    public static boolean isDegradedValue(Object value) {
+        return value instanceof DegradedValueMarker
+                || (value instanceof NullValueMarker marker && marker.degraded);
+    }
+
+    private static Object unwrapValue(Object value) {
+        if (value instanceof DegradedValueMarker marker) {
+            return marker.value;
+        }
+        return value;
     }
 
     public boolean isAvailable() {

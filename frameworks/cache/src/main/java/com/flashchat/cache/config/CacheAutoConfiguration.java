@@ -66,10 +66,13 @@ public class CacheAutoConfiguration {
         Cache<String, Object> accountCache = buildCaffeineCache(
                 localProps.getAccount(), nullTtl, "flashchat.local.account", meterRegistry);
 
-        log.info("[本地缓存] 初始化完成 | room(max={}, ttl={}s) | roomMember(max={}, ttl={}s) | account(max={}, ttl={}s) | nullTtl={}s",
+        log.info("[本地缓存] 初始化完成 | room(max={}, ttl={}s, degraded={}s) | roomMember(max={}, ttl={}s, degraded={}s) | account(max={}, ttl={}s, degraded={}s) | nullTtl={}s",
                 localProps.getRoom().getMaxSize(), localProps.getRoom().getTtlSeconds(),
+                localProps.getRoom().getDegradedTtlSeconds(),
                 localProps.getRoomMember().getMaxSize(), localProps.getRoomMember().getTtlSeconds(),
+                localProps.getRoomMember().getDegradedTtlSeconds(),
                 localProps.getAccount().getMaxSize(), localProps.getAccount().getTtlSeconds(),
+                localProps.getAccount().getDegradedTtlSeconds(),
                 nullTtl);
 
         return new LocalCacheManager(roomCache, roomMemberCache, accountCache, localProps);
@@ -137,25 +140,35 @@ public class CacheAutoConfiguration {
 
         long domainTtlNanos = TimeUnit.SECONDS.toNanos(domainProps.getTtlSeconds());
         long nullTtlNanos = TimeUnit.SECONDS.toNanos(nullValueTtlSeconds);
+        long degradedTtlNanos = TimeUnit.SECONDS.toNanos(domainProps.getDegradedTtlSeconds());
 
         Cache<String, Object> cache = Caffeine.newBuilder()
                 .maximumSize(domainProps.getMaxSize())
                 .expireAfter(new Expiry<String, Object>() {
                     @Override
                     public long expireAfterCreate(String key, Object value, long currentTime) {
-                        return LocalCacheManager.isNullValue(value) ? nullTtlNanos : domainTtlNanos;
+                        return ttlFor(value);
                     }
 
                     @Override
                     public long expireAfterUpdate(String key, Object value,
                                                   long currentTime, long currentDuration) {
-                        return LocalCacheManager.isNullValue(value) ? nullTtlNanos : domainTtlNanos;
+                        return ttlFor(value);
                     }
 
                     @Override
                     public long expireAfterRead(String key, Object value,
                                                 long currentTime, long currentDuration) {
                         return currentDuration;
+                    }
+
+                    private long ttlFor(Object value) {
+                        if (LocalCacheManager.isDegradedValue(value)) {
+                            return LocalCacheManager.isNullValue(value)
+                                    ? Math.min(nullTtlNanos, degradedTtlNanos)
+                                    : degradedTtlNanos;
+                        }
+                        return LocalCacheManager.isNullValue(value) ? nullTtlNanos : domainTtlNanos;
                     }
                 })
                 .recordStats()

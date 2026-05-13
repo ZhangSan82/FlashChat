@@ -6,7 +6,9 @@ import com.flashchat.cache.core.CacheGetIfAbsent;
 import com.flashchat.cache.core.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.Nullable;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -16,6 +18,7 @@ import org.redisson.api.RBloomFilter;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
@@ -57,6 +60,12 @@ public class MultistageCacheProxy implements MultistageCache {
     private static final long PENDING_REPAIR_MAX_SIZE = 50_000L;
 
     /**
+     * Redis 异常路径使用的本地分片锁数量。
+     * 使用 2 的幂，便于通过 hash 位运算快速路由。
+     */
+    private static final int LOCAL_LOCK_STRIPES = 256;
+
+    /**
      * Redis 访问代理。
      */
     private final StringRedisTemplateProxy distributedCache;
@@ -70,6 +79,11 @@ public class MultistageCacheProxy implements MultistageCache {
      * Redis 熔断器。
      */
     private final RedisCircuitBreaker circuitBreaker;
+
+    /**
+     * Redis 熔断 / Redisson 锁竞争失败时的本地兜底锁。
+     */
+    private final LocalStripedLock localStripedLock = new LocalStripedLock(LOCAL_LOCK_STRIPES);
 
     /**
      * 待修复操作表。
@@ -90,6 +104,44 @@ public class MultistageCacheProxy implements MultistageCache {
      * Redis 降级计数器，按操作名称预创建，避免高频降级时重复做 meterRegistry.counter(...) 查找。
      */
     private final Map<String, Counter> degradationCounters;
+
+    /**
+     * 本地分片锁等待耗时分布。
+     * <p>
+     * 用于观察 Redis 异常 / Redisson 锁失败兜底时同分片回源被串行化的真实压力：
+     * P99 偏高说明热点 key 多线程回源争抢明显，需要考虑增加分片数或拉短 DB 加载耗时。
+     */
+    @Nullable
+    private final Timer localLockWaitTimer;
+
+    /**
+     * 待修复回放计数器，tag=result(success / fail)。
+     */
+    @Nullable
+    private final Counter pendingRepairReplaySuccessCounter;
+
+    @Nullable
+    private final Counter pendingRepairReplayFailCounter;
+
+    /**
+     * DB 回源计数器，tag=reason(circuit_open / redis_exception / redisson_lock_timeout / pending_invalidate)。
+     * <p>
+     * 用 reason 区分降级原因便于排障：
+     * - circuit_open       熔断中主动跳过 Redis
+     * - redis_exception    Redis 请求抛异常
+     * - redisson_lock_timeout Redisson tryLock 超时 / 中断
+     * - pending_invalidate 之前删除失败的 key 走 DB 重建
+     */
+    private final Map<String, Counter> dbFallbackCounters;
+
+    /**
+     * Redisson 锁竞争失败计数器。
+     * <p>
+     * 与 dbFallbackCounters(redisson_lock_timeout) 维度互补：本指标只统计「Redisson 真的没拿到锁」，
+     * 不区分后续是否成功 DB 回源，便于评估 Redis 自身锁热点的发生频率。
+     */
+    @Nullable
+    private final Counter redissonLockFailedCounter;
 
     /**
      * @param distributedCache Redis 访问代理
@@ -115,8 +167,42 @@ public class MultistageCacheProxy implements MultistageCache {
                     "hasKey", meterRegistry.counter("cache.redis.degradation", "operation", "hasKey"),
                     "countExistingKeys", meterRegistry.counter("cache.redis.degradation", "operation", "countExistingKeys")
             );
+
+            this.localLockWaitTimer = Timer.builder("cache.local.lock.wait")
+                    .description("本地分片锁获取等待耗时分布")
+                    .publishPercentiles(0.5, 0.95, 0.99)
+                    .register(meterRegistry);
+
+            this.pendingRepairReplaySuccessCounter = meterRegistry.counter(
+                    "cache.pending.repair.replay", "result", "success");
+            this.pendingRepairReplayFailCounter = meterRegistry.counter(
+                    "cache.pending.repair.replay", "result", "fail");
+
+            this.dbFallbackCounters = Map.of(
+                    "circuit_open", meterRegistry.counter(
+                            "cache.db.fallback", "reason", "circuit_open"),
+                    "redis_exception", meterRegistry.counter(
+                            "cache.db.fallback", "reason", "redis_exception"),
+                    "redisson_lock_timeout", meterRegistry.counter(
+                            "cache.db.fallback", "reason", "redisson_lock_timeout"),
+                    "pending_invalidate", meterRegistry.counter(
+                            "cache.db.fallback", "reason", "pending_invalidate")
+            );
+
+            this.redissonLockFailedCounter = meterRegistry.counter("cache.redisson.lock.failed");
+
+            // 待修复表当前条目数,通过 Gauge 暴露,供 Prometheus 周期性采集
+            Gauge.builder("cache.pending.repair.size", pendingRedisRepairs,
+                            cache -> (double) cache.estimatedSize())
+                    .description("待修复操作表当前大小")
+                    .register(meterRegistry);
         } else {
             this.degradationCounters = null;
+            this.localLockWaitTimer = null;
+            this.pendingRepairReplaySuccessCounter = null;
+            this.pendingRepairReplayFailCounter = null;
+            this.dbFallbackCounters = null;
+            this.redissonLockFailedCounter = null;
         }
     }
 
@@ -149,6 +235,13 @@ public class MultistageCacheProxy implements MultistageCache {
         } else {
             localCacheManager.putNullValue(key);
         }
+    }
+
+    /**
+     * Redis 异常路径的短 TTL 本地兜底。
+     */
+    private <T> void fillLocalDegraded(String key, T result) {
+        localCacheManager.putDegradedValue(key, result);
     }
 
     /**
@@ -325,14 +418,14 @@ public class MultistageCacheProxy implements MultistageCache {
     @Override
     public <T> T get(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader,
                      long timeout) {
-        return doGetWithDegradation("get", key, cacheLoader,
+        return doGetWithDegradation("get", key, clazz, cacheLoader, timeout, null,
                 () -> distributedCache.get(key, clazz, cacheLoader, timeout));
     }
 
     @Override
     public <T> T get(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader,
                      long timeout, TimeUnit timeUnit) {
-        return doGetWithDegradation("get", key, cacheLoader,
+        return doGetWithDegradation("get", key, clazz, cacheLoader, timeout, timeUnit,
                 () -> distributedCache.get(key, clazz, cacheLoader, timeout, timeUnit));
     }
 
@@ -343,28 +436,28 @@ public class MultistageCacheProxy implements MultistageCache {
     @Override
     public <T> T safeGet(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader,
                          long timeout) {
-        return doGetWithDegradation("safeGet", key, cacheLoader,
+        return doGetWithDegradation("safeGet", key, clazz, cacheLoader, timeout, null,
                 () -> distributedCache.safeGet(key, clazz, cacheLoader, timeout));
     }
 
     @Override
     public <T> T safeGet(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader,
                          long timeout, TimeUnit timeUnit) {
-        return doGetWithDegradation("safeGet", key, cacheLoader,
+        return doGetWithDegradation("safeGet", key, clazz, cacheLoader, timeout, timeUnit,
                 () -> distributedCache.safeGet(key, clazz, cacheLoader, timeout, timeUnit));
     }
 
     @Override
     public <T> T safeGet(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader,
                          long timeout, RBloomFilter<String> bloomFilter) {
-        return doGetWithDegradation("safeGet", key, cacheLoader,
+        return doGetWithDegradation("safeGet", key, clazz, cacheLoader, timeout, null,
                 () -> distributedCache.safeGet(key, clazz, cacheLoader, timeout, bloomFilter));
     }
 
     @Override
     public <T> T safeGet(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader,
                          long timeout, TimeUnit timeUnit, RBloomFilter<String> bloomFilter) {
-        return doGetWithDegradation("safeGet", key, cacheLoader,
+        return doGetWithDegradation("safeGet", key, clazz, cacheLoader, timeout, timeUnit,
                 () -> distributedCache.safeGet(key, clazz, cacheLoader, timeout, timeUnit,
                         bloomFilter));
     }
@@ -373,7 +466,7 @@ public class MultistageCacheProxy implements MultistageCache {
     public <T> T safeGet(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader,
                          long timeout, RBloomFilter<String> bloomFilter,
                          CacheGetFilter<String> cacheCheckFilter) {
-        return doGetWithDegradation("safeGet", key, cacheLoader,
+        return doGetWithDegradation("safeGet", key, clazz, cacheLoader, timeout, null,
                 () -> distributedCache.safeGet(key, clazz, cacheLoader, timeout,
                         bloomFilter, cacheCheckFilter));
     }
@@ -382,7 +475,7 @@ public class MultistageCacheProxy implements MultistageCache {
     public <T> T safeGet(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader,
                          long timeout, TimeUnit timeUnit, RBloomFilter<String> bloomFilter,
                          CacheGetFilter<String> cacheCheckFilter) {
-        return doGetWithDegradation("safeGet", key, cacheLoader,
+        return doGetWithDegradation("safeGet", key, clazz, cacheLoader, timeout, timeUnit,
                 () -> distributedCache.safeGet(key, clazz, cacheLoader, timeout, timeUnit,
                         bloomFilter, cacheCheckFilter));
     }
@@ -392,7 +485,7 @@ public class MultistageCacheProxy implements MultistageCache {
                          long timeout, RBloomFilter<String> bloomFilter,
                          CacheGetFilter<String> cacheGetFilter,
                          CacheGetIfAbsent<String> cacheGetIfAbsent) {
-        return doGetWithDegradation("safeGet", key, cacheLoader,
+        return doGetWithDegradation("safeGet", key, clazz, cacheLoader, timeout, null,
                 () -> distributedCache.safeGet(key, clazz, cacheLoader, timeout,
                         bloomFilter, cacheGetFilter, cacheGetIfAbsent));
     }
@@ -403,7 +496,7 @@ public class MultistageCacheProxy implements MultistageCache {
                          RBloomFilter<String> bloomFilter,
                          CacheGetFilter<String> cacheGetFilter,
                          CacheGetIfAbsent<String> cacheGetIfAbsent) {
-        return doGetWithDegradation("safeGet", key, cacheLoader,
+        return doGetWithDegradation("safeGet", key, clazz, cacheLoader, timeout, timeUnit,
                 () -> distributedCache.safeGet(key, clazz, cacheLoader, timeout, timeUnit,
                         bloomFilter, cacheGetFilter, cacheGetIfAbsent));
     }
@@ -528,9 +621,18 @@ public class MultistageCacheProxy implements MultistageCache {
      * <p>
      * 设计重点：
      * 待修复表优先级高于 Redis，可用性永远不能覆盖正确性语义。
+     * <p>
+     * 关于 timeout / timeUnit：
+     * 透传给下游 resolvePendingOperation 用于构造「Redis 兜底回填」的 replayAction，
+     * 保证 INVALIDATE 重建场景下 Redis 的 TTL 与业务声明一致，
+     * 而不是退化到 distributedCache.put 的全局默认 TTL（30s）。
+     * timeUnit 为 null 时按 RedisDistributedProperties 的默认单位写入。
      */
     private <T> T doGetWithDegradation(String operation, String key,
+                                       Class<T> clazz,
                                        CacheLoader<T> cacheLoader,
+                                       long timeout,
+                                       @Nullable TimeUnit timeUnit,
                                        Supplier<T> distributedAction) {
         Object local = getFromLocal(key);
         if (local != LOCAL_MISS) {
@@ -539,13 +641,16 @@ public class MultistageCacheProxy implements MultistageCache {
 
         PendingRedisOperation pendingOperation = pendingRedisRepairs.getIfPresent(key);
         if (pendingOperation != null) {
-            return resolvePendingOperation(operation, key, cacheLoader, pendingOperation);
+            return resolvePendingOperation(operation, key, cacheLoader,
+                    timeout, timeUnit, pendingOperation);
         }
 
         if (!circuitBreaker.allowRequest()) {
             log.debug("[Cache] 熔断中，跳过 Redis, key={}", key);
             recordDegradation(operation);
-            return loadDirectAndFillLocal(key, cacheLoader);
+            recordDbFallback("circuit_open");
+            return loadWithLocalLockAndFillDegraded(operation, key, cacheLoader,
+                    timeout, timeUnit, true);
         }
 
         try {
@@ -553,11 +658,20 @@ public class MultistageCacheProxy implements MultistageCache {
             circuitBreaker.recordSuccess();
             fillLocal(key, result);
             return result;
+        } catch (CacheLockAcquireTimeoutException e) {
+            log.warn("[Cache] Redisson 锁竞争失败, key={}, 进入本地分片锁兜底", key);
+            recordDegradation(operation);
+            recordRedissonLockFailed();
+            recordDbFallback("redisson_lock_timeout");
+            return loadAfterDistributedLockFailure(operation, key, clazz, cacheLoader,
+                    timeout, timeUnit);
         } catch (Exception e) {
             circuitBreaker.recordFailure();
             log.error("[Cache] Redis {} 异常, key={}, 降级查数据源", operation, key, e);
             recordDegradation(operation);
-            return loadDirectAndFillLocal(key, cacheLoader);
+            recordDbFallback("redis_exception");
+            return loadWithLocalLockAndFillDegraded(operation, key, cacheLoader,
+                    timeout, timeUnit, true);
         }
     }
 
@@ -595,16 +709,95 @@ public class MultistageCacheProxy implements MultistageCache {
 
     /**
      * Redis 不可用时的直接回源逻辑。
+     * <p>
      * 只回填本地缓存，不立刻写 Redis，因为此时 Redis 很可能仍不可用。
+     * timeout / timeUnit 透传给嵌套的 resolvePendingOperation，让 INVALIDATE 重建走业务声明 TTL。
      */
-    private <T> T loadDirectAndFillLocal(String key, CacheLoader<T> cacheLoader) {
+    private <T> T loadWithLocalLockAndFillDegraded(String operation,
+                                                   String key,
+                                                   CacheLoader<T> cacheLoader,
+                                                   long timeout,
+                                                   @Nullable TimeUnit timeUnit,
+                                                   boolean checkPending) {
+        ReentrantLock lock = localStripedLock.getLock(key);
+        long lockStartNanos = System.nanoTime();
+        lock.lock();
+        recordLocalLockWait(System.nanoTime() - lockStartNanos);
         try {
+            Object local = getFromLocal(key);
+            if (local != LOCAL_MISS) {
+                return resolveLocal(local);
+            }
+
+            if (checkPending) {
+                PendingRedisOperation pendingOperation = pendingRedisRepairs.getIfPresent(key);
+                if (pendingOperation != null) {
+                    return resolvePendingOperation(operation, key, cacheLoader,
+                            timeout, timeUnit, pendingOperation);
+                }
+            }
+
             T result = cacheLoader.load();
-            fillLocal(key, result);
+            fillLocalDegraded(key, result);
             return result;
         } catch (Exception e) {
             log.error("[Cache] 降级加载数据源也失败, key={}", key, e);
             return null;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Redisson 锁失败后的本地兜底。
+     * <p>
+     * 锁内先查 Caffeine，再用普通 Redis GET 做二次检查；仍未命中才回源 DB。
+     * 回源结果只写入短 TTL 本地缓存，不回填 Redis，避免和持有 Redisson 锁的线程竞争构建。
+     */
+    private <T> T loadAfterDistributedLockFailure(String operation,
+                                                  String key,
+                                                  Class<T> clazz,
+                                                  CacheLoader<T> cacheLoader,
+                                                  long timeout,
+                                                  @Nullable TimeUnit timeUnit) {
+        ReentrantLock lock = localStripedLock.getLock(key);
+        long lockStartNanos = System.nanoTime();
+        lock.lock();
+        recordLocalLockWait(System.nanoTime() - lockStartNanos);
+        try {
+            Object local = getFromLocal(key);
+            if (local != LOCAL_MISS) {
+                return resolveLocal(local);
+            }
+
+            PendingRedisOperation pendingOperation = pendingRedisRepairs.getIfPresent(key);
+            if (pendingOperation != null) {
+                return resolvePendingOperation(operation, key, cacheLoader,
+                        timeout, timeUnit, pendingOperation);
+            }
+
+            if (circuitBreaker.allowRequest()) {
+                try {
+                    T redisValue = distributedCache.get(key, clazz);
+                    circuitBreaker.recordSuccess();
+                    if (redisValue != null) {
+                        fillLocal(key, redisValue);
+                        return redisValue;
+                    }
+                } catch (Exception e) {
+                    circuitBreaker.recordFailure();
+                    log.warn("[Cache] Redisson 锁失败兜底二次查 Redis 异常, key={}", key, e);
+                }
+            }
+
+            T result = cacheLoader.load();
+            fillLocalDegraded(key, result);
+            return result;
+        } catch (Exception e) {
+            log.error("[Cache] Redisson 锁失败兜底加载数据源失败, key={}", key, e);
+            return null;
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -620,10 +813,15 @@ public class MultistageCacheProxy implements MultistageCache {
      * - Redis 删除失败，Redis 可能残留旧值
      * - 先回源数据源，拿到最新值后再尝试重建 Redis
      * - 如果数据源也为空，则继续尝试回放删除动作
+     * <p>
+     * 重建 Redis 时使用调用方传入的 timeout / timeUnit，避免退化到
+     * RedisDistributedProperties 的全局默认 TTL（30s），从而保持业务声明的 TTL 不变。
      */
     private <T> T resolvePendingOperation(String operation,
                                           String key,
                                           CacheLoader<T> cacheLoader,
+                                          long timeout,
+                                          @Nullable TimeUnit timeUnit,
                                           PendingRedisOperation pendingOperation) {
         recordDegradation(operation);
 
@@ -634,12 +832,16 @@ public class MultistageCacheProxy implements MultistageCache {
             return value;
         }
 
-        T result = loadDirectAndFillLocal(key, cacheLoader);
+        recordDbFallback("pending_invalidate");
+        T result = loadWithLocalLockAndFillDegraded(operation, key, cacheLoader,
+                timeout, timeUnit, false);
         if (result != null) {
-            PendingRedisOperation freshValueRepair = PendingRedisOperation.upsert(
-                    result,
-                    () -> distributedCache.put(key, result)
-            );
+            // 用业务 TTL 构造重建动作,确保 Redis 恢复后 key 的过期时间与业务声明一致
+            Runnable redisRefill = timeUnit != null
+                    ? () -> distributedCache.put(key, result, timeout, timeUnit)
+                    : () -> distributedCache.put(key, result, timeout);
+            PendingRedisOperation freshValueRepair =
+                    PendingRedisOperation.upsert(result, redisRefill);
             if (!tryReplayPendingOperation(key, freshValueRepair)) {
                 rememberPendingRedisRepair(key, freshValueRepair);
             }
@@ -667,6 +869,8 @@ public class MultistageCacheProxy implements MultistageCache {
      * 成功则清理待修复标记；失败则继续保留，等待下一次机会。
      */
     private boolean tryReplayPendingOperation(String key, PendingRedisOperation pendingOperation) {
+        // 熔断中不计入 replay 指标:这是设计预期的跳过,不是 Redis 真的失败,
+        // 计入 fail 会让 Grafana 上 fail 曲线在熔断窗口被无故拉高,掩盖真正的回放失败。
         if (!circuitBreaker.allowRequest()) {
             return false;
         }
@@ -675,11 +879,13 @@ public class MultistageCacheProxy implements MultistageCache {
             pendingOperation.replayAction.run();
             circuitBreaker.recordSuccess();
             clearPendingRedisRepair(key);
+            recordPendingReplay(true);
             return true;
         } catch (Exception e) {
             circuitBreaker.recordFailure();
             log.warn("[Cache] Redis 修复回放失败, key={}, type={}",
                     key, pendingOperation.type, e);
+            recordPendingReplay(false);
             return false;
         }
     }
@@ -721,6 +927,47 @@ public class MultistageCacheProxy implements MultistageCache {
             if (counter != null) {
                 counter.increment();
             }
+        }
+    }
+
+    /**
+     * 记录本地分片锁等待耗时（纳秒），用于评估热点 key 在 Redis 异常 / 锁失败时的回源争抢。
+     */
+    private void recordLocalLockWait(long elapsedNanos) {
+        if (localLockWaitTimer != null) {
+            localLockWaitTimer.record(elapsedNanos, TimeUnit.NANOSECONDS);
+        }
+    }
+
+    /**
+     * 记录 DB 回源次数，reason 取值见 dbFallbackCounters 注释。
+     */
+    private void recordDbFallback(String reason) {
+        if (dbFallbackCounters != null) {
+            Counter counter = dbFallbackCounters.get(reason);
+            if (counter != null) {
+                counter.increment();
+            }
+        }
+    }
+
+    /**
+     * 记录待修复回放结果。
+     * 高频 fail 通常意味着 Redis 长时间不可用，需要触发告警。
+     */
+    private void recordPendingReplay(boolean success) {
+        Counter counter = success ? pendingRepairReplaySuccessCounter : pendingRepairReplayFailCounter;
+        if (counter != null) {
+            counter.increment();
+        }
+    }
+
+    /**
+     * 记录 Redisson 分布式锁竞争失败的发生次数。
+     */
+    private void recordRedissonLockFailed() {
+        if (redissonLockFailedCounter != null) {
+            redissonLockFailedCounter.increment();
         }
     }
 

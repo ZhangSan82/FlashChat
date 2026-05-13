@@ -8,6 +8,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,7 +63,9 @@ class MultistageCacheProxyTest {
         when(distributedCache.delete(KEY))
                 .thenThrow(new RuntimeException("redis down"))
                 .thenReturn(true);
-        doNothing().when(distributedCache).put(KEY, "fresh-value");
+        // INVALIDATE 重建会用业务声明的 TIMEOUT 回填 Redis(而非全局默认 TTL),
+        // stub 必须与代理实际调用的 put 重载完全一致。
+        doNothing().when(distributedCache).put(KEY, "fresh-value", TIMEOUT);
 
         boolean deleted = Boolean.TRUE.equals(multistageCacheProxy.delete(KEY));
         assertFalse(deleted);
@@ -69,7 +80,7 @@ class MultistageCacheProxyTest {
         assertEquals("fresh-value", result);
         verify(loader).load();
         verify(distributedCache, never()).safeGet(eq(KEY), eq(String.class), any(), eq(TIMEOUT));
-        verify(distributedCache).put(KEY, "fresh-value");
+        verify(distributedCache).put(KEY, "fresh-value", TIMEOUT);
     }
 
     @Test
@@ -91,5 +102,79 @@ class MultistageCacheProxyTest {
         verify(loader, never()).load();
         verify(distributedCache, times(2)).put(KEY, "new-value", TIMEOUT);
         verify(distributedCache, never()).safeGet(eq(KEY), eq(String.class), any(), eq(TIMEOUT));
+    }
+
+    @Test
+    void shouldCoalesceDbFallbackWithLocalLockWhenRedisUnavailable() throws Exception {
+        when(distributedCache.safeGet(eq(KEY), eq(String.class), any(), eq(TIMEOUT)))
+                .thenThrow(new RuntimeException("redis down"));
+
+        AtomicInteger loadCount = new AtomicInteger();
+        CountDownLatch loaderEntered = new CountDownLatch(1);
+        CacheLoader<String> loader = () -> {
+            loadCount.incrementAndGet();
+            loaderEntered.countDown();
+            sleepQuietly(50);
+            return "fallback-value";
+        };
+
+        ExecutorService executor = Executors.newFixedThreadPool(8);
+        try {
+            List<Future<String>> futures = IntStream.range(0, 8)
+                    .mapToObj(i -> executor.submit(
+                            () -> multistageCacheProxy.safeGet(KEY, String.class, loader, TIMEOUT)))
+                    .toList();
+
+            loaderEntered.await(1, TimeUnit.SECONDS);
+
+            for (Future<String> future : futures) {
+                assertEquals("fallback-value", future.get(1, TimeUnit.SECONDS));
+            }
+            assertEquals(1, loadCount.get());
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void shouldUseLocalLockFallbackAfterRedissonLockTimeout() throws Exception {
+        when(distributedCache.safeGet(eq(KEY), eq(String.class), any(), eq(TIMEOUT)))
+                .thenThrow(new CacheLockAcquireTimeoutException(KEY));
+        when(distributedCache.get(KEY, String.class)).thenReturn(null);
+
+        AtomicInteger loadCount = new AtomicInteger();
+        CountDownLatch loaderEntered = new CountDownLatch(1);
+        CacheLoader<String> loader = () -> {
+            loadCount.incrementAndGet();
+            loaderEntered.countDown();
+            sleepQuietly(50);
+            return "lock-fallback-value";
+        };
+
+        ExecutorService executor = Executors.newFixedThreadPool(8);
+        try {
+            List<Future<String>> futures = IntStream.range(0, 8)
+                    .mapToObj(i -> executor.submit(
+                            () -> multistageCacheProxy.safeGet(KEY, String.class, loader, TIMEOUT)))
+                    .toList();
+
+            loaderEntered.await(1, TimeUnit.SECONDS);
+
+            for (Future<String> future : futures) {
+                assertEquals("lock-fallback-value", future.get(1, TimeUnit.SECONDS));
+            }
+            assertEquals(1, loadCount.get());
+            verify(distributedCache, times(1)).get(KEY, String.class);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

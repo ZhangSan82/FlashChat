@@ -208,7 +208,7 @@ public class StringRedisTemplateProxy implements DistributedCache {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("[Cache] 获取分布式锁被中断, key={}", key);
-            return null;
+            throw new CacheLockAcquireTimeoutException(key, e);
         }
 
         // ===== 获取锁超时 → 降级策略 =====
@@ -318,7 +318,7 @@ public class StringRedisTemplateProxy implements DistributedCache {
                 Thread.sleep(DEGRADATION_RETRY_INTERVAL_MS);
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                return null;
+                throw new CacheLockAcquireTimeoutException(key, ie);
             }
             T result = get(key, clazz);
             if (!CacheUtil.isNullOrBlank(result)) {
@@ -327,14 +327,9 @@ public class StringRedisTemplateProxy implements DistributedCache {
             }
         }
 
-        // 重试后仍未命中 → 降级直接查数据源（不写缓存）
-        log.warn("[Cache] 降级重试未命中, 直接查数据源, key={}", key);
-        try {
-            return cacheLoader.load();
-        } catch (Exception e) {
-            log.error("[Cache] 降级加载数据源失败, key={}", key, e);
-            return null;
-        }
+        // 重试后仍未命中 → 交给 MultistageCacheProxy 通过本地分片锁兜底。
+        log.warn("[Cache] 降级重试未命中, 交给本地分片锁兜底, key={}", key);
+        throw new CacheLockAcquireTimeoutException(key);
     }
 
     /**

@@ -112,17 +112,17 @@ public class RedisDistributedProperties {
         /**
          * Room 域本地缓存。
          */
-        private CacheDomainProperties room = CacheDomainProperties.of(10000, 30);
+        private CacheDomainProperties room = CacheDomainProperties.of(10000, 30, 10);
 
         /**
          * RoomMember 域本地缓存。
          */
-        private CacheDomainProperties roomMember = CacheDomainProperties.of(5000, 15);
+        private CacheDomainProperties roomMember = CacheDomainProperties.of(5000, 15, 5);
 
         /**
          * Account 域本地缓存。
          */
-        private CacheDomainProperties account = CacheDomainProperties.of(10000, 45);
+        private CacheDomainProperties account = CacheDomainProperties.of(10000, 45, 30);
     }
 
     /**
@@ -143,12 +143,19 @@ public class RedisDistributedProperties {
         private int ttlSeconds = 30;
 
         /**
+         * Redis 异常期间写入本地缓存的短 TTL（秒）。
+         * 仅用于短时间吸收热点请求，不承担长期一致性职责。
+         */
+        private int degradedTtlSeconds = 10;
+
+        /**
          * 工厂方法，用于给不同业务域提供差异化默认值。
          */
-        public static CacheDomainProperties of(int maxSize, int ttlSeconds) {
+        public static CacheDomainProperties of(int maxSize, int ttlSeconds, int degradedTtlSeconds) {
             CacheDomainProperties props = new CacheDomainProperties();
             props.setMaxSize(maxSize);
             props.setTtlSeconds(ttlSeconds);
+            props.setDegradedTtlSeconds(degradedTtlSeconds);
             return props;
         }
     }
