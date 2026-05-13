@@ -285,7 +285,7 @@ public class MultistageCacheProxy implements MultistageCache {
             }
             return result;
         } catch (Exception e) {
-            circuitBreaker.recordFailure();
+            circuitBreaker.recordFailure(e);
             log.warn("[Cache] 简单 get 异常, key={}, 返回 null", key, e);
             recordDegradation("get");
             return null;
@@ -333,7 +333,7 @@ public class MultistageCacheProxy implements MultistageCache {
             clearPendingRedisRepair(key);
             return result;
         } catch (Exception e) {
-            circuitBreaker.recordFailure();
+            circuitBreaker.recordFailure(e);
             rememberPendingRedisRepair(key, pendingOperation);
             log.error("[Cache] Redis delete 异常, key={}", key, e);
             recordDegradation("delete");
@@ -363,7 +363,7 @@ public class MultistageCacheProxy implements MultistageCache {
             }
             return result;
         } catch (Exception e) {
-            circuitBreaker.recordFailure();
+            circuitBreaker.recordFailure(e);
             rememberPendingInvalidate(keys);
             log.error("[Cache] Redis batch delete 异常, keys.size={}", keys != null ? keys.size() : 0, e);
             recordDegradation("delete");
@@ -399,7 +399,7 @@ public class MultistageCacheProxy implements MultistageCache {
             circuitBreaker.recordSuccess();
             return result;
         } catch (Exception e) {
-            circuitBreaker.recordFailure();
+            circuitBreaker.recordFailure(e);
             log.error("[Cache] Redis hasKey 异常, key={}", key, e);
             recordDegradation("hasKey");
             return false;
@@ -586,7 +586,7 @@ public class MultistageCacheProxy implements MultistageCache {
             circuitBreaker.recordSuccess();
             return result;
         } catch (Exception e) {
-            circuitBreaker.recordFailure();
+            circuitBreaker.recordFailure(e);
             log.error("[Cache] Redis countExistingKeys 异常", e);
             recordDegradation("countExistingKeys");
             return 0L;
@@ -666,7 +666,7 @@ public class MultistageCacheProxy implements MultistageCache {
             return loadAfterDistributedLockFailure(operation, key, clazz, cacheLoader,
                     timeout, timeUnit);
         } catch (Exception e) {
-            circuitBreaker.recordFailure();
+            circuitBreaker.recordFailure(e);
             log.error("[Cache] Redis {} 异常, key={}, 降级查数据源", operation, key, e);
             recordDegradation(operation);
             recordDbFallback("redis_exception");
@@ -700,7 +700,7 @@ public class MultistageCacheProxy implements MultistageCache {
             circuitBreaker.recordSuccess();
             clearPendingRedisRepair(key);
         } catch (Exception e) {
-            circuitBreaker.recordFailure();
+            circuitBreaker.recordFailure(e);
             log.error("[Cache] Redis {} 异常, key={}, 仅写本地", operation, key, e);
             recordDegradation(operation);
             rememberPendingRedisRepair(key, pendingOperation);
@@ -785,7 +785,7 @@ public class MultistageCacheProxy implements MultistageCache {
                         return redisValue;
                     }
                 } catch (Exception e) {
-                    circuitBreaker.recordFailure();
+                    circuitBreaker.recordFailure(e);
                     log.warn("[Cache] Redisson 锁失败兜底二次查 Redis 异常, key={}", key, e);
                 }
             }
@@ -882,7 +882,7 @@ public class MultistageCacheProxy implements MultistageCache {
             recordPendingReplay(true);
             return true;
         } catch (Exception e) {
-            circuitBreaker.recordFailure();
+            circuitBreaker.recordFailure(e);
             log.warn("[Cache] Redis 修复回放失败, key={}, type={}",
                     key, pendingOperation.type, e);
             recordPendingReplay(false);

@@ -1,6 +1,8 @@
 package com.flashchat.cache.config;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -16,7 +18,7 @@ import java.util.concurrent.TimeUnit;
  * 当前主要包含三类配置：
  * 1. Redis 基础 TTL 与分布式锁参数
  * 2. 本地缓存（Caffeine）按业务域的容量 / TTL 配置
- * 3. Redis 熔断器阈值与冷却时间
+ * 3. Redis 熔断器滑动窗口、失败率与慢调用率阈值
  */
 @Data
 @Validated
@@ -173,20 +175,47 @@ public class RedisDistributedProperties {
         private boolean enabled = true;
 
         /**
-         * 连续失败阈值。
-         * 建议值：
-         * - 网络稳定、同机房部署：3
-         * - 普通场景：5
-         * - 对偶发抖动容忍度更高：5~10
+         * 失败率阈值（百分比）。滑动窗口内失败率达到该值后熔断。
          */
-        @Min(value = 1, message = "熔断器 failureThreshold 必须 >= 1")
-        private int failureThreshold = 5;
+        @DecimalMin(value = "1.0", message = "熔断器 failureRateThreshold 必须 >= 1")
+        @DecimalMax(value = "100.0", message = "熔断器 failureRateThreshold 必须 <= 100")
+        private float failureRateThreshold = 50.0F;
 
         /**
-         * 熔断持续时间（ms）。
-         * 太短会导致 OPEN / HALF_OPEN 来回抖动；太长则会延迟 Redis 恢复后的重新接入。
+         * 慢调用率阈值（百分比）。慢但成功的 Redis 调用也会进入故障判断。
          */
-        @Min(value = 1000, message = "熔断器 openDurationMs 必须 >= 1000")
-        private long openDurationMs = 30000L;
+        @DecimalMin(value = "1.0", message = "熔断器 slowCallRateThreshold 必须 >= 1")
+        @DecimalMax(value = "100.0", message = "熔断器 slowCallRateThreshold 必须 <= 100")
+        private float slowCallRateThreshold = 50.0F;
+
+        /**
+         * 慢调用判定阈值（ms）。Redis 调用耗时超过该值即计为 slow call。
+         */
+        @Min(value = 1, message = "熔断器 slowCallDurationThresholdMs 必须 >= 1")
+        private long slowCallDurationThresholdMs = 100L;
+
+        /**
+         * 基于时间的滑动窗口大小（秒）。
+         */
+        @Min(value = 1, message = "熔断器 slidingWindowSizeSeconds 必须 >= 1")
+        private int slidingWindowSizeSeconds = 10;
+
+        /**
+         * 窗口内至少达到该调用数后，才计算失败率和慢调用率。
+         */
+        @Min(value = 1, message = "熔断器 minimumNumberOfCalls 必须 >= 1")
+        private int minimumNumberOfCalls = 20;
+
+        /**
+         * HALF_OPEN 状态下允许通过的试探请求数。
+         */
+        @Min(value = 1, message = "熔断器 permittedNumberOfCallsInHalfOpenState 必须 >= 1")
+        private int permittedNumberOfCallsInHalfOpenState = 3;
+
+        /**
+         * OPEN 状态保持时间（ms）。到期后进入 HALF_OPEN 试探恢复。
+         */
+        @Min(value = 1000, message = "熔断器 waitDurationInOpenStateMs 必须 >= 1000")
+        private long waitDurationInOpenStateMs = 5000L;
     }
 }

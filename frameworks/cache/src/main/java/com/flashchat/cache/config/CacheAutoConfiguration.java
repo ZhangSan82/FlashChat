@@ -6,6 +6,7 @@ import com.flashchat.cache.StringRedisTemplateProxy;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import jakarta.annotation.Nullable;
@@ -16,6 +17,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
@@ -81,7 +83,7 @@ public class CacheAutoConfiguration {
     /**
      * Redis 熔断器。
      * <p>
-     * 关闭熔断时返回一个 failureThreshold/openDuration 极大的空操作熔断器，
+     * 关闭熔断时返回一个空操作熔断器，
      * 这样 MultistageCacheProxy 无需在业务逻辑里判断「是否启用熔断」。
      */
     @Bean
@@ -90,16 +92,26 @@ public class CacheAutoConfiguration {
 
         if (!cbProps.isEnabled()) {
             log.info("[熔断器] 已关闭（flashchat.cache.circuit-breaker.enabled=false）");
-            return new RedisCircuitBreaker(Integer.MAX_VALUE, Long.MAX_VALUE, null);
+            return RedisCircuitBreaker.disabled();
         }
 
-        log.info("[熔断器] 初始化完成 | failureThreshold={}, openDuration={}ms",
-                cbProps.getFailureThreshold(), cbProps.getOpenDurationMs());
-        return new RedisCircuitBreaker(
-                cbProps.getFailureThreshold(),
-                cbProps.getOpenDurationMs(),
-                meterRegistry
-        );
+        CircuitBreakerConfig config = CircuitBreakerConfig.custom()
+                .failureRateThreshold(cbProps.getFailureRateThreshold())
+                .slowCallRateThreshold(cbProps.getSlowCallRateThreshold())
+                .slowCallDurationThreshold(Duration.ofMillis(cbProps.getSlowCallDurationThresholdMs()))
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.TIME_BASED)
+                .slidingWindowSize(cbProps.getSlidingWindowSizeSeconds())
+                .minimumNumberOfCalls(cbProps.getMinimumNumberOfCalls())
+                .permittedNumberOfCallsInHalfOpenState(cbProps.getPermittedNumberOfCallsInHalfOpenState())
+                .waitDurationInOpenState(Duration.ofMillis(cbProps.getWaitDurationInOpenStateMs()))
+                .build();
+
+        log.info("[熔断器] 初始化完成 | failureRate={}%, slowCallRate={}%, slowCallThreshold={}ms, window={}s, minCalls={}, halfOpenCalls={}, openWait={}ms",
+                cbProps.getFailureRateThreshold(), cbProps.getSlowCallRateThreshold(),
+                cbProps.getSlowCallDurationThresholdMs(), cbProps.getSlidingWindowSizeSeconds(),
+                cbProps.getMinimumNumberOfCalls(), cbProps.getPermittedNumberOfCallsInHalfOpenState(),
+                cbProps.getWaitDurationInOpenStateMs());
+        return new RedisCircuitBreaker(config, meterRegistry);
     }
 
     /**
