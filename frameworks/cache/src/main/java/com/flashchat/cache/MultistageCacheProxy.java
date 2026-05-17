@@ -143,6 +143,9 @@ public class MultistageCacheProxy implements MultistageCache {
     @Nullable
     private final Counter redissonLockFailedCounter;
 
+    @Nullable
+    private final CacheHitMetrics cacheHitMetrics;
+
     /**
      * @param distributedCache Redis 访问代理
      * @param localCacheManager 本地缓存管理器
@@ -153,9 +156,19 @@ public class MultistageCacheProxy implements MultistageCache {
                                 LocalCacheManager localCacheManager,
                                 RedisCircuitBreaker circuitBreaker,
                                 @Nullable MeterRegistry meterRegistry) {
+        this(distributedCache, localCacheManager, circuitBreaker, meterRegistry,
+                CacheHitMetrics.create(meterRegistry));
+    }
+
+    public MultistageCacheProxy(StringRedisTemplateProxy distributedCache,
+                                LocalCacheManager localCacheManager,
+                                RedisCircuitBreaker circuitBreaker,
+                                @Nullable MeterRegistry meterRegistry,
+                                @Nullable CacheHitMetrics cacheHitMetrics) {
         this.distributedCache = distributedCache;
         this.localCacheManager = localCacheManager;
         this.circuitBreaker = circuitBreaker;
+        this.cacheHitMetrics = cacheHitMetrics;
 
         if (meterRegistry != null) {
             this.degradationCounters = Map.of(
@@ -213,6 +226,9 @@ public class MultistageCacheProxy implements MultistageCache {
      */
     private Object getFromLocal(String key) {
         Object value = localCacheManager.get(key);
+        if (cacheHitMetrics != null && localCacheManager.supportsKey(key)) {
+            cacheHitMetrics.recordLocal(value != null);
+        }
         return value != null ? value : LOCAL_MISS;
     }
 
@@ -244,6 +260,24 @@ public class MultistageCacheProxy implements MultistageCache {
         localCacheManager.putDegradedValue(key, result);
     }
 
+    private <T> T trackCacheLookup(Supplier<T> lookup) {
+        if (cacheHitMetrics == null) {
+            return lookup.get();
+        }
+        cacheHitMetrics.startLookup();
+        try {
+            return lookup.get();
+        } finally {
+            cacheHitMetrics.finishLookup();
+        }
+    }
+
+    private void markCacheHit() {
+        if (cacheHitMetrics != null) {
+            cacheHitMetrics.markTotalHit();
+        }
+    }
+
     /**
      * 简单读取。
      * <p>
@@ -256,40 +290,43 @@ public class MultistageCacheProxy implements MultistageCache {
      */
     @Override
     public <T> T get(@NotBlank String key, Class<T> clazz) {
-        Object local = getFromLocal(key);
-        if (local != LOCAL_MISS) {
-            return resolveLocal(local);
-        }
-
-        PendingRedisOperation pendingOperation = pendingRedisRepairs.getIfPresent(key);
-        if (pendingOperation != null) {
-            recordDegradation("get");
-            if (pendingOperation.type == PendingOperationType.UPSERT) {
-                T value = resolvePendingValue(pendingOperation);
-                fillLocal(key, value);
-                return value;
+        return trackCacheLookup(() -> {
+            Object local = getFromLocal(key);
+            if (local != LOCAL_MISS) {
+                return resolveLocal(local);
             }
-            return null;
-        }
 
-        if (!circuitBreaker.allowRequest()) {
-            recordDegradation("get");
-            return null;
-        }
-
-        try {
-            T result = distributedCache.get(key, clazz);
-            circuitBreaker.recordSuccess();
-            if (result != null) {
-                localCacheManager.put(key, result);
+            PendingRedisOperation pendingOperation = pendingRedisRepairs.getIfPresent(key);
+            if (pendingOperation != null) {
+                recordDegradation("get");
+                if (pendingOperation.type == PendingOperationType.UPSERT) {
+                    markCacheHit();
+                    T value = resolvePendingValue(pendingOperation);
+                    fillLocal(key, value);
+                    return value;
+                }
+                return null;
             }
-            return result;
-        } catch (Exception e) {
-            circuitBreaker.recordFailure(e);
-            log.warn("[Cache] 简单 get 异常, key={}, 返回 null", key, e);
-            recordDegradation("get");
-            return null;
-        }
+
+            if (!circuitBreaker.allowRequest()) {
+                recordDegradation("get");
+                return null;
+            }
+
+            try {
+                T result = distributedCache.get(key, clazz);
+                circuitBreaker.recordSuccess();
+                if (result != null) {
+                    localCacheManager.put(key, result);
+                }
+                return result;
+            } catch (Exception e) {
+                circuitBreaker.recordFailure(e);
+                log.warn("[Cache] 简单 get 异常, key={}, 返回 null", key, e);
+                recordDegradation("get");
+                return null;
+            }
+        });
     }
 
     /**
@@ -634,6 +671,16 @@ public class MultistageCacheProxy implements MultistageCache {
                                        long timeout,
                                        @Nullable TimeUnit timeUnit,
                                        Supplier<T> distributedAction) {
+        return trackCacheLookup(() -> doGetWithDegradationInternal(operation, key, clazz,
+                cacheLoader, timeout, timeUnit, distributedAction));
+    }
+
+    private <T> T doGetWithDegradationInternal(String operation, String key,
+                                               Class<T> clazz,
+                                               CacheLoader<T> cacheLoader,
+                                               long timeout,
+                                               @Nullable TimeUnit timeUnit,
+                                               Supplier<T> distributedAction) {
         Object local = getFromLocal(key);
         if (local != LOCAL_MISS) {
             return resolveLocal(local);
@@ -826,6 +873,7 @@ public class MultistageCacheProxy implements MultistageCache {
         recordDegradation(operation);
 
         if (pendingOperation.type == PendingOperationType.UPSERT) {
+            markCacheHit();
             tryReplayPendingOperation(key, pendingOperation);
             T value = resolvePendingValue(pendingOperation);
             fillLocal(key, value);

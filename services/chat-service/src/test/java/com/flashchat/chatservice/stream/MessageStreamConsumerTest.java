@@ -5,6 +5,7 @@ import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
 import com.flashchat.chatservice.service.crypto.MessageContentCodec;
 import com.flashchat.chatservice.service.crypto.MessageCryptoService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -24,7 +25,8 @@ class MessageStreamConsumerTest {
         MessageStreamConsumer consumer = new MessageStreamConsumer(
                 mock(StringRedisTemplate.class),
                 mock(MessageMapper.class),
-                buildCodec()
+                buildCodec(),
+                new SimpleMeterRegistry()
         );
 
         List<MessageDO> encoded = consumer.encodeBatchForStorage(List.of(buildMessage("hello"), buildMessage("world")));

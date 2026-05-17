@@ -170,6 +170,10 @@ public class LocalCacheManager {
         return available;
     }
 
+    public boolean supportsKey(String key) {
+        return available && routeCache(key) != null;
+    }
+
     // ==================== 路由逻辑 ====================
 
     /**

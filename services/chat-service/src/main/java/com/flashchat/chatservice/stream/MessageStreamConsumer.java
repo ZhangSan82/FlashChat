@@ -4,6 +4,9 @@ import com.flashchat.chatservice.dao.entity.MessageDO;
 import com.flashchat.chatservice.dao.mapper.MessageMapper;
 import com.flashchat.chatservice.service.crypto.MessageContentCodec;
 import com.flashchat.chatservice.toolkit.JsonUtil;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +53,9 @@ public class MessageStreamConsumer {
     private final StringRedisTemplate stringRedisTemplate;
     private final MessageMapper messageMapper;
     private final MessageContentCodec messageContentCodec;
+    private final MeterRegistry meterRegistry;
+    private Timer mysqlInsertBatchTimer;
+    private Counter mysqlInsertBatchFailureCounter;
 
     /** 控制消费循环退出 */
     private volatile boolean running = true;
@@ -64,6 +70,12 @@ public class MessageStreamConsumer {
 
     @PostConstruct
     public void start() {
+        this.mysqlInsertBatchTimer = Timer.builder("flashchat.mysql.insert.batch.duration")
+                .description("MySQL batch INSERT IGNORE duration for messages consumed from Redis Stream")
+                .register(meterRegistry);
+        this.mysqlInsertBatchFailureCounter = Counter.builder("flashchat.mysql.insert.batch.failure")
+                .description("MySQL batch INSERT IGNORE failures for messages consumed from Redis Stream")
+                .register(meterRegistry);
         consumerThread = new Thread(this::consumeLoop, "msg-stream-consumer");
         consumerThread.setDaemon(true);
         consumerThread.start();
@@ -92,6 +104,19 @@ public class MessageStreamConsumer {
             }
         }
         log.info("[Stream Consumer] 已停止");
+    }
+
+    private int insertBatchIgnore(List<MessageDO> batch) {
+        List<MessageDO> encodedBatch = encodeBatchForStorage(batch);
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            return messageMapper.insertBatchIgnore(encodedBatch);
+        } catch (RuntimeException ex) {
+            mysqlInsertBatchFailureCounter.increment();
+            throw ex;
+        } finally {
+            sample.stop(mysqlInsertBatchTimer);
+        }
     }
 
     // ================================================================
@@ -158,7 +183,7 @@ public class MessageStreamConsumer {
                 }
 
                 if (!batch.isEmpty()) {
-                    int affected = messageMapper.insertBatchIgnore(encodeBatchForStorage(batch));
+                    int affected = insertBatchIgnore(batch);
                     ackBatch(recordIds);
                     log.info("[Stream Consumer] Pending 恢复: {} 条, 实际插入 {} 条",
                             batch.size(), affected);
@@ -273,7 +298,7 @@ public class MessageStreamConsumer {
         }
 
         try {
-            int affected = messageMapper.insertBatchIgnore(encodeBatchForStorage(buffer));
+            int affected = insertBatchIgnore(buffer);
 
             try {
                 ackBatch(recordIds);

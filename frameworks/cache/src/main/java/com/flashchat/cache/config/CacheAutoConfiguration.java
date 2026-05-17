@@ -1,5 +1,6 @@
 package com.flashchat.cache.config;
 
+import com.flashchat.cache.CacheHitMetrics;
 import com.flashchat.cache.MultistageCacheProxy;
 import com.flashchat.cache.RedisCircuitBreaker;
 import com.flashchat.cache.StringRedisTemplateProxy;
@@ -127,13 +128,15 @@ public class CacheAutoConfiguration {
             LocalCacheManager localCacheManager,
             RedisCircuitBreaker redisCircuitBreaker,
             @Nullable MeterRegistry meterRegistry) {
+        CacheHitMetrics cacheHitMetrics = CacheHitMetrics.create(meterRegistry);
         StringRedisTemplateProxy redisProxy = new StringRedisTemplateProxy(
-                stringRedisTemplate, cacheProperties, redissonClient);
+                stringRedisTemplate, cacheProperties, redissonClient, cacheHitMetrics);
         return new MultistageCacheProxy(
                 redisProxy,
                 localCacheManager,
                 redisCircuitBreaker,
-                meterRegistry
+                meterRegistry,
+                cacheHitMetrics
         );
     }
 

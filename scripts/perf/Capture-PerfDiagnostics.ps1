@@ -145,6 +145,10 @@ Save-Actuator -Url "http://localhost:8081/actuator/metrics/flashchat.broadcast.w
 Save-Actuator -Url "http://localhost:8081/actuator/metrics/flashchat.broadcast.batch.complete.duration" -FilePath (Join-Path $captureDir "actuator-metric-flashchat-broadcast-batch-complete-duration.json")
 Save-Actuator -Url "http://localhost:8081/actuator/metrics/flashchat.broadcast.write.failure" -FilePath (Join-Path $captureDir "actuator-metric-flashchat-broadcast-write-failure.json")
 Save-Actuator -Url "http://localhost:8081/actuator/metrics/cache.redis.degradation" -FilePath (Join-Path $captureDir "actuator-metric-cache-redis-degradation.json")
+Save-Actuator -Url "http://localhost:8081/actuator/metrics/cache.lookup" -FilePath (Join-Path $captureDir "actuator-metric-cache-lookup.json")
+Save-Actuator -Url "http://localhost:8081/actuator/metrics/cache.hit.ratio?tag=level:local" -FilePath (Join-Path $captureDir "actuator-metric-cache-hit-ratio-local.json")
+Save-Actuator -Url "http://localhost:8081/actuator/metrics/cache.hit.ratio?tag=level:redis" -FilePath (Join-Path $captureDir "actuator-metric-cache-hit-ratio-redis.json")
+Save-Actuator -Url "http://localhost:8081/actuator/metrics/cache.hit.ratio?tag=level:total" -FilePath (Join-Path $captureDir "actuator-metric-cache-hit-ratio-total.json")
 Save-Actuator -Url "http://localhost:8081/actuator/metrics/websocket.online.users" -FilePath (Join-Path $captureDir "actuator-metric-websocket-online-users.json")
 Save-Actuator -Url "http://localhost:8081/actuator/metrics/jvm.gc.pause" -FilePath (Join-Path $captureDir "actuator-metric-jvm-gc-pause.json")
 

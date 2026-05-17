@@ -8,9 +8,9 @@ import com.flashchat.cache.core.CacheLoader;
 import com.flashchat.cache.toolkit.CacheUtil;
 import com.flashchat.cache.toolkit.FastJson2Util;
 import com.google.common.collect.Lists;
+import jakarta.annotation.Nullable;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBloomFilter;
 import org.redisson.api.RLock;
@@ -28,12 +28,29 @@ import java.util.concurrent.TimeUnit;
  * 底层通过 {@link RedissonClient} 提供分布式锁，{@link StringRedisTemplate} 提供 Redis 操作
  */
 @Slf4j
-@RequiredArgsConstructor
 public class StringRedisTemplateProxy implements DistributedCache {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final RedisDistributedProperties redisProperties;
     private final RedissonClient redissonClient;
+    @Nullable
+    private final CacheHitMetrics cacheHitMetrics;
+
+    public StringRedisTemplateProxy(StringRedisTemplate stringRedisTemplate,
+                                    RedisDistributedProperties redisProperties,
+                                    RedissonClient redissonClient) {
+        this(stringRedisTemplate, redisProperties, redissonClient, null);
+    }
+
+    public StringRedisTemplateProxy(StringRedisTemplate stringRedisTemplate,
+                                    RedisDistributedProperties redisProperties,
+                                    RedissonClient redissonClient,
+                                    @Nullable CacheHitMetrics cacheHitMetrics) {
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.redisProperties = redisProperties;
+        this.redissonClient = redissonClient;
+        this.cacheHitMetrics = cacheHitMetrics;
+    }
 
     /**
      * 安全获取时的分布式锁 key 前缀
@@ -54,6 +71,7 @@ public class StringRedisTemplateProxy implements DistributedCache {
     @Override
     public <T> T get(String key, Class<T> clazz) {
         String value = stringRedisTemplate.opsForValue().get(key);
+        recordRedisLookup(value != null);
         if (value == null) {
             return null;
         }
@@ -372,5 +390,11 @@ public class StringRedisTemplateProxy implements DistributedCache {
             return timeout;
         }
         return timeout + ThreadLocalRandom.current().nextLong(-fluctuation, fluctuation + 1);
+    }
+
+    private void recordRedisLookup(boolean hit) {
+        if (cacheHitMetrics != null) {
+            cacheHitMetrics.recordRedis(hit);
+        }
     }
 }

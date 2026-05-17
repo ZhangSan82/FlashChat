@@ -18,6 +18,7 @@ import com.flashchat.chatservice.toolkit.JsonUtil;
 import com.flashchat.convention.storage.OssAssetUrlService;
 import com.flashchat.convention.exception.ClientException;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
@@ -27,6 +28,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoop;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
+import io.netty.util.concurrent.SingleThreadEventExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -57,6 +59,8 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
     private final Timer broadcastWriteCompleteTimer;
     private final Timer broadcastBatchCompleteTimer;
     private final Counter broadcastWriteFailureCounter;
+    private final Counter channelNotWritableCounter;
+    private final DistributionSummary eventLoopPendingTasksSummary;
     // ==================== 用户连接映射 ====================
     /**
      * userId → Channel
@@ -118,6 +122,11 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
         this.broadcastWriteCompleteTimer = meterRegistry.timer("flashchat.broadcast.write.complete.duration");
         this.broadcastBatchCompleteTimer = meterRegistry.timer("flashchat.broadcast.batch.complete.duration");
         this.broadcastWriteFailureCounter = meterRegistry.counter("flashchat.broadcast.write.failure");
+        this.channelNotWritableCounter = meterRegistry.counter("flashchat.broadcast.channel.not_writable");
+        this.eventLoopPendingTasksSummary = DistributionSummary.builder("flashchat.netty.eventloop.pending.tasks")
+                .description("Observed Netty EventLoop pending task count before/inside broadcast scheduling")
+                .baseUnit("tasks")
+                .register(meterRegistry);
     }
 
     // ===========================================================
@@ -524,7 +533,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
             if (ch == excludeCh) continue;
             if (!ch.isActive()) continue;
             if (!ch.isWritable()) {
-                slowClientSkipCounter.increment();
+                recordChannelNotWritable();
                 continue;
             }
             channelsByEventLoop.computeIfAbsent(ch.eventLoop(), ignored -> new ArrayList<>()).add(ch);
@@ -545,6 +554,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
                 List<Channel> eventLoopChannels = entry.getValue();
                 ByteBuf eventLoopPayload = payload.retainedDuplicate();
                 long eventLoopQueuedAtNanos = System.nanoTime();
+                recordEventLoopPendingTasks(eventLoop);
                 try {
                     eventLoop.execute(() -> writeBroadcastOnEventLoop(
                             eventLoopChannels,
@@ -569,6 +579,9 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
                                            long batchStartAtNanos,
                                            AtomicInteger pendingWrites) {
         try {
+            if (!channels.isEmpty()) {
+                recordEventLoopPendingTasks(channels.get(0).eventLoop());
+            }
             Timer.Sample writeSample = Timer.start(meterRegistry);
             for (Channel ch : channels) {
                 if (!ch.isActive()) {
@@ -576,7 +589,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
                     continue;
                 }
                 if (!ch.isWritable()) {
-                    slowClientSkipCounter.increment();
+                    recordChannelNotWritable();
                     completeBroadcastWrite(pendingWrites, batchStartAtNanos);
                     continue;
                 }
@@ -929,7 +942,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
                 ch.write(new TextWebSocketFrame(json));
                 toFlush.add(ch);
             } else if (ch != null && ch.isActive() && !ch.isWritable()) {
-                slowClientSkipCounter.increment();
+                recordChannelNotWritable();
             }
         }
         for (Channel ch : toFlush) {
@@ -947,7 +960,7 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
         for (Channel ch : channels) {
             if (!ch.isActive()) continue;
             if (!ch.isWritable()) {
-                slowClientSkipCounter.increment();
+                recordChannelNotWritable();
                 continue;
             }
             ch.write(new TextWebSocketFrame(json));
@@ -996,6 +1009,17 @@ public class RoomChannelManager implements ChannelPushService, ChannelQueryServi
     @Override
     public int getRoomOnlineCount(String roomId) {
         return getOnlineCountInRoom(roomId);
+    }
+
+    private void recordChannelNotWritable() {
+        slowClientSkipCounter.increment();
+        channelNotWritableCounter.increment();
+    }
+
+    private void recordEventLoopPendingTasks(EventLoop eventLoop) {
+        if (eventLoop instanceof SingleThreadEventExecutor executor) {
+            eventLoopPendingTasksSummary.record(Math.max(0, executor.pendingTasks()));
+        }
     }
 }
 
